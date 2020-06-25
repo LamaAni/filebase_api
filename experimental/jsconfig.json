@@ -1,0 +1,13 @@
+{
+    "typeAcquisition": {
+        "include": [
+            "jquery",
+            "google.visualization",
+        ],
+        "enable": true
+    },
+    "compilerOptions": {
+        "module": "commonJS",
+        "target": "es2015",
+    }
+}

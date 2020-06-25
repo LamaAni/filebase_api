@@ -1,0 +1,25 @@
+<!DOCTYPE html5>
+<html>
+
+<head>
+    <!-- Test macros -->
+    {{scripts_and_style()}}
+
+    <script lang="javascript">
+        $(() => {
+            setInterval(async () => {
+                console.log(await fapi_test_interval("from client"))
+            }, 1000)
+        })
+    </script>
+</head>
+
+<body style="text-align: center;">
+    <div class="box">
+        <a href="/trader/disp.html" class="button is-link">Trader(s) info</a>
+        <a href="/tests/websocket.html" class="button is-link">Websocket test</a>
+    </div>
+    "call page: {{page.page_id}}"
+</body>
+
+</html>

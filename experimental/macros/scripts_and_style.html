@@ -1,0 +1,31 @@
+{% macro scripts_and_style () %}
+<!-- Filebase api -->
+{{ filebase_api() }}
+
+<!-- Viewport -->
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8" />
+
+<!-- Font awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"
+    integrity="sha256-NuCn4IvuZXdBaFKJOAcsU2Q3ZpwbdFisd5dux4jkQ5w=" crossorigin="anonymous" />
+
+<!-- bulma style -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.0/css/bulma.css"
+    integrity="sha256-oSsWW/ca1ll8OVu2t4EKkyb9lmH0Pkd8CXKXnYP4QvA=" crossorigin="anonymous" />
+
+<!-- JQuery -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"
+    integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+
+<!-- JQuery date format -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-dateFormat/1.0/jquery.dateFormat.js"
+    integrity="sha256-+rv0A2ZjIOtKjBFMjXBkV3jPlOtzoUof5YzUNhiAARM=" crossorigin="anonymous"></script>
+
+<!-- JSON viewer -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-jsonview/1.2.3/jquery.jsonview.js"
+    integrity="sha256-RrrCilgcVMV3H4hWxBPNA6O/6h4IcMewKdW2irKZPWU=" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-jsonview/1.2.3/jquery.jsonview.css"
+    integrity="sha256-zs419U9qZ1t+PfakxgdddCoAp+NQiQrHZCU51GrXA5U=" crossorigin="anonymous" />
+
+{% endmacro %}
