@@ -1,0 +1,21 @@
+<!DOCTYPE html5>
+<html>
+
+<head>
+    <!-- Core scripts -->
+    {{filebase_api()}}
+
+    <script lang="javascript">
+        fapi.ready(() => {
+            setInterval(async () => {
+                console.log(await fapi_test_interval("from client"))
+            }, 1000)
+        })
+    </script>
+</head>
+
+<body style="text-align: center;">
+    "calling page: {{page.page_id}}"
+</body>
+
+</html>
