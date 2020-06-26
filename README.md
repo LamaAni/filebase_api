@@ -22,7 +22,7 @@ _public/index.code.py_
 from datetime import datetime
 from filebase_api import fapi_remote, FilebaseApiPage
 
-# Expose this method on the browser page as a js function: `fapi_test_interval(msg){...}`
+# Expose this method on the browser page as a js function: `async fapi_test_interval(msg){...}`
 @fapi_remote
 def test_interval(page: FilebaseApiPage, msg: str = "No message"):
     # The return value should be a json object (date time was added as a special value)
