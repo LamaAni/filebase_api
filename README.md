@@ -42,7 +42,11 @@ _public/index.html_
     <script lang="javascript">
       fapi.ready(() => {
           setInterval(async () => {
+              // ---------------------
+              // The function on the server side appears on the client
+              // with the addition of fapi_
               console.log(await fapi_test_interval("from client"))
+              // ---------------------
           }, 1000)
       })
     </script>
@@ -67,7 +71,7 @@ WebServer.start_global_web_server(os.path.dirname(__file__)).join()
 # Install
 
 ```shell
-pip install zthreading
+pip install filbase_api
 ```
 
 ## From the git repo directly
@@ -75,13 +79,13 @@ pip install zthreading
 To install from master branch,
 
 ```shell
-pip install git+https://github.com/LamaAni/zthreading.py.git@master
+pip install git+https://github.com/LamaAni/FilebaseAPI.git@master
 ```
 
 To install from a release (tag)
 
 ```shell
-pip install git+https://github.com/LamaAni/zthreading.py.git@[tag]
+pip install git+https://github.com/LamaAni/FilebaseAPI.git@[tag]
 ```
 
 # Contribution

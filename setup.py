@@ -26,7 +26,7 @@ setup(
     classifiers=[],
     author="Zav Shotan",
     author_email="",
-    url="https://github.com/LamaAni/zthreading.py",
+    url="https://github.com/LamaAni/FilebaseAPI",
     packages=["filebase_api"],
     platforms="any",
     license="LICENSE",
