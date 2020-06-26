@@ -22,9 +22,10 @@ _public/index.code.py_
 from datetime import datetime
 from filebase_api import fapi_remote, FilebaseApiPage
 
-
-@fapi_remote # mark expose this method on the client as fapi_test_interval
+# Expose this method on the browser page as a js function: `fapi_test_interval(msg){...}`
+@fapi_remote
 def test_interval(page: FilebaseApiPage, msg: str = "No message"):
+    # The return value should be a json object (date time was added as a special value)
     return {"msg": msg, "server_time": datetime.now()}
 
 ```
@@ -32,19 +33,18 @@ def test_interval(page: FilebaseApiPage, msg: str = "No message"):
 _public/index.html_
 
 ```html
-<!DOCTYPE html5>
-<html>
-  <head>
+<!DOCTYPE html5><html><head>
     <!-- Core scripts are loaded using the jinja templates-->
     {{filebase_api()}}
 
     <!-- Local scripts -->
     <script lang="javascript">
+      // invoked when fapi is ready to recive commands.
       fapi.ready(() => {
           setInterval(async () => {
               // ---------------------
               // The function on the server side appears on the client
-              // with the addition of fapi_
+              // with the addition of 'fapi_'
               console.log(await fapi_test_interval("from client"))
               // ---------------------
           }, 1000)
@@ -52,10 +52,12 @@ _public/index.html_
     </script>
   </head>
   <body style="text-align: center;">
+    <!-- The page id will change on every refresh -->
     "calling page: {{page.page_id}}"
-  </body>
-</html>
+  </body></html>
 ```
+
+### Running the webserver
 
 _public/webserver.py_
 
