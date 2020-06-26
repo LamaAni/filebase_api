@@ -16,7 +16,7 @@ In a folder add the following files,
 
 where,
 
-_public/index.code.html_
+_public/index.code.py_
 
 ```python
 from datetime import datetime
