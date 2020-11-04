@@ -2,9 +2,7 @@
 
 A simple web api builder for python apps. Integrates Jinja templates, fileserver and websockets.
 
-# BETA
-
-This project is its beta stage.
+# ALPHA
 
 # TL;DR
 
