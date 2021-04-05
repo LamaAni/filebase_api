@@ -1,8 +1,32 @@
-## FilebaseAPI
+# Filebase Api
 
-A simple web api builder for python apps. Integrates Jinja templates, fileserver and websockets.
+A simple web template engine for fast api's. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.
+
+1. Fast html template with either Jinja (Python) or EJS (NodeJs).
+1. Command line server startup.
+1. Built-in REST api.
+1. Build-in Websocket api.
+1. NodeJS implementation (using [express.js](https://expressjs.com/)).
+1. Python implementation (using [sanic] (https://github.com/sanic-org/sanic)).
+1. Live update for changes in the file contents.
 
 # ALPHA
+
+# Core principle of operation
+
+1. Uses file extensions to determine the role of each file in the webserver
+1. Serves a folder, and exposes all of the files in the folder to web requests.
+1. Specific file extensions represent templates, and others represent source files.
+
+### Types of files
+1. code files - file that expose methods as `REST API`, `JS API` and `Websocket API`
+1. template files - templated sources. All template files can be imported into one another.
+
+### Default file extensions and behaviors
+
+1. `html`, `htm`, `.html`, `.htm`, `.xhtml`, `.js`, `.css` - files to read as templates (either Jinja in python or EJS in NodeJS)
+1. [filename].code.js - Code files in NodeJS
+1. [filename].code.js - Code files in Python
 
 # TL;DR
 
@@ -10,6 +34,7 @@ In a folder add the following files,
 
 1. public/index.html
 1. public/index.code.py
+1. public/index.code.js
 1. webserver.py
 
 where,
@@ -31,7 +56,9 @@ def test_interval(page: FilebaseApiPage, msg: str = "No message"):
 _public/index.html_
 
 ```html
-<!DOCTYPE html5><html><head>
+<!DOCTYPE html5>
+<html>
+  <head>
     <!-- Core scripts are loaded using the jinja templates-->
     {{filebase_api()}}
 
@@ -52,7 +79,8 @@ _public/index.html_
   <body style="text-align: center;">
     <!-- The page id will change on every refresh -->
     "calling page: {{page.page_id}}"
-  </body></html>
+  </body>
+</html>
 ```
 
 ### Running the webserver
