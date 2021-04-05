@@ -71,7 +71,7 @@ WebServer.start_global_web_server(os.path.dirname(__file__)).join()
 # Install
 
 ```shell
-pip install filbase_api
+pip install filebase_api
 ```
 
 ## From the git repo directly
