@@ -1,0 +1,37 @@
+{
+  "name": "filebase_api",
+  "version": "0.0.1",
+  "description": "A simple web template engine for fast apis",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/LamaAni/filebase_api.git"
+  },
+  "keywords": [
+    "webserver",
+    "REST",
+    "websocket",
+    "api",
+    "docker",
+    "kubernetes"
+  ],
+  "dependencies": {
+    "@LamaAni/zcli": "github:lamaani/zcli",
+    "cookie-parser": "^1.4.5",
+    "cookie-session": "^1.4.0",
+    "ejs": "^3.1.6",
+    "express": "^4.17.1",
+    "express-session": "^1.17.1",
+    "mime": "^1.6.0",
+    "ws": "^7.4.4"
+  },
+  "author": "Zav Shotan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/LamaAni/filebase_api/issues"
+  },
+  "homepage": "https://github.com/LamaAni/filebase_api#readme"
+}
