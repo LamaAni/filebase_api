@@ -2,6 +2,7 @@
 local/
 .vscode/
 Pipefile.lock
+*/package-lock.json
 
 # ignore the test airflow db.
 tests/airflow.db
