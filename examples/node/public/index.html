@@ -3,8 +3,18 @@
 
 <head>
     <script src="https://code.jquery.com/jquery-3.6.0.js" lang="javascript"></script>
-    <% render_file_api_script_tag() %>
+    <%- render_stratis_script_tag() %>
+        <script lang="javascript">
+            stratis.test_remote_call("from client").then(val => {
+                $("#remote_rslt").html(val)
+            })
+        </script>
 </head>
-test ejs
+<div>
+    test ejs: <%=template_argument%>
+</div>
+<div>
+    Remote Value: <p id="remote_rslt"></p>
+</div>
 
 </html>

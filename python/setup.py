@@ -19,15 +19,16 @@ def get_version():
 
 
 setup(
-    name="filebase_api",
+    name="stratis-webservice",
     version=get_version(),
-    description="A simple web api builder for python apps. Integrates Jinja templates, fileserver and websockets.",
-    long_description="Please see the github repo and help @ https://github.com/LamaAni/FilebaseAPI",
+    description="A simple web template engine for fast api's and websites."
+    + " Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application",
+    long_description="Please see the github repo and help @ https://github.com/LamaAni/stratis",
     classifiers=[],
     author="Zav Shotan",
     author_email="",
-    url="https://github.com/LamaAni/FilebaseAPI",
-    packages=["filebase_api"],
+    url="https://github.com/LamaAni/stratis",
+    packages=["stratis_webservice"],
     platforms="any",
     license="LICENSE",
     install_requires=["match_pattern", "zthreading", "TicTocTimer", "zcommon", "jinja2", "sanic"],

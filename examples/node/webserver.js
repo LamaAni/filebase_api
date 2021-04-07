@@ -1,8 +1,9 @@
-const { FileApi } = require('../../nodejs/index')
+const { Stratis } = require('../../nodejs/index')
 const path = require('path')
 
 const serve_directory_fullpath = path.resolve(path.join(__dirname, 'public'))
-const app = new FileApi({}).server(serve_directory_fullpath)
+const app = new Stratis({}).server(serve_directory_fullpath)
+const port = 8080
 
 app.all('/test', (req, rsp, next) => {
   rsp.send('lama')
@@ -13,6 +14,6 @@ app.use((req, rsp, next) => {
   rsp.redirect('/index.html')
 })
 
-app.listen(3000, () =>
-  console.log('Listening for http://localhost:3000/index.html')
+app.listen(port, () =>
+  console.log(`Listening for http://localhost:${port}/index.html`)
 )
