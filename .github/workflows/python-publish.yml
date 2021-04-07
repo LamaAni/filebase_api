@@ -6,8 +6,9 @@ on:
   release:
     types: [created]
 jobs:
-  deploy:
+  create_python_package:
     runs-on: ubuntu-latest
+    name: 'Create python package'
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
