@@ -123,8 +123,11 @@ class StratisCli {
 }
 
 const cli_args = new StratisCli()
-const cli = new Cli({ name: 'STRATIS' })
-cli.default((args) => cli_args.run(), cli_args)
+const cli = new Cli({ name: 'stratis' })
+cli.default((args) => cli_args.run(), cli_args, {
+  description:
+    "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
+})
 cli.parse().catch((err) => {
   console.error(err)
 })
