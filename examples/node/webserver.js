@@ -1,7 +1,8 @@
-const { FileApi } = require('./index')
+const { FileApi } = require('../../nodejs/index')
 const path = require('path')
 
-const app = new FileApi({}).server(path.resolve(path.join(__dirname, 'public')))
+const serve_directory_fullpath = path.resolve(path.join(__dirname, 'public'))
+const app = new FileApi({}).server(serve_directory_fullpath)
 
 app.all('/test', (req, rsp, next) => {
   rsp.send('lama')

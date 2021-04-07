@@ -14,12 +14,13 @@ A simple web template engine for fast api's. Very low memory and cpu print that 
 
 # Core principle of operation
 
-1. Uses file extensions to determine the role of each file in the webserver
+1. Uses file extensions to determine the role of each file in the webserver.
 1. Serves a folder, and exposes all of the files in the folder to web requests.
-1. Specific file extensions represent templates, and others represent source files.
+1. The file extension `[filename].code.[js or py]` represents code files.
+1. Configurable file extensions represent template files. eg. `.html`
 
 ### Types of files
-1. code files - file that expose methods as `REST API`, `JS API` and `Websocket API`
+1. code files - file that expose python or node functions to `REST API`, `JS API` or `Websocket API` requests.
 1. template files - templated sources. All template files can be imported into one another.
 
 ### Default file extensions and behaviors
