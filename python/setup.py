@@ -8,14 +8,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_version():
-    version_file_path = os.path.join(here, "package_version.txt")
-    if not os.path.isfile(version_file_path):
-        return "debug"
-    version = None
-    with open(version_file_path, "r") as raw:
-        version = raw.read()
-
-    return version
+    return os.environ.get("VERSION", "debug")
 
 
 setup(

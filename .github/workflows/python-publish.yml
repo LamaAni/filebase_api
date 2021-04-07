@@ -20,17 +20,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install setuptools wheel twine
 
-      - name: Prepare version
-        run: |
-          echo "Version number: ${GITHUB_REF##*/}"
-          echo "${GITHUB_REF##*/}" > package_version.txt || exit $?
-          ls
+      - name: 'Read commit args'
+        id: args
+        uses: LamaAni/parse-commit-args-action@master
         env:
-          GITHUB_BRANCH: ${{ github.ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and publish
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+          VERSION: '${{steps.args.outputs.version}}'
         run: |
           cd python
           python setup.py sdist bdist_wheel
