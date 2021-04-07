@@ -1,22 +1,22 @@
 const express = require('express')
 const {
-  FileApi,
-  FileApiOptions,
-  FileApiRequestInfo,
-  FileApiCodeObject,
-  FileApiRequestHandler,
-  as_file_api_method,
-  as_file_api_template_arg,
-} = require('./fileapi')
+  Stratis,
+  StratisOptions,
+  StratisRequestInfo,
+  StratisCodeObject,
+  StratisRequestHandler,
+  as_stratis_method,
+  as_stratis_template_arg,
+} = require('./stratis')
 const websocket = require('./websocket')
 
 module.exports = {
   websocket,
-  FileApi,
-  FileApiOptions,
-  FileApiRequestInfo,
-  FileApiCodeObject,
-  FileApiRequestHandler,
-  as_file_api_template_arg,
-  as_file_api_method,
+  Stratis,
+  StratisOptions,
+  StratisRequestInfo,
+  StratisCodeObject,
+  StratisRequestHandler,
+  as_stratis_template_arg,
+  as_stratis_method,
 }

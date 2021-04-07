@@ -7,9 +7,9 @@ const path = require('path')
 const fs = require('fs')
 const express = require('express')
 
-const { FileApi } = require('./index')
+const { Stratis } = require('./index')
 
-class FileApiCli {
+class StratisCli {
   constructor() {
     this.serve_path = path.c
 
@@ -28,7 +28,7 @@ class FileApiCli {
     this.__$port = {
       type: 'named',
       default: this.port,
-      enviromentVariable: 'FILE_API_PORT',
+      enviromentVariable: 'STRATIS_PORT',
       parse: (val) => (typeof val == 'number' ? val : parseInt(val)),
       description: 'The webserver port',
     }
@@ -40,7 +40,7 @@ class FileApiCli {
     this.__$default_redirect = {
       type: 'named',
       default: this.default_redirect,
-      enviromentVariable: 'FILE_API_DEFAULT_REDIRECT',
+      enviromentVariable: 'STRATIS_DEFAULT_REDIRECT',
       description: 'The default redirect path to use for (/)',
     }
 
@@ -51,7 +51,7 @@ class FileApiCli {
     this.__$redirect_all_unknown = {
       type: 'named',
       default: this.redirect_all_unknown,
-      enviromentVariable: 'FILE_API_REDIRECT_ALL_UNKNOWN',
+      enviromentVariable: 'STRATIS_REDIRECT_ALL_UNKNOWN',
       description:
         'If true, redirects all unknown request to the default redirect',
     }
@@ -63,7 +63,7 @@ class FileApiCli {
     this.__$log_level = {
       type: 'named',
       default: this.log_level,
-      enviromentVariable: 'FILE_API_LOG_LEVEL',
+      enviromentVariable: 'STRATIS_LOG_LEVEL',
       description: 'The log level, DEBUG will show all requests',
     }
 
@@ -74,7 +74,7 @@ class FileApiCli {
     this.__$cache = {
       type: 'flag',
       default: this.cache,
-      enviromentVariable: 'FILE_API_CACHE',
+      enviromentVariable: 'STRATIS_CACHE',
       description: 'Enable cache for requests',
     }
   }
@@ -94,7 +94,7 @@ class FileApiCli {
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
 
-    const api = new FileApi()
+    const api = new Stratis()
     const app = express()
 
     if (!this.cache) {
@@ -122,8 +122,8 @@ class FileApiCli {
   }
 }
 
-const cli_args = new FileApiCli()
-const cli = new Cli({ name: 'FileApi' })
+const cli_args = new StratisCli()
+const cli = new Cli({ name: 'STRATIS' })
 cli.default((args) => cli_args.run(), cli_args)
 cli.parse().catch((err) => {
   console.error(err)

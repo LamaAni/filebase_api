@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
-    "fileapi": "serve.js"
+    "Stratis": "serve.js"
   },
   "repository": {
     "type": "git",

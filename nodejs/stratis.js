@@ -9,47 +9,47 @@ const express = require('express')
 
 const websocket = require('./websocket')
 
-const fileapi_core_source = fs.readFileSync(
-  path.join(__dirname, 'fileapi.core.js'),
+const Stratis_core_source = fs.readFileSync(
+  path.join(__dirname, 'stratis.core.js'),
   'utf-8'
 )
 
 /**
- * @typedef {(event: 'error', listener: (error: Error) => void) => this} FileApiEventListenError
- * @typedef {(event: 'log', listener: (level:string, ...args) => void) => this} FileApiEventListenLog
- * @typedef {FileApiEventListenError & FileApiEventListenLog} FileApiEventListenRegister
+ * @typedef {(event: 'error', listener: (error: Error) => void) => this} StratisEventListenError
+ * @typedef {(event: 'log', listener: (level:string, ...args) => void) => this} StratisEventListenLog
+ * @typedef {StratisEventListenError & StratisEventListenLog} StratisEventListenRegister
  */
 
 /**
- * @typedef {(event: 'error', error:Error) => this} FileApiEventEmitError
- * @typedef {(event: 'log', level:'DEBUG'|'INFO'|'WARN'|'ERROR', ...args) => this} FileApiEventEmitLog
- * @typedef {FileApiEventEmitError & FileApiEventEmitLog} FileApiEventEmitter
+ * @typedef {(event: 'error', error:Error) => this} StratisEventEmitError
+ * @typedef {(event: 'log', level:'DEBUG'|'INFO'|'WARN'|'ERROR', ...args) => this} StratisEventEmitLog
+ * @typedef {StratisEventEmitError & StratisEventEmitLog} StratisEventEmitter
  */
 
 /**
  * Interface for the current request information.
- * @typedef {{url: URL, filepath: string, codefilepath:string, query: string, stat:fs.Stats, exists:boolean}} FileApiRequestInfo
+ * @typedef {{url: URL, filepath: string, codefilepath:string, query: string, stat:fs.Stats, exists:boolean}} StratisRequestInfo
  */
 
 /**
  * The type of code object.
- * @typedef {"REMOTE_METHOD" | "TEMPLATE_ARG" | "REQUEST_HANDLER" | "IGNORE"} FileApiCodeObjectTypeEnum
+ * @typedef {"REMOTE_METHOD" | "TEMPLATE_ARG" | "REQUEST_HANDLER" | "IGNORE"} StratisCodeObjectTypeEnum
  */
 
-class FileApiCodeObject {
+class StratisCodeObject {
   /**
    * A code object to be used in the file api environment.
    * @param {any} val
-   * @param {FileApiCodeObjectTypeEnum } type
+   * @param {StratisCodeObjectTypeEnum } type
    * @param {string} name The name to use, (overrides)
    */
   constructor(val, type = null, name = null) {
     this.name = name
     /**
      * The request object type
-     * @type {FileApiCodeObjectTypeEnum}
+     * @type {StratisCodeObjectTypeEnum}
      */
-    this.type = type || FileApiCodeObject.auto_detect_type(val)
+    this.type = type || StratisCodeObject.auto_detect_type(val)
     this.val = val
   }
 
@@ -63,7 +63,7 @@ class FileApiCodeObject {
 
   /**
    *
-   * @param {[FileApiCodeObject]} lst
+   * @param {[StratisCodeObject]} lst
    * @returns {Object<string,any>}
    */
   static to_key_value_object(lst) {
@@ -75,36 +75,36 @@ class FileApiCodeObject {
 
 /**
  * Creates a file api function to expose, which will appear on the client side.
- * @param {string} name The name of the fileapi method to expose
+ * @param {string} name The name of the Stratis method to expose
  * @param {(...args, req:Request, rsp: Response, next:NextFunction)} func The exposed function.
  * @returns The file api function
  */
-function as_file_api_method(name, func) {
-  return new FileApiCodeObject(func, 'REMOTE_METHOD', name)
+function as_stratis_method(name, func) {
+  return new StratisCodeObject(func, 'REMOTE_METHOD', name)
 }
 
 /**
  * Creates a file api template argument that will appear while rendering.
  * @param {string} name The name of the argument in the template.
  * @param {any} val The value of the argument. Can be a function as well.
- * @returns The fileapi template argument that appears in rendering.
+ * @returns The Stratis template argument that appears in rendering.
  */
-function as_file_api_template_arg(name, val) {
-  return new FileApiCodeObject(val, 'TEMPLATE_ARG', name)
+function as_stratis_template_arg(name, val) {
+  return new StratisCodeObject(val, 'TEMPLATE_ARG', name)
 }
 
-class FileApiRequestHandler extends FileApiCodeObject {
+class StratisRequestHandler extends StratisCodeObject {
   /**
    * Creates a request handler that can override/augment the request before
    * the file api executes.
-   * @param {(req:Request, rsp:Response, next:NextFunction, api:FileApi)} on_request
+   * @param {(req:Request, rsp:Response, next:NextFunction, api:Stratis)} on_request
    */
   constructor(on_request) {
     super('request_handler', on_request, 'REQUEST_HANDLER')
   }
 
   /**
-   * @type {(req:Request, rsp:Response, next:NextFunction, api:FileApi)=>void} on_request
+   * @type {(req:Request, rsp:Response, next:NextFunction, api:Stratis)=>void} on_request
    */
   get on_request() {
     return this.val
@@ -115,20 +115,20 @@ class FileApiRequestHandler extends FileApiCodeObject {
  * A request environment for the jinja bank.
  * Holds the module information and status for the request.
  */
-class FileApiRequestEnvironment {
+class StratisRequestEnvironment {
   /**
    * A request environment for the jinja bank.
    * Holds the module information and status for the request.
-   * @param {FileApi} api
-   * @param {FileApiRequestInfo} info
+   * @param {Stratis} api
+   * @param {StratisRequestInfo} info
    */
   constructor() {
     /**
-     * @type {Object<string,function|Object|FileApiCodeObject>}
+     * @type {Object<string,function|Object|StratisCodeObject>}
      */
     this.codefile_module = null
     /**
-     * @type {[FileApiCodeObject]}
+     * @type {[StratisCodeObject]}
      */
     this.env_objects = null
 
@@ -162,7 +162,7 @@ class FileApiRequestEnvironment {
   get api_methods() {
     if (this.env_objects == null) return []
     if (this.__api_methods == null)
-      this.__api_methods = FileApiCodeObject.to_key_value_object(
+      this.__api_methods = StratisCodeObject.to_key_value_object(
         this.env_objects.filter((o) => o.type == 'REMOTE_METHOD')
       )
     return this.__api_methods
@@ -175,14 +175,14 @@ class FileApiRequestEnvironment {
   get ejs_environment() {
     if (this.env_objects == null) return {}
     if (this.__ejs_environment == null)
-      this.__ejs_environment = FileApiCodeObject.to_key_value_object(
+      this.__ejs_environment = StratisCodeObject.to_key_value_object(
         this.env_objects.filter((o) => o.type == 'TEMPLATE_ARG')
       )
     return this.__ejs_environment
   }
 
   /**
-   * @returns {[FileApiRequestHandler]}
+   * @returns {[StratisRequestHandler]}
    */
   get request_handlers() {
     if (this.env_objects == null) return []
@@ -198,7 +198,7 @@ class FileApiRequestEnvironment {
   }
 
   /**
-   * @param {FileApiRequestInfo} info
+   * @param {StratisRequestInfo} info
    * @returns {[Date]}
    */
   async __get_modification_timestamps(info) {
@@ -210,7 +210,7 @@ class FileApiRequestEnvironment {
   }
 
   /**
-   * @param {FileApiRequestInfo} info
+   * @param {StratisRequestInfo} info
    * @return {boolean} True if changed.
    */
   async check(info) {
@@ -228,23 +228,23 @@ class FileApiRequestEnvironment {
   }
 
   /**
-   * @param {FileApi} api
+   * @param {Stratis} api
    */
   render_api_script(api) {
-    return ejs.render(fileapi_core_source, {
-      file_api: api,
-      fileapi_methods: [
+    return ejs.render(Stratis_core_source, {
+      stratis: api,
+      Stratis_methods: [
         '\n', // needed for comment override
         ...Object.keys(this.api_methods).map((k) => {
-          return `static async ${k}(...args){return await _file_api_send_ws_request("${k}",...args)}`
+          return `static async ${k}(...args){return await _stratis_send_ws_request("${k}",...args)}`
         }),
       ].join('\n'),
     })
   }
 
   /**
-   * @param {FileApi} api
-   * @param {FileApiRequestInfo} info
+   * @param {Stratis} api
+   * @param {StratisRequestInfo} info
    */
   async load_request(api, info) {
     this.created = new Date()
@@ -260,7 +260,7 @@ class FileApiRequestEnvironment {
 
     for (let key of Object.keys(this.codefile_module)) {
       let o = this.codefile_module[key]
-      o = o instanceof FileApiCodeObject ? o : new FileApiCodeObject(o)
+      o = o instanceof StratisCodeObject ? o : new StratisCodeObject(o)
       o.name = o.name || key
       this.env_objects.push(o)
     }
@@ -277,22 +277,22 @@ class FileApiRequestEnvironment {
   }
 }
 
-class FileApiRequestEnvironmentBank {
+class StratisRequestEnvironmentBank {
   /**
    * A memory bank for pre-rendered templates, env cache.
-   * @param {FileApi} api
+   * @param {Stratis} api
    */
   constructor(api) {
     this.api = api
     /**
-     * @type {Object<string,FileApiRequestEnvironment>}
+     * @type {Object<string,StratisRequestEnvironment>}
      */
     this.__col = {}
     this.last_cleaned = null
   }
 
   /**
-   * @type {Object<string,FileApiRequestEnvironment>}
+   * @type {Object<string,StratisRequestEnvironment>}
    */
   get col() {
     return this.__col
@@ -313,7 +313,7 @@ class FileApiRequestEnvironmentBank {
   }
 
   /**
-   * @param {FileApiRequestInfo} info
+   * @param {StratisRequestInfo} info
    * @param {boolean} validate
    */
   async get(info, validate = true) {
@@ -327,7 +327,7 @@ class FileApiRequestEnvironmentBank {
     }
 
     if (env == null) {
-      env = new FileApiRequestEnvironment()
+      env = new StratisRequestEnvironment()
       await env.load_request(this.api, info)
       this.col[info.filepath] = env
     }
@@ -341,8 +341,8 @@ class FileApiRequestEnvironmentBank {
 }
 
 /**
- * Interface for FileApi options.
- * @typedef {Object} FileApiOptions
+ * Interface for Stratis options.
+ * @typedef {Object} StratisOptions
  * @property {Object<string,(...args, req:Request, rsp: Response, next:NextFunction)=>void>} api_methods A collection
  * of core api methods to expose.
  * @property {Object<string, any>} ejs_environment A collection to render time objects to expose.
@@ -359,11 +359,11 @@ class FileApiRequestEnvironmentBank {
  * (if search query api='api_version', means api request)
  */
 
-class FileApi extends events.EventEmitter {
+class Stratis extends events.EventEmitter {
   /**
    * Creates a file api handler that can be used to generate
    * the file api.
-   * @param {FileApiOptions} param0
+   * @param {StratisOptions} param0
    */
   constructor({
     api_methods = {},
@@ -382,12 +382,12 @@ class FileApi extends events.EventEmitter {
   } = {}) {
     super()
 
-    /** @type {FileApiEventListenRegister} */
+    /** @type {StratisEventListenRegister} */
     this.on
-    /** @type {FileApiEventListenRegister} */
+    /** @type {StratisEventListenRegister} */
     this.once
 
-    /** @type {FileApiEventEmitter} */
+    /** @type {StratisEventEmitter} */
     this.emit
 
     this.logger = logger || console
@@ -405,7 +405,7 @@ class FileApi extends events.EventEmitter {
       ...ejs_options,
     }
 
-    this.env_bank = new FileApiRequestEnvironmentBank(this)
+    this.env_bank = new StratisRequestEnvironmentBank(this)
 
     assert(
       api_methods == null ||
@@ -414,30 +414,27 @@ class FileApi extends events.EventEmitter {
     )
 
     /**
-     * @type {[FileApiCodeObject]}
+     * @type {[StratisCodeObject]}
      */
     this.env_objects = []
     Object.keys(api_methods).forEach((k) =>
       this.env_objects.push(
-        new FileApiCodeObject(api_methods[k], 'REMOTE_METHOD', k)
+        new StratisCodeObject(api_methods[k], 'REMOTE_METHOD', k)
       )
     )
     Object.keys(ejs_environment).forEach((k) =>
       this.env_objects.push(
-        new FileApiCodeObject(ejs_environment[k], 'TEMPLATE_ARG', k)
+        new StratisCodeObject(ejs_environment[k], 'TEMPLATE_ARG', k)
       )
     )
 
     this.__core_env_objects = [
-      as_file_api_template_arg(
-        'render_file_api_script_tag',
-        FileApi.render_file_api_script_tag
+      as_stratis_template_arg(
+        'render_stratis_script_tag',
+        Stratis.render_stratis_script_tag
       ),
-      as_file_api_method(
-        'render_file_api_script',
-        FileApi.render_file_api_script
-      ),
-      as_file_api_template_arg('file_api', this),
+      as_stratis_method('render_stratis_script', Stratis.render_stratis_script),
+      as_stratis_template_arg('stratis', this),
     ]
 
     if (log_errors_to_console) {
@@ -451,7 +448,7 @@ class FileApi extends events.EventEmitter {
    * Internal.
    * @param {string} src
    * @param {Request} req
-   * @returns {FileApiRequestInfo}
+   * @returns {StratisRequestInfo}
    */
   async _get_request_info(src, req) {
     const fileQuery = req.originalUrl.substr(req.baseUrl.length)
@@ -492,16 +489,28 @@ class FileApi extends events.EventEmitter {
    * @param {Request} req
    * @param {Response} rsp
    */
-  static render_file_api_script_tag(req, rsp) {
-    const ver = req.file_api.api_version || 'v1'
+  static render_stratis_script_tag(req, rsp) {
+    const ver = req.stratis.api_version || 'v1'
     const uri = path.basename(req.path)
-    return `<script lang="javascript" src='${uri}?api=${ver}&call=render_file_api_script'></script>`
+    return `<script lang="javascript" src='${uri}?api=${ver}&call=render_stratis_script'></script>`
   }
 
-  static render_file_api_script(req, rsp) {
-    /** @type {FileApiRequestEnvironment} */
-    const env = req.file_api_env
+  static render_stratis_script(req, rsp) {
+    /** @type {StratisRequestEnvironment} */
+    const env = req.stratis_env
     return env.api_script
+  }
+
+  _apply_stratis_request_args(req, info, env) {
+    req.stratis = this
+    req.stratis_env = env
+    req.stratis_info = info
+  }
+
+  _clean_stratis_request_args(req) {
+    delete req.stratis
+    delete req.stratis_env
+    delete req.stratis_info
   }
 
   async _invoke_api_method(info, env, req, rsp, name, args) {
@@ -516,8 +525,8 @@ class FileApi extends events.EventEmitter {
 
   /**
    * Internal.
-   * @param {FileApiRequestInfo} info The request environment.
-   * @param {FileApiRequestEnvironment} env The request environment.
+   * @param {StratisRequestInfo} info The request environment.
+   * @param {StratisRequestEnvironment} env The request environment.
    * @param {Request} req The express request
    * @param {Response} rsp The express response to be sent
    * @param {NextFunction} next call next
@@ -527,9 +536,11 @@ class FileApi extends events.EventEmitter {
       ws.on('message', async (data) => {
         data = JSON.parse(data.toString('utf-8'))
         try {
+          const env = await this.env_bank.get(info)
+          this._apply_stratis_request_args(req, info, env)
           const rslt = await this._invoke_api_method(
             info,
-            await this.env_bank.get(info),
+            env,
             req,
             rsp,
             data.name,
@@ -549,6 +560,8 @@ class FileApi extends events.EventEmitter {
             })
           )
           this.emit('error', err)
+        } finally {
+          this._clean_stratis_request_args(req)
         }
       })
       ws.on('open', () => this.emit('websocket_open'))
@@ -559,8 +572,8 @@ class FileApi extends events.EventEmitter {
 
   /**
    * Internal.
-   * @param {FileApiRequestInfo} info The request environment.
-   * @param {FileApiRequestEnvironment} env The request environment.
+   * @param {StratisRequestInfo} info The request environment.
+   * @param {StratisRequestEnvironment} env The request environment.
    * @param {Request} req The express request
    * @param {Response} rsp The express response to be sent
    * @param {NextFunction} next call next
@@ -597,8 +610,8 @@ class FileApi extends events.EventEmitter {
 
   /**
    * Internal,
-   * @param {FileApiRequestInfo} info The request environment.
-   * @param {FileApiRequestEnvironment} env The request environment.
+   * @param {StratisRequestInfo} info The request environment.
+   * @param {StratisRequestEnvironment} env The request environment.
    * @param {Request} req The express request
    * @param {Response} rsp The express response to be sent
    * @param {NextFunction} next call next
@@ -653,9 +666,7 @@ class FileApi extends events.EventEmitter {
       this.env_bank.clean()
 
       const env = await this.env_bank.get(info)
-      req.file_api = this
-      req.file_api_info = info
-      req.file_api_env = env
+      this._apply_stratis_request_args(req, info, env)
 
       try {
         let moved_next = false
@@ -685,9 +696,7 @@ class FileApi extends events.EventEmitter {
         else await this._handle_file_request(info, env, req, rsp, next)
       } finally {
         // cleanup.
-        delete req.file_api
-        delete req.file_api_info
-        delete req.file_api_env
+        this._clean_stratis_request_args(req)
       }
     }
 
@@ -695,7 +704,7 @@ class FileApi extends events.EventEmitter {
   }
 
   /**
-   * Creates a new express server to use with the fileapi.
+   * Creates a new express server to use with the Stratis.
    * @param {string} src The path to the folder to serve.
    * @param {express.Express} app The express app to use, if null create one.
    * @returns {express.Express} The express app to use. You can do express.listen
@@ -709,15 +718,15 @@ class FileApi extends events.EventEmitter {
 }
 
 module.exports = {
-  FileApi,
-  /** @type {FileApiOptions} */
-  FileApiOptions: {},
-  /** @type {FileApiRequestInfo} */
-  FileApiRequestInfo: {},
-  FileApiCodeObject,
-  FileApiRequestHandler,
-  FileApiRequestEnvironment,
-  FileApiRequestEnvironmentBank,
-  as_file_api_method,
-  as_file_api_template_arg,
+  Stratis,
+  /** @type {StratisOptions} */
+  StratisOptions: {},
+  /** @type {StratisRequestInfo} */
+  StratisRequestInfo: {},
+  StratisCodeObject,
+  StratisRequestHandler,
+  StratisRequestEnvironment,
+  StratisRequestEnvironmentBank,
+  as_stratis_method,
+  as_stratis_template_arg,
 }
