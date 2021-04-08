@@ -6,6 +6,8 @@ const fs = require('fs')
 const ejs = require('ejs')
 const mime = require('mime')
 const express = require('express')
+const { split_stream_once, stream_to_buffer } = require('./streams')
+const stream = require('stream')
 
 const websocket = require('./websocket')
 
@@ -32,8 +34,8 @@ const Stratis_core_source = fs.readFileSync(
  */
 
 /**
- * The type of code object.
- * @typedef {"REMOTE_METHOD" | "TEMPLATE_ARG" | "REQUEST_HANDLER" | "IGNORE"} StratisCodeObjectTypeEnum
+ * The type of code object. See documentation in readme.
+ * @typedef {"API_METHOD" | "PUSH_NOTIFICATION" | "TEMPLATE_ARG" | "REQUEST_HANDLER" | "IGNORE"} StratisCodeObjectTypeEnum
  */
 
 class StratisCodeObject {
@@ -55,10 +57,10 @@ class StratisCodeObject {
 
   /**
    * @param {any} val
-   * @returns {"REMOTE_METHOD" | "TEMPLATE_ARG" | "IGNORE" }
+   * @returns {"API_METHOD" | "TEMPLATE_ARG" | "IGNORE" }
    */
   static auto_detect_type(val) {
-    return typeof val == 'function' ? 'REMOTE_METHOD' : 'TEMPLATE_ARG'
+    return typeof val == 'function' ? 'API_METHOD' : 'TEMPLATE_ARG'
   }
 
   /**
@@ -76,11 +78,11 @@ class StratisCodeObject {
 /**
  * Creates a file api function to expose, which will appear on the client side.
  * @param {string} name The name of the Stratis method to expose
- * @param {(...args, req:Request, rsp: Response, next:NextFunction)} func The exposed function.
+ * @param {(...args, req:Request, res: Response, next:NextFunction)} func The exposed function.
  * @returns The file api function
  */
 function as_stratis_method(name, func) {
-  return new StratisCodeObject(func, 'REMOTE_METHOD', name)
+  return new StratisCodeObject(func, 'API_METHOD', name)
 }
 
 /**
@@ -97,14 +99,14 @@ class StratisRequestHandler extends StratisCodeObject {
   /**
    * Creates a request handler that can override/augment the request before
    * the file api executes.
-   * @param {(req:Request, rsp:Response, next:NextFunction, api:Stratis)} on_request
+   * @param {(req:Request, res:Response, next:NextFunction, api:Stratis)} on_request
    */
   constructor(on_request) {
     super('request_handler', on_request, 'REQUEST_HANDLER')
   }
 
   /**
-   * @type {(req:Request, rsp:Response, next:NextFunction, api:Stratis)=>void} on_request
+   * @type {(req:Request, res:Response, next:NextFunction, api:Stratis)=>void} on_request
    */
   get on_request() {
     return this.val
@@ -163,7 +165,7 @@ class StratisRequestEnvironment {
     if (this.env_objects == null) return []
     if (this.__api_methods == null)
       this.__api_methods = StratisCodeObject.to_key_value_object(
-        this.env_objects.filter((o) => o.type == 'REMOTE_METHOD')
+        this.env_objects.filter((o) => o.type == 'API_METHOD')
       )
     return this.__api_methods
   }
@@ -236,7 +238,7 @@ class StratisRequestEnvironment {
       Stratis_methods: [
         '\n', // needed for comment override
         ...Object.keys(this.api_methods).map((k) => {
-          return `static async ${k}(...args){return await _stratis_send_ws_request("${k}",...args)}`
+          return `static async ${k}(...args){return await _stratis_send_ws_request("${k}",null,...args)}`
         }),
       ].join('\n'),
     })
@@ -343,7 +345,7 @@ class StratisRequestEnvironmentBank {
 /**
  * Interface for Stratis options.
  * @typedef {Object} StratisOptions
- * @property {Object<string,(...args, req:Request, rsp: Response, next:NextFunction)=>void>} api_methods A collection
+ * @property {Object<string,(...args, req:Request, res: Response, next:NextFunction)=>void>} api_methods A collection
  * of core api methods to expose.
  * @property {Object<string, any>} ejs_environment A collection to render time objects to expose.
  * @property {RegExp} filepath_and_query_regexp The filepath and query regexp. Must return two groups.
@@ -419,7 +421,7 @@ class Stratis extends events.EventEmitter {
     this.env_objects = []
     Object.keys(api_methods).forEach((k) =>
       this.env_objects.push(
-        new StratisCodeObject(api_methods[k], 'REMOTE_METHOD', k)
+        new StratisCodeObject(api_methods[k], 'API_METHOD', k)
       )
     )
     Object.keys(ejs_environment).forEach((k) =>
@@ -487,36 +489,49 @@ class Stratis extends events.EventEmitter {
   /**
    * Template method. Renders the file api script.
    * @param {Request} req
-   * @param {Response} rsp
+   * @param {Response} res
    */
-  static render_stratis_script_tag(req, rsp) {
+  static render_stratis_script_tag(req, res) {
     const ver = req.stratis.api_version || 'v1'
     const uri = path.basename(req.path)
     return `<script lang="javascript" src='${uri}?api=${ver}&call=render_stratis_script'></script>`
   }
 
-  static render_stratis_script(req, rsp) {
+  static render_stratis_script(req, res) {
     /** @type {StratisRequestEnvironment} */
     const env = req.stratis_env
     return env.api_script
   }
 
-  _apply_stratis_request_args(req, info, env) {
+  /**
+   * @param {Request} req
+   * @param {StratisRequestInfo} info
+   * @param {StratisRequestEnvironment} env
+   * @param {Buffer} payload
+   */
+  _apply_stratis_request_args(req, info, env, payload = null) {
     req.stratis = this
     req.stratis_env = env
     req.stratis_info = info
+    req.payload = payload
   }
 
+  /**
+   *
+   * @param {Request} req
+   */
   _clean_stratis_request_args(req) {
     delete req.stratis
     delete req.stratis_env
     delete req.stratis_info
+    delete req.payload
   }
 
-  async _invoke_api_method(info, env, req, rsp, name, args) {
+  async _invoke_api_method(info, env, req, res, name, args) {
     try {
-      if (env.api_methods[name] == null) throw new Error('api method not found')
-      return await env.api_methods[name](...args, req, rsp)
+      if (env.api_methods[name] == null)
+        throw new Error(`api ${name} method not found`)
+      return await env.api_methods[name](...args, req, res)
     } catch (err) {
       this.emit('api_error', err)
       throw err
@@ -524,50 +539,18 @@ class Stratis extends events.EventEmitter {
   }
 
   /**
-   * Internal.
-   * @param {StratisRequestInfo} info The request environment.
-   * @param {StratisRequestEnvironment} env The request environment.
-   * @param {Request} req The express request
-   * @param {Response} rsp The express response to be sent
-   * @param {NextFunction} next call next
+   * @param {stream.Readable|Buffer|string} data
+   * @returns {[call_info: Object, payload: stream.Readable]} The call info and the stream body.
    */
-  async _handle_websocket_request(info, env, req, rsp, next) {
-    websocket((ws, req) => {
-      ws.on('message', async (data) => {
-        data = JSON.parse(data.toString('utf-8'))
-        try {
-          const env = await this.env_bank.get(info)
-          this._apply_stratis_request_args(req, info, env)
-          const rslt = await this._invoke_api_method(
-            info,
-            env,
-            req,
-            rsp,
-            data.name,
-            data.args
-          )
-          ws.send(
-            JSON.stringify({
-              name: data.rid,
-              args: [rslt],
-            })
-          )
-        } catch (err) {
-          ws.send(
-            JSON.stringify({
-              name: 'error',
-              args: [err],
-            })
-          )
-          this.emit('error', err)
-        } finally {
-          this._clean_stratis_request_args(req)
-        }
-      })
-      ws.on('open', () => this.emit('websocket_open'))
-      ws.on('close', () => this.emit('websocket_close'))
-      ws.on('error', (err) => this.emit('error', err))
-    })(req, rsp, next)
+  async _parse_body(data) {
+    const [call_info_stream, payload] = split_stream_once(data, '\0')
+    const call_info_buffer = await stream_to_buffer(call_info_stream)
+    return [
+      call_info_buffer.length == 0
+        ? {}
+        : JSON.parse(call_info_buffer.toString('utf-8')),
+      payload,
+    ]
   }
 
   /**
@@ -575,37 +558,112 @@ class Stratis extends events.EventEmitter {
    * @param {StratisRequestInfo} info The request environment.
    * @param {StratisRequestEnvironment} env The request environment.
    * @param {Request} req The express request
-   * @param {Response} rsp The express response to be sent
+   * @param {Response} res The express response to be sent
    * @param {NextFunction} next call next
    */
-  async _handle_api_request(info, env, req, rsp, next) {
-    // assume request body is json args or json method.
-    let api_call_args = (req.body == null ? [] : JSON.parse(req.body)) || []
-    if (!Array.isArray(api_call_args)) api_call_args = [api_call_args]
+  async _handle_websocket_request(info, env, req, res, next) {
+    websocket((ws, req) => {
+      const invoke =
+        /**
+         * @param {Object} call_info
+         * @param {Buffer} payload
+         */
+        async (call_info, payload) => {
+          try {
+            const env = await this.env_bank.get(info)
+            this._apply_stratis_request_args(req, info, env, payload)
+            const rslt = await this._invoke_api_method(
+              info,
+              env,
+              req,
+              res,
+              call_info.call,
+              call_info.args
+            )
+            ws.send(
+              JSON.stringify({
+                call: call_info.rid,
+                args: [rslt],
+              })
+            )
+          } catch (err) {
+            ws.send(
+              JSON.stringify({
+                call: 'error',
+                args: [err],
+              })
+            )
+            this.emit('error', err)
+          } finally {
+            this._clean_stratis_request_args(req)
+          }
+        }
 
-    let name = info.url.searchParams.get('call')
-    if (name == null || env.api_methods[name] == null)
-      return rsp.sendStatus(404)
+      ws.on('message', async (data) => {
+        const [call_info, payload] = await this._parse_body(data)
+        await invoke(call_info, payload)
+      })
+
+      ws.on('open', () => this.emit('websocket_open'))
+      ws.on('close', () => this.emit('websocket_close'))
+      ws.on('error', (err) => this.emit('error', err))
+    })(req, res, next)
+  }
+
+  /**
+   * Internal.
+   * @param {StratisRequestInfo} info The request environment.
+   * @param {StratisRequestEnvironment} env The request environment.
+   * @param {Request} req The express request
+   * @param {Response} res The express response to be sent
+   * @param {NextFunction} next call next
+   */
+  async _handle_api_request(info, env, req, res, next) {
+    let [call_info, payload] = await this._parse_body(req.body || '')
+
+    let search_params_args = null
+    let search_params_call = null
+    for (let k of info.url.searchParams.keys()) {
+      if (k == 'call') {
+        search_params_call = info.url.searchParams.get(k)
+        continue
+      } else if (k == 'api') {
+        continue
+      }
+      if (search_params_args == null) {
+        search_params_args = {}
+      }
+      search_params_args[k] = info.url.searchParams.get(k)
+    }
+
+    call_info.rid = call_info.rid || ''
+    call_info.call = search_params_call || call_info.call
+    call_info.args = call_info.args || []
+
+    if (!Array.isArray(call_info.args)) call_info.args = [call_info.args]
+    if (search_params_args) call_info.args.unshift(search_params_args)
+
+    if (call_info.call == null || env.api_methods[call_info.call] == null)
+      return res.sendStatus(404)
+
+    this._apply_stratis_request_args(req, info, env, payload)
+
     let return_val = await this._invoke_api_method(
       info,
       env,
       req,
-      rsp,
-      name,
-      api_call_args
+      res,
+      call_info.call,
+      call_info.args
     )
-    if (return_val == null) return rsp.end()
-    if (
-      info.url.searchParams.get('json') == 'true' ||
-      (typeof return_val == 'object' && !return_val instanceof Date)
-    ) {
-      return_val = JSON.stringify(
-        return_val,
-        null,
-        info.url.searchParams.get('pretty') == 'true' ? 2 : null
-      )
+
+    if (return_val == null) return res.end()
+
+    if (typeof return_val == 'object' && !return_val instanceof Date) {
+      return_val = JSON.stringify(return_val)
     }
-    return rsp.send(`${return_val}`)
+
+    return res.send(`${return_val}`)
   }
 
   /**
@@ -613,26 +671,26 @@ class Stratis extends events.EventEmitter {
    * @param {StratisRequestInfo} info The request environment.
    * @param {StratisRequestEnvironment} env The request environment.
    * @param {Request} req The express request
-   * @param {Response} rsp The express response to be sent
+   * @param {Response} res The express response to be sent
    * @param {NextFunction} next call next
    */
-  async _handle_file_request(info, env, req, rsp, next) {
+  async _handle_file_request(info, env, req, res, next) {
     const is_template = this.template_extensions.some((ext) =>
       info.filepath.endsWith(ext)
     )
-    if (!is_template) return rsp.sendFile(info.filepath)
-    if (env.content_type) rsp.setHeader('Content-Type', env.content_type)
+    if (!is_template) return res.sendFile(info.filepath)
+    if (env.content_type) res.setHeader('Content-Type', env.content_type)
 
-    const ejs_data = { req, rsp, session: req.session || {} }
+    const ejs_data = { req, res, session: req.session || {} }
     for (let k of Object.keys(env.ejs_environment)) {
       let o = env.ejs_environment[k]
       if (typeof o == 'function') {
         const call_to = o
-        o = (...args) => call_to(...args, req, rsp)
+        o = (...args) => call_to(...args, req, res)
       }
       ejs_data[k] = o
     }
-    rsp.send(
+    res.send(
       await ejs.renderFile(info.filepath, ejs_data, {
         async: true,
       })
@@ -641,20 +699,20 @@ class Stratis extends events.EventEmitter {
 
   /**
    * @param {string} src The base path where to search for files.
-   * @returns {(req:Request,rsp:Response,next:NextFunction)=>void} The middleware
+   * @returns {(req:Request,res:Response,next:NextFunction)=>void} The middleware
    */
   middleware(src) {
     /**
      * @param {Request} req The request
-     * @param {Response} rsp The response
+     * @param {Response} res The response
      * @param {NextFunction} next Call next
      */
-    const intercept = async (req, rsp, next) => {
+    const intercept = async (req, res, next) => {
       const info = await this._get_request_info(src, req)
 
       if (info.filepath == null) {
         this.emit('error', new Error('Could not parse filepath'))
-        rsp.sendStatus(500)
+        res.sendStatus(500)
         return
       }
 
@@ -674,7 +732,7 @@ class Stratis extends events.EventEmitter {
         for (let handler of env.request_handlers) {
           handler.on_request(
             req,
-            rsp,
+            res,
             (...args) => {
               moved_next = true
               next_rsp = next(...args)
@@ -690,10 +748,10 @@ class Stratis extends events.EventEmitter {
         }
 
         if (websocket.is_websocket_request(req))
-          await this._handle_websocket_request(info, env, req, rsp, next)
+          await this._handle_websocket_request(info, env, req, res, next)
         else if (info.url.searchParams.get('api') == this.api_version)
-          await this._handle_api_request(info, env, req, rsp, next)
-        else await this._handle_file_request(info, env, req, rsp, next)
+          await this._handle_api_request(info, env, req, res, next)
+        else await this._handle_file_request(info, env, req, res, next)
       } finally {
         // cleanup.
         this._clean_stratis_request_args(req)

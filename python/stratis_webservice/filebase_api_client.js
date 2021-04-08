@@ -84,8 +84,8 @@ class FilebaseApi extends Emitter {
             '{!%FILEBASE_API_WEBSOCKET_MARKER%!}'
         this.FILEBASE_API_CORE_ROUTES_MARKER =
             '{!%FILEBASE_API_CORE_ROUTES_MARKER%!}'
-        this.FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER =
-            '{!%FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER%!}'
+        this.FILEBASE_API_API_METHODS_COLLECTION_MARKER =
+            '{!%FILEBASE_API_API_METHODS_COLLECTION_MARKER%!}'
         this.FILEBASE_API_PAGE_TYPE_MARKER =
             '{!%FILEBASE_API_PAGE_TYPE_MARKER%!}'
 
@@ -94,7 +94,7 @@ class FilebaseApi extends Emitter {
             websocket_url ||
             `ws://${window.location.host}/${this.FILEBASE_API_WEBSOCKET_MARKER}?${this.FILEBASE_API_PAGE_TYPE_MARKER}=${window.location.pathname}}`
 
-        this.websocket_methods_url = `/${this.FILEBASE_API_CORE_ROUTES_MARKER}/${this.FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER}?${this.FILEBASE_API_PAGE_TYPE_MARKER}=${window.location.pathname}`
+        this.websocket_methods_url = `/${this.FILEBASE_API_CORE_ROUTES_MARKER}/${this.FILEBASE_API_API_METHODS_COLLECTION_MARKER}?${this.FILEBASE_API_PAGE_TYPE_MARKER}=${window.location.pathname}`
 
         this.waiting_for_initialization = true
     }

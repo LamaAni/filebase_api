@@ -4,13 +4,13 @@ const path = require('path')
 const serve_path = path.join(__dirname, '..', 'examples', 'node', 'public')
 const app = new Stratis({}).server(path.resolve(serve_path))
 
-app.all('/test', (req, rsp, next) => {
-  rsp.send('lama')
+app.all('/test', (req, res, next) => {
+  res.send('lama')
 })
 
 // redirect all.
-app.use((req, rsp, next) => {
-  rsp.redirect('/index.html')
+app.use((req, res, next) => {
+  res.redirect('/index.html')
 })
 
 const port = 8080

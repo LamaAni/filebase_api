@@ -98,21 +98,21 @@ class StratisCli {
     const app = express()
 
     if (!this.cache) {
-      app.use((req, rsp, next) => {
-        rsp.set('Cache-Control', 'no-store')
+      app.use((req, res, next) => {
+        res.set('Cache-Control', 'no-store')
         next()
       })
     }
 
-    app.use((req, rsp, next) => {
+    app.use((req, res, next) => {
       cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
       next()
     })
 
     api.server(src, app)
 
-    const redirect = (req, rsp, next) => {
-      rsp.redirect(this.default_redirect)
+    const redirect = (req, res, next) => {
+      res.redirect(this.default_redirect)
     }
     if (this.redirect_all_unknown) app.use(redirect)
     else app.all('/', redirect)

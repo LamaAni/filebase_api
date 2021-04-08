@@ -3,8 +3,8 @@ from functools import wraps
 from zcommon.shell import logger
 from filebase_api.helpers import (
     FilebaseApiPage,
-    FILEBASE_API_REMOTE_METHOD_MARKER_ATTRIB_NAME,
-    FILEBASE_API_REMOTE_METHOD_MARKER_CONFIG_ATTRIB_NAME,
+    FILEBASE_API_API_METHOD_MARKER_ATTRIB_NAME,
+    FILEBASE_API_API_METHOD_MARKER_CONFIG_ATTRIB_NAME,
     FilebaseApiRemoteMethodConfig,
 )
 
@@ -14,7 +14,7 @@ def fapi_remote(fun):
 
     Expose this method to remote websocket client.
     """
-    setattr(fun, FILEBASE_API_REMOTE_METHOD_MARKER_ATTRIB_NAME, True)
+    setattr(fun, FILEBASE_API_API_METHOD_MARKER_ATTRIB_NAME, True)
     return fun
 
 
@@ -26,7 +26,7 @@ def fapi_remote_config(config: FilebaseApiRemoteMethodConfig = None):
     """
 
     def decorator(fun):
-        setattr(fun, FILEBASE_API_REMOTE_METHOD_MARKER_CONFIG_ATTRIB_NAME, config)
+        setattr(fun, FILEBASE_API_API_METHOD_MARKER_CONFIG_ATTRIB_NAME, config)
         return fun
 
 

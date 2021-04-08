@@ -35,10 +35,10 @@ function create_express_websocket_middleware(
 
     /**
      * @param {Request} req
-     * @param {Response} rsp
+     * @param {Response} res
      * @param {NextFunction} next
      */
-    function middleware(req, rsp, next) {
+    function middleware(req, res, next) {
         if (!is_websocket_request(req)) {
             if (error_if_not_websocket) throw Error('Websocket received a non websocket request')
             return next()

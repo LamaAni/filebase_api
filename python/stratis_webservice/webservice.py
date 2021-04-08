@@ -29,7 +29,7 @@ from filebase_api.helpers import (
     FilebaseApiCoreRoutes,
     FILEBASE_API_CORE_ROUTES_MARKER,
     FILEBASE_API_WEBSOCKET_MARKER,
-    FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER,
+    FILEBASE_API_API_METHODS_COLLECTION_MARKER,
     FILEBASE_API_PAGE_TYPE_MARKER,
 )
 
@@ -139,7 +139,7 @@ class FilebaseApi(FilebaseTemplateService, AsyncEventHandler):
 
             core_route_raw = None
 
-            if sub_path == FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER:
+            if sub_path == FILEBASE_API_API_METHODS_COLLECTION_MARKER:
                 core_route_raw = (
                     "\n".join(page.websocket_javascript_command_functions.values())
                     if page.has_code_module and page.expose_client_js_bindings

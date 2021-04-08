@@ -14,11 +14,11 @@ from zcommon.textops import json_dump_with_types
 from zcommon.collections import SerializableDict
 from zthreading.events import AsyncEventHandler
 
-FILEBASE_API_REMOTE_METHOD_MARKER_ATTRIB_NAME = "__filebase_api_remote_method"
-FILEBASE_API_REMOTE_METHOD_MARKER_CONFIG_ATTRIB_NAME = FILEBASE_API_REMOTE_METHOD_MARKER_ATTRIB_NAME + "_config"
+FILEBASE_API_API_METHOD_MARKER_ATTRIB_NAME = "__filebase_api_API_METHOD"
+FILEBASE_API_API_METHOD_MARKER_CONFIG_ATTRIB_NAME = FILEBASE_API_API_METHOD_MARKER_ATTRIB_NAME + "_config"
 FILEBASE_API_WEBSOCKET_MARKER = "__filebase_api_websocket"
 FILEBASE_API_CORE_ROUTES_MARKER = "__filebase_api_core"
-FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER = "__filebase_api_websocket_methods.js"
+FILEBASE_API_API_METHODS_COLLECTION_MARKER = "__filebase_api_websocket_methods.js"
 FILEBASE_API_PAGE_TYPE_MARKER = "__filebase_pt"
 
 
@@ -267,7 +267,7 @@ class FilebaseApiCoreRoutes(SerializableDict):
                 custom_end_pattern="%!}",
                 FILEBASE_API_CORE_ROUTES_MARKER=FILEBASE_API_CORE_ROUTES_MARKER,
                 FILEBASE_API_WEBSOCKET_MARKER=FILEBASE_API_WEBSOCKET_MARKER,
-                FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER=FILEBASE_API_REMOTE_METHODS_COLLECTION_MARKER,
+                FILEBASE_API_API_METHODS_COLLECTION_MARKER=FILEBASE_API_API_METHODS_COLLECTION_MARKER,
                 FILEBASE_API_PAGE_TYPE_MARKER=FILEBASE_API_PAGE_TYPE_MARKER,
             )
 
@@ -363,7 +363,7 @@ async function fapi_{name}({','.join(input_args)}) {{
         if self.module is None:
             return
         cmnd = getattr(self.module, name, None)
-        if cmnd is None or not (callable(cmnd) and hasattr(cmnd, FILEBASE_API_REMOTE_METHOD_MARKER_ATTRIB_NAME)):
+        if cmnd is None or not (callable(cmnd) and hasattr(cmnd, FILEBASE_API_API_METHOD_MARKER_ATTRIB_NAME)):
             return None
         return cmnd
 
@@ -374,10 +374,10 @@ async function fapi_{name}({','.join(input_args)}) {{
             name (str): The command name
         """
         handler = self.get_module_command_handler(name)
-        if handler is None or not hasattr(handler, FILEBASE_API_REMOTE_METHOD_MARKER_CONFIG_ATTRIB_NAME):
+        if handler is None or not hasattr(handler, FILEBASE_API_API_METHOD_MARKER_CONFIG_ATTRIB_NAME):
             return None
 
-        return getattr(handler, FILEBASE_API_REMOTE_METHOD_MARKER_CONFIG_ATTRIB_NAME)
+        return getattr(handler, FILEBASE_API_API_METHOD_MARKER_CONFIG_ATTRIB_NAME)
 
     @classmethod
     def load_from_path(cls, module_path: str) -> "FilebaseApiModuleInfo":

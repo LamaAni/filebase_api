@@ -6,6 +6,10 @@ let _stratis__websocket = new WebSocket(
 
 const _stratis__websocket_invoke_listener = new EventTarget()
 
+/**
+ * @param {string} name The name of the browser side method to call.
+ * @param {[any]} args The values to send as args.
+ */
 async function _stratis_invoke_event(name, args) {
   if (name == null) throw new Error('Event name was not defined on api invoke.')
   args = args || []
@@ -22,7 +26,7 @@ async function _stratis_invoke_event(name, args) {
 _stratis__websocket.addEventListener('message', (ev) => {
   const data = JSON.parse(ev.data)
   try {
-    _stratis_invoke_event(data.name, data.args)
+    _stratis_invoke_event(data.call, data.args)
   } catch (err) {
     stratis.error(err)
   }
@@ -35,7 +39,12 @@ const _stratis_ws_request_response_timeout = parseInt(
   '<%-stratis.client_request_timeout%>'
 )
 
-function _stratis_makeid(length) {
+/**
+ * Makes a stratis request id
+ * @param {int} length The number of letters in the id
+ * @returns
+ */
+function _stratis_makeid(length = 15) {
   let result = ''
   for (var i = 0; i < length; i++) {
     result += _stratis_make_id_chars.charAt(
@@ -45,6 +54,9 @@ function _stratis_makeid(length) {
   return result
 }
 
+/**
+ * Waits for the stratis websocket to be ready.
+ */
 async function wait_for_staratis_websocket() {
   if (_stratis__websocket.readyState == _stratis__websocket.OPEN) return true
   console.log('waiting for stratis to be ready..')
@@ -64,16 +76,29 @@ async function wait_for_staratis_websocket() {
   })
 }
 
-async function _stratis_send_ws_request(name, ...args) {
+/**
+ * Send a api server method query.
+ * @param {string} call The name of the server method to call
+ * @param {any} payload The file to upload.
+ * @param  {...any} args The args to send to that method.
+ * @returns The return value of the server method.
+ */
+async function _stratis_send_ws_request(call, payload, ...args) {
   await wait_for_staratis_websocket()
+
   const rid = _stratis_makeid(15)
-  _stratis__websocket.send(
-    JSON.stringify({
-      name: name,
-      args: args,
-      rid,
-    })
-  )
+
+  const call_info_json = JSON.stringify({
+    call: call,
+    args: args,
+    rid,
+  })
+
+  if (payload == null) _stratis__websocket.send(call_info_json)
+  else {
+    throw new Error('Stream sending through websocket is not yet implemented.')
+  }
+
   return await new Promise((resolve, reject) => {
     let callback = null
     function cleanup() {
@@ -126,5 +151,9 @@ class stratis {
    */
   static error(err) {
     console.error(err)
+  }
+
+  static async upload(call, file, arg1, arg2) {
+    throw new Error('Stream sending through websocket is not yet implemented.')
   }
 }
