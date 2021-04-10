@@ -42,19 +42,17 @@ WORKDIR /usr/lib/stratis
 COPY ./nodejs ./nodejs
 COPY ./package.json .
 
-RUN git config --global pull.ff only && \
-    npm install && npm install -g . &&\
+RUN npm install && npm install -g . &&\
     addgroup "$USER" &&\
     adduser \
     --disabled-password \
-    --home "$(pwd)" \
     --ingroup "$USER" \
     "$USER"\
     &&\
     chmod +x /entrypoint &&\
     chown -R "$USER" /www
 
-WORKDIR /www
 USER stratis
+RUN git config --global pull.ff only
 
 CMD [ "/entrypoint" ]
