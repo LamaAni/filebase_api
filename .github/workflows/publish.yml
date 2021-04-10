@@ -56,5 +56,5 @@ jobs:
           docker/nodejs/build
         env:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           IMAGE_TAGS: ${{ steps.args.output.versions }}
