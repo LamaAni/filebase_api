@@ -42,7 +42,8 @@ WORKDIR /usr/lib/stratis
 COPY ./nodejs ./nodejs
 COPY ./package.json .
 
-RUN npm install && npm install -g . &&\
+RUN git config --global pull.ff only && \
+    npm install && npm install -g . &&\
     addgroup "$USER" &&\
     adduser \
     --disabled-password \
