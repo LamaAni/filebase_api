@@ -55,4 +55,4 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_USERNAME: lamaani
           DOCKER_REPOSITORY: lamaani/stratis
-          IMAGE_TAGS: ${{ steps.args.outputs.versions }}
+          IMAGE_TAGS: "${{ steps.args.outputs.versions }} latest"

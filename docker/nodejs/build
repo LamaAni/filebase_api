@@ -21,7 +21,8 @@ done
 
 docker build -t "${IMAGE_NAMES[0]}" -f "$REPO_PATH/docker/nodejs/Dockerfile" "$REPO_PATH" || exit $?
 for name in "${IMAGE_NAMES[@]}"; do
-    docker tag "${IMAGE_NAMES[0]}" "${name}"
-    docker push "$name"
+    docker tag "${IMAGE_NAMES[0]}" "${name}" || exit $?
+    docker push "$name" || exit $?
+    echo "Pushed: $name"
 done
 
