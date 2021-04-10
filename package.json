@@ -19,7 +19,7 @@
     "kubernetes"
   ],
   "dependencies": {
-    "@LamaAni/zcli": "github:lamaani/zcli",
+    "@lamaani/infer": "github:lamaani/infer",
     "cookie-parser": "^1.4.5",
     "cookie-session": "^1.4.0",
     "ejs": "^3.1.6",

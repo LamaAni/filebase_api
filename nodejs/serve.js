@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // command line interface.
-const { Cli, Logger } = require('@LamaAni/zcli')
-const CliArgument = require('@LamaAni/zcli/src/CliArgument')
+const { Cli, CliArgument } = require('@lamaani/infer')
 const { assert } = require('console')
 const path = require('path')
 const fs = require('fs')
@@ -28,7 +27,7 @@ class StratisCli {
     this.__$port = {
       type: 'named',
       default: this.port,
-      enviromentVariable: 'STRATIS_PORT',
+      environmentVariable: 'STRATIS_PORT',
       parse: (val) => (typeof val == 'number' ? val : parseInt(val)),
       description: 'The webserver port',
     }
@@ -40,7 +39,7 @@ class StratisCli {
     this.__$default_redirect = {
       type: 'named',
       default: this.default_redirect,
-      enviromentVariable: 'STRATIS_DEFAULT_REDIRECT',
+      environmentVariable: 'STRATIS_DEFAULT_REDIRECT',
       description: 'The default redirect path to use for (/)',
     }
 
@@ -51,7 +50,7 @@ class StratisCli {
     this.__$redirect_all_unknown = {
       type: 'named',
       default: this.redirect_all_unknown,
-      enviromentVariable: 'STRATIS_REDIRECT_ALL_UNKNOWN',
+      environmentVariable: 'STRATIS_REDIRECT_ALL_UNKNOWN',
       description:
         'If true, redirects all unknown request to the default redirect',
     }
@@ -63,7 +62,7 @@ class StratisCli {
     this.__$log_level = {
       type: 'named',
       default: this.log_level,
-      enviromentVariable: 'STRATIS_LOG_LEVEL',
+      environmentVariable: 'STRATIS_LOG_LEVEL',
       description: 'The log level, DEBUG will show all requests',
     }
 
@@ -74,7 +73,7 @@ class StratisCli {
     this.__$cache = {
       type: 'flag',
       default: this.cache,
-      enviromentVariable: 'STRATIS_CACHE',
+      environmentVariable: 'STRATIS_CACHE',
       description: 'Enable cache for requests',
     }
   }
@@ -124,10 +123,18 @@ class StratisCli {
 
 const cli_args = new StratisCli()
 const cli = new Cli({ name: 'stratis' })
-cli.default((args) => cli_args.run(), cli_args, {
-  description:
-    "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
-})
-cli.parse().catch((err) => {
-  console.error(err)
-})
+
+module.exports = {
+  cli,
+  cli_args,
+}
+
+if (require.main == module) {
+  cli.default((args) => cli_args.run(), cli_args, {
+    description:
+      "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
+  })
+  cli.parse().catch((err) => {
+    console.error(err)
+  })
+}
