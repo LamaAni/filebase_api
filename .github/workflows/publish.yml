@@ -57,4 +57,4 @@ jobs:
         env:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          IMAGE_TAGS: ${{ steps.args.output.versions }}
+          IMAGE_TAGS: ${{ steps.args.outputs.versions }}
