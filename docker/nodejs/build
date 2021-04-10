@@ -3,15 +3,16 @@ REPO_PATH="$(realpath "$(dirname "${BASH_SOURCE[0]}")/../..")"
 
 echo "Building @ $REPO_PATH"
 
+: "${DOCKER_REPOSITORY:="docker.io/lamaani/stratis"}"
+
 if [ -n "$DOCKER_PASSWORD" ]; then
     echo "Docker logging in $DOCKER_USERNAME"
-    docker login p "$DOCKER_PASSWORD" -u "$DOCKER_USERNAME" || exit $?
+    docker login -p "$DOCKER_PASSWORD" -u "$DOCKER_USERNAME" "$DOCKER_REPOSITORY" || exit $?
 fi
 
 : "${IMAGE_TAGS:="local"}"
 TAGS=($IMAGE_TAGS)
 
-: "${DOCKER_REPOSITORY:="docker.io/lamaani/stratis"}"
 
 IMAGE_NAMES=()
 for tag in "${TAGS[@]}"; do
