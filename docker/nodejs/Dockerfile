@@ -5,7 +5,8 @@ RUN apk update &&\
     git\
     curl \
     sudo \
-    bash
+    bash \
+    openssh 
 
 ARG GIT_AUTOSYNC_VERSION=1.2.6
 ARG ZBASH_COMMONS_VERSION=0.1.11
@@ -25,8 +26,8 @@ ARG GIT_AUTOSYNC_REPO_BRANCH=master
 ARG GIT_AUTOSYNC_REPO_LOCAL_PATH=/www
 ARG GIT_AUTOSYNC_RUN_ASYNC=1
 
-ENV USER="${USER}"\
-    PS1="\A \h \w > "\
+
+ENV PS1="\A \h \w > "\
     GIT_AUTOSYNC_SSH_KEY_PATH="${GIT_AUTOSYNC_SSH_KEY_PATH}"\
     GIT_AUTOSYNC_REPO_BRANCH="${GIT_AUTOSYNC_REPO_BRANCH}"\
     GIT_AUTOSYNC_REPO_LOCAL_PATH="${GIT_AUTOSYNC_REPO_LOCAL_PATH}"\
@@ -43,16 +44,7 @@ COPY ./nodejs ./nodejs
 COPY ./package.json .
 
 RUN npm install && npm install -g . &&\
-    addgroup "$USER" &&\
-    adduser \
-    --disabled-password \
-    --ingroup "$USER" \
-    "$USER"\
-    &&\
     chmod +x /entrypoint &&\
-    chown -R "$USER" /www
-
-USER stratis
-RUN git config --global pull.ff only
+    git config --global pull.ff only
 
 CMD [ "/entrypoint" ]
