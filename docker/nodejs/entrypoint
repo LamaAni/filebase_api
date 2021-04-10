@@ -1,0 +1,12 @@
+#!/bin/bash
+source zbash_commons
+
+if [ "$ENABLE_GIT_AUTOSYNC" == "true" ]; then
+    log:sep "Autosync"
+    git_autosync --async
+    assert $? "Faild to start autosync" || exit $?
+fi
+
+log:sep "Starting stratis web server"
+stratis "$STRAIS_SERVE_PATH"
+
