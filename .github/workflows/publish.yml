@@ -35,3 +35,23 @@ jobs:
           cd python
           python setup.py sdist bdist_wheel
           twine upload dist/*
+
+  create_node_js_docker:
+    runs-on: ubuntu-latest
+    name: 'Create nodejs docker'
+    steps:
+      - name: 'Read commit args'
+        id: args
+        uses: LamaAni/parse-commit-args-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v2
+
+      - name: 'build & push'
+        run: |
+          docker/nodejs/build
+        env:
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_PASSWORD }}
+          IMAGE_TAGS: ${{ steps.args.output.versions }}
