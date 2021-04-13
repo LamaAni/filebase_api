@@ -94,8 +94,9 @@ class StratisCli {
 
   /**
    * Call to run the stratis cli.
+   * @param {Cli} cli The command line interface.
    */
-  async run() {
+  async run(cli) {
     let src = path.resolve(this.serve_path)
     let stat = null
     cli.logger.level = this.log_level
@@ -145,7 +146,7 @@ if (require.main == module) {
 
   cli.default(
     (args) => {
-      api.run()
+      api.run(cli)
       cli.logger.info('Listening on http://localhost:' + api.port)
     },
     api,
