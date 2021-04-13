@@ -16,6 +16,69 @@ A simple web template engine for fast apis and websites. Very low memory and cpu
 
 This project is undergoing structural changes and should be used with care.
 
+# TL;DR
+
+Example of a NodeJS implementation; on the server we define.
+
+1. index.html - Html EJS template to be compiled and run on client.
+2. index.code.js - The api code for index.html, exposed to the client.
+
+<table>
+<tr>
+<td>index.html
+</td>
+<td>index.code.js
+</td>
+</tr>
+<tr>
+  <td>
+
+```html
+<html>
+  <head>
+    <!-- EJS template, render the stratis tag -->
+    <%- render_stratis_script_tag() %>
+    <script lang="javascript">
+      // stratis object added to browser, with
+      // auto generated attached api calls.
+      stratis.test_remote_call(40).then(val => {
+          document.getElementById("content_box").innerHTML=val
+      })
+    </script>
+  </head>
+  <body>
+    <div id="content_box">
+      <!-- will show 42 after client responds -->
+    </div>
+  </body>
+</html>
+```
+
+</td>
+  <td>
+
+```javascript
+async function test_remote_call(x, req, rsp) {
+  return x + 2
+}
+
+module.exports = {
+  test_remote_call: test_remote_call,
+}
+```
+
+  </td>
+<tr>
+</table>
+
+Or when using REST,
+
+```url
+http://[my_domain]/index.html?api=v1&x=40
+```
+
+Notice, `*.code.js` in NodeJS or `*.code.py` in python are unauthorized to all callers.
+
 # Core principles
 
 1. Uses file extensions to determine the role of each file in the webserver.

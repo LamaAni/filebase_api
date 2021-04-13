@@ -30,7 +30,15 @@ const Stratis_core_source = fs.readFileSync(
 
 /**
  * Interface for the current request information.
- * @typedef {{url: URL, filepath: string, codefilepath:string, query: string, stat:fs.Stats, exists:boolean}} StratisRequestInfo
+ * @typedef {{
+ *  url: URL,
+ *  filepath: string,
+ *  codefilepath:string,
+ *  query: string,
+ *  stat:fs.Stats,
+ *  exists:boolean,
+ *  is_public: boolean,
+ * }} StratisRequestInfo
  */
 
 /**
@@ -358,6 +366,10 @@ class StratisRequestEnvironmentBank {
  * @property {integer} client_request_timeout The client side request timeout [ms]
  * @property {string}  api_version The api version name to use
  * @property {ejs.Options} ejs_options The ejs options.
+ * @property {(filepath)=>boolean} access_filter If true, then allow the file to be accessed from the web. Defaults
+ * @property {boolean} next_handler_on_forbidden If true, then dose not send a 404 on a forbidden file, but rather
+ * sends the request to the next handler.
+ * to true.
  * (if search query api='api_version', means api request)
  */
 
@@ -381,6 +393,8 @@ class Stratis extends events.EventEmitter {
     client_request_timeout = 1 * 60 * 1000,
     api_version = 'v1',
     ejs_options = {},
+    access_filter = null,
+    next_handler_on_forbidden = false,
   } = {}) {
     super()
 
@@ -401,6 +415,8 @@ class Stratis extends events.EventEmitter {
     this.client_request_timeout = client_request_timeout || 1000
     this.api_version = api_version
     this.template_extensions = template_extensions
+    this.access_filter = access_filter
+    this.next_handler_on_forbidden = next_handler_on_forbidden
 
     /** @type {ejs.Options} */
     this.ejs_options = {
@@ -435,7 +451,14 @@ class Stratis extends events.EventEmitter {
         'render_stratis_script_tag',
         Stratis.render_stratis_script_tag
       ),
-      as_stratis_method('render_stratis_script', Stratis.render_stratis_script),
+      as_stratis_method(
+        'render_stratis_api_description',
+        Stratis.render_stratis_api_description
+      ),
+      as_stratis_method(
+        'render_stratis_browser_api_script',
+        Stratis.render_stratis_browser_api_script
+      ),
       as_stratis_template_arg('stratis', this),
     ]
 
@@ -460,6 +483,9 @@ class Stratis extends events.EventEmitter {
     }
 
     const filepath = path.join(src, match[1] || '')
+    const is_public =
+      this.access_filter == null ? true : this.access_filter(filepath)
+
     /**
      * @type {fs.Stats}
      */
@@ -468,13 +494,17 @@ class Stratis extends events.EventEmitter {
       stat = await fs.promises.stat(path.join(src, match[1] || ''))
     } catch {}
 
-    const codefilepath = path.join(
-      path.dirname(filepath),
-      [
-        path.basename(filepath).split('.').slice(0, -1).join('.'),
-        this.codefile_postfix,
-      ].join('.')
-    )
+    const is_target_a_codefile = filepath.endsWith(this.codefile_postfix)
+
+    const codefilepath = is_target_a_codefile
+      ? null
+      : path.join(
+          path.dirname(filepath),
+          [
+            path.basename(filepath).split('.').slice(0, -1).join('.'),
+            this.codefile_postfix,
+          ].join('.')
+        )
 
     return {
       url: new URL(req.protocol + '://' + req.get('host') + req.originalUrl),
@@ -483,6 +513,7 @@ class Stratis extends events.EventEmitter {
       stat,
       exists: stat != null,
       query: match[2],
+      is_public: is_target_a_codefile ? false : is_public,
     }
   }
 
@@ -494,13 +525,27 @@ class Stratis extends events.EventEmitter {
   static render_stratis_script_tag(req, res) {
     const ver = req.stratis.api_version || 'v1'
     const uri = path.basename(req.path)
-    return `<script lang="javascript" src='${uri}?api=${ver}&call=render_stratis_script'></script>`
+    return `<script lang="javascript" src='${uri}?api=${ver}&call=render_stratis_browser_api_script'></script>`
   }
 
-  static render_stratis_script(req, res) {
+  static render_stratis_browser_api_script(req, res) {
     /** @type {StratisRequestEnvironment} */
     const env = req.stratis_env
     return env.api_script
+  }
+
+  static render_stratis_api_description(req, res) {
+    /** @type {StratisRequestEnvironment} */
+    const env = req.stratis_env
+    /** @type {Stratis} */
+    const stratis = req.stratis
+
+    const api_description = {
+      api: stratis.api_version,
+      methods: Object.keys(env.api_methods),
+    }
+
+    return JSON.stringify(api_description)
   }
 
   /**
@@ -718,6 +763,11 @@ class Stratis extends events.EventEmitter {
 
       if (!info.exists || info.stat.isDirectory()) {
         return next()
+      }
+
+      if (!info.is_public) {
+        if (this.next_handler_on_forbidden) return next()
+        return res.sendStatus(404)
       }
 
       // back cleaning.
