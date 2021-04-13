@@ -55,4 +55,34 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_USERNAME: lamaani
           DOCKER_REPOSITORY: lamaani/stratis
-          IMAGE_TAGS: "${{ steps.args.outputs.versions }} latest"
+          IMAGE_TAGS: '${{ steps.args.outputs.versions }} latest'
+
+  publish-to-github:
+    name: 'Publish to github'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Read commit args'
+        id: args
+        uses: LamaAni/parse-commit-args-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'checkout the code'
+        uses: actions/checkout@v2
+      - name: 'setup nodejs'
+        uses: actions/setup-node@v2
+        with:
+          node-version: '12.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@lamaani'
+      - run: |
+          echo "Publishing version ${{steps.args.outputs.version}}" &&
+          git config --global user.email "actions@no-a-server.com" &&
+          git config --global user.name "github actions" &&
+          git fetch &&
+          git checkout main &&
+          npm version '${{steps.args.outputs.version}}' &&
+          npm publish && 
+          git push origin HEAD
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
