@@ -18,12 +18,14 @@ jobs:
 
       - name: 'checkout the code'
         uses: actions/checkout@v2
+
       - name: 'setup nodejs'
         uses: actions/setup-node@v2
         with:
           node-version: '12.x'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@lamaani'
+
       - run: |
           echo "Publishing version ${{steps.args.outputs.version}}" &&
           git config --global user.email "actions@no-a-server.com" &&
