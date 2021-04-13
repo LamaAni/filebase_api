@@ -9,8 +9,11 @@ const express = require('express')
 const { Stratis } = require('./index')
 
 class StratisCli {
+  /**
+   * Implements an infer set of arguments to control the stratis.
+   */
   constructor() {
-    this.serve_path = path.c
+    this.serve_path = process.cwd()
 
     /** @type {CliArgument} */
     this.__$serve_path = {
@@ -76,8 +79,22 @@ class StratisCli {
       environmentVariable: 'STRATIS_CACHE',
       description: 'Enable cache for requests',
     }
+
+    this._api = new Stratis()
+    this._app = express()
   }
 
+  get api() {
+    return this._api
+  }
+
+  get app() {
+    return this._app
+  }
+
+  /**
+   * Call to run the stratis cli.
+   */
   async run() {
     let src = path.resolve(this.serve_path)
     let stat = null
@@ -93,47 +110,52 @@ class StratisCli {
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
 
-    const api = new Stratis()
-    const app = express()
-
     if (!this.cache) {
-      app.use((req, res, next) => {
+      this.app.use((req, res, next) => {
         res.set('Cache-Control', 'no-store')
         next()
       })
     }
 
-    app.use((req, res, next) => {
+    this.app.use((req, res, next) => {
       cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
       next()
     })
 
-    api.server(src, app)
+    this.api.server(src, this.app)
 
     const redirect = (req, res, next) => {
       res.redirect(this.default_redirect)
     }
-    if (this.redirect_all_unknown) app.use(redirect)
-    else app.all('/', redirect)
 
-    await app.listen(this.port)
-    cli.logger.info('App is listening on http://localhost:' + this.port)
+    if (this.redirect_all_unknown) this.app.use(redirect)
+    else this.app.all('/', redirect)
+
+    await this.app.listen(this.port)
   }
 }
 
-const cli_args = new StratisCli()
+const api = new StratisCli()
 const cli = new Cli({ name: 'stratis' })
 
 module.exports = {
   cli,
-  cli_args,
+  cli_args: api,
+  StratisCli,
 }
 
 if (require.main == module) {
-  cli.default((args) => cli_args.run(), cli_args, {
-    description:
-      "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
-  })
+  cli.default(
+    (args) => {
+      api.run()
+      cli.logger.info('Listening on http://localhost:' + api.port)
+    },
+    api,
+    {
+      description:
+        "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
+    }
+  )
   cli.parse().catch((err) => {
     console.error(err)
   })
