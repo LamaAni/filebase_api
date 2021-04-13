@@ -135,16 +135,14 @@ class StratisCli {
   }
 }
 
-const api = new StratisCli()
-const cli = new Cli({ name: 'stratis' })
-
 module.exports = {
-  cli,
-  cli_args: api,
   StratisCli,
 }
 
 if (require.main == module) {
+  const api = new StratisCli()
+  const cli = new Cli({ name: 'stratis' })
+
   cli.default(
     (args) => {
       api.run()
@@ -156,6 +154,7 @@ if (require.main == module) {
         "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
     }
   )
+
   cli.parse().catch((err) => {
     console.error(err)
   })
