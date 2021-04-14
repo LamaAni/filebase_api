@@ -382,7 +382,15 @@ class Stratis extends events.EventEmitter {
   constructor({
     api_methods = {},
     ejs_environment = {},
-    template_extensions = ['.html', '.htm', '.xhtml', '.js', '.css'],
+    template_extensions = [
+      '.html',
+      '.htm',
+      '.xhtml',
+      '.js',
+      '.css',
+      '.api.yaml',
+      '.api.json',
+    ],
     filepath_and_query_regexp = /^([^?#]+)(.*)$/,
     codefile_postfix = 'code.js',
     logger = null,
@@ -747,6 +755,15 @@ class Stratis extends events.EventEmitter {
    * @returns {(req:Request,res:Response,next:NextFunction)=>void} The middleware
    */
   middleware(src) {
+    if (!fs.existsSync(src))
+      throw new Error(`Stratis search path ${src} dose not exist`)
+    const src_stat = fs.statSync(src)
+
+    assert(
+      src_stat.isDirectory(),
+      Error(`Stratis search path ${src} must point to a directory`)
+    )
+
     /**
      * @param {Request} req The request
      * @param {Response} res The response

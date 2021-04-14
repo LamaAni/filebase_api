@@ -80,6 +80,17 @@ class StratisCli {
       description: 'Enable cache for requests',
     }
 
+    /** If exists, dose not load the stratis js file from the source directory. */
+    this.skip_stratis_js_load = false
+    /** @type {CliArgument} */
+    this.__$skip_stratis_js_load = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_SKIP_STRATIS_JS_LOAD',
+      default: this.skip_stratis_js_load,
+      description:
+        'If exists, dose not load the stratis js file from the source directory.',
+    }
+
     this._api = new Stratis()
     this._app = express()
   }
@@ -110,6 +121,23 @@ class StratisCli {
       src != null && stat.isDirectory(),
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
+
+    let init_stratis = null
+    if (
+      !this.skip_stratis_js_load &&
+      fs.existsSync(path.join(src, 'stratis.js'))
+    ) {
+      init_stratis = require(path.join(src, 'stratis.js'))
+      if (typeof init_stratis != 'function') {
+        init_stratis = null
+        cli.logger.warn(
+          'File stratis.js must export an initialization method, (stratis:Stratis, express_app:express.Express, cli:Cli)=>{}'
+        )
+        cli.logger.warn('Initialization skipped.')
+      }
+    }
+
+    if (init_stratis) init_stratis(this.api, this.app, cli)
 
     if (!this.cache) {
       this.app.use((req, res, next) => {
