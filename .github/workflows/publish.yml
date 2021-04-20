@@ -32,6 +32,7 @@ jobs:
           git config --global user.name "github actions" &&
           git fetch &&
           git checkout master &&
+          git pull &&
           npm version '${{steps.args.outputs.version}}' &&
           npm publish && 
           git push origin HEAD
