@@ -7,6 +7,9 @@ if [ "$ENABLE_GIT_AUTOSYNC" == "true" ]; then
     assert $? "Faild to start autosync" || exit $?
 fi
 
+[ -n "$STRATIS_SERVE_PATH" ]
+assert $? "Invalid serve path: $STRATIS_SERVE_PATH"
+
 log:sep "Starting stratis web server"
-stratis "$STRAIS_SERVE_PATH"
+stratis "$STRATIS_SERVE_PATH"
 

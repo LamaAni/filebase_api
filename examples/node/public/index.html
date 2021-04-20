@@ -1,17 +1,22 @@
+<% 
+console.log(req)
+%>
+
 <!DOCTYPE html5>
 <html>
 
 <head>
     <script src="https://code.jquery.com/jquery-3.6.0.js" lang="javascript"></script>
     <%- render_stratis_script_tag() %>
-        <script lang="javascript">
-            stratis.test_remote_call("from client").then(val => {
-                $("#remote_rslt").html(val)
-            })
-        </script>
+    <script lang="javascript">
+        stratis.test_remote_call("from client").then(val => {
+            $("#remote_rslt").html(val)
+        })
+    </script>
 </head>
 <div>
     test ejs: <%=template_argument%>
+    test class: <%=(new helpers.CodeClass()).val%>
 </div>
 <div>
     Remote Value: <p id="remote_rslt"></p>

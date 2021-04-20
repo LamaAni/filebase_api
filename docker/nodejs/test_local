@@ -5,7 +5,7 @@ docker run -it --rm \
     -v "$HOME/.ssh/id_rsa:/var/secrets/git-autosync-ssh-key" \
     -p 8080:8080\
     -e ENABLE_GIT_AUTOSYNC=true\
-    -e STRAIS_SERVE_PATH=/www/examples/node/public\
+    -e STRATIS_SERVE_PATH=/www/examples/node/public\
     -e GIT_AUTOSYNC_REPO_URL=https://github.com/LamaAni/stratis.git\
     -e GIT_AUTOSYNC_REPO_BRANCH=master\
     lamaani/stratis:local "$@"

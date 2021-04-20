@@ -19,6 +19,7 @@ class StratisCli {
     this.__$serve_path = {
       type: 'positional',
       default: this.serve_path,
+      environmentVariable: 'STRATIS_SERVE_PATH',
       description:
         'The path where to find the public files (all files will be exposed)',
     }
