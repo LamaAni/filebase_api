@@ -306,7 +306,7 @@ class StratisCli {
       cli.logger.info('Initialized stratis service middleware and routes')
     }
 
-    if (init_stratis) init_stratis(this.api, this.app, cli)
+    if (init_stratis) await init_stratis(this.api, this.app, cli)
     if (!stratis_init_called) this.api.init_service()
 
     this.api.init_service = null
