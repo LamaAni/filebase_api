@@ -1,4 +1,4 @@
-const { assert } = require('console')
+const { assert } = require('./common')
 const { EventEmitter } = require('events')
 
 const DEFAULT_ERROR_EVENT_NAME = 'error'

@@ -1,5 +1,5 @@
 const events = require('events')
-const { assert } = require('console')
+const { assert } = require('./common')
 const { Request, Response, NextFunction } = require('express/index')
 const path = require('path')
 const fs = require('fs')
@@ -781,6 +781,9 @@ class Stratis extends events.EventEmitter {
       if (!info.exists || info.stat.isDirectory()) {
         return next()
       }
+
+      // Stratis has no cache on client side.
+      res.set('Cache-Control', 'no-store')
 
       if (!info.is_public) {
         if (this.next_handler_on_forbidden) return next()
