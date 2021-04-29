@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // command line interface.
 const { Cli, CliArgument } = require('@lamaani/infer')
-const { assert } = require('console')
+const { assert } = require('./common')
 const path = require('path')
 const fs = require('fs')
 const express = require('express')
@@ -22,6 +22,8 @@ class StratisCli {
       environmentVariable: 'STRATIS_SERVE_PATH',
       description:
         'The path where to find the public files (all files will be exposed)',
+      parse: (p) =>
+        p == null || p.trim().length == 0 ? null : path.resolve(p),
     }
 
     /** The webserver port*/
@@ -81,15 +83,17 @@ class StratisCli {
       description: 'Enable cache for requests',
     }
 
-    /** If exists, dose not load the stratis js file from the source directory. */
-    this.skip_stratis_js_load = false
+    /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.
+     * Calling stratis.init_service() will register the stratis middleware */
+    this.init_script_path = null
     /** @type {CliArgument} */
-    this.__$skip_stratis_js_load = {
-      type: 'flag',
-      environmentVariable: 'STRATIS_SKIP_STRATIS_JS_LOAD',
-      default: this.skip_stratis_js_load,
-      description:
-        'If exists, dose not load the stratis js file from the source directory.',
+    this.__$init_script_path = {
+      type: 'named',
+      environmentVariable: 'IFR_INIT_SCRIPT_PATH',
+      default: this.init_script_path,
+      description: `The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}. Calling stratis.init_service() will register the stratis middleware.`,
+      parse: (p) =>
+        p == null || p.trim().length == 0 ? null : path.resolve(p),
     }
 
     this._api = new Stratis()
@@ -107,61 +111,68 @@ class StratisCli {
   /**
    * Call to run the stratis cli.
    * @param {Cli} cli The command line interface.
+   * @param {bool} listen_sync If true, await listen to the port.
    */
-  async run(cli) {
-    let src = path.resolve(this.serve_path)
+  async run(cli, listen_sync = false) {
     let stat = null
     cli.logger.level = this.log_level
     try {
-      stat = await fs.promises.stat(src)
+      stat = await fs.promises.stat(this.serve_path)
     } catch (err) {
-      src = null
+      this.serve_path = null
     }
 
     assert(
-      src != null && stat.isDirectory(),
+      this.serve_path != null && stat.isDirectory(),
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
 
     let init_stratis = null
-    if (
-      !this.skip_stratis_js_load &&
-      fs.existsSync(path.join(src, 'stratis.js'))
-    ) {
-      init_stratis = require(path.join(src, 'stratis.js'))
-      if (typeof init_stratis != 'function') {
-        init_stratis = null
-        cli.logger.warn(
-          'File stratis.js must export an initialization method, (stratis:Stratis, express_app:express.Express, cli:Cli)=>{}'
-        )
-        cli.logger.warn('Initialization skipped.')
-      }
+
+    if (this.init_script_path != null) {
+      assert(
+        fs.existsSync(this.init_script_path),
+        `Init script file not found @ ${this.init_script_path}`
+      )
+
+      init_stratis = require(this.init_script_path)
+      assert(
+        typeof init_stratis == 'function',
+        `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
+      )
     }
-
-    if (init_stratis) init_stratis(this.api, this.app, cli)
-
-    if (!this.cache) {
-      this.app.use((req, res, next) => {
-        res.set('Cache-Control', 'no-store')
-        next()
-      })
-    }
-
-    this.app.use((req, res, next) => {
-      cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
-      next()
-    })
-
-    this.api.server(src, this.app)
 
     const redirect = (req, res, next) => {
       res.redirect(this.default_redirect)
     }
 
-    if (this.redirect_all_unknown) this.app.use(redirect)
-    else this.app.all('/', redirect)
+    let stratis_init_called = false
 
-    await this.app.listen(this.port)
+    this.api.init_service = () => {
+      stratis_init_called = true
+
+      this.app.use((req, res, next) => {
+        cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
+        next()
+      })
+
+      this.api.server(this.serve_path, this.app)
+
+      if (this.redirect_all_unknown) this.app.use(redirect)
+      else this.app.all('/', redirect)
+
+      cli.logger.info('Initialized stratis service middleware and routes')
+    }
+
+    if (init_stratis) init_stratis(this.api, this.app, cli)
+    if (!stratis_init_called) this.api.init_service()
+
+    this.api.init_service = null
+
+    if (this.app.listeners().length == 0) {
+      if (listen_sync) await this.app.listen(this.port)
+      else this.app.listen(this.port)
+    }
   }
 }
 
@@ -174,8 +185,8 @@ if (require.main == module) {
   const cli = new Cli({ name: 'stratis' })
 
   cli.default(
-    (args) => {
-      api.run(cli)
+    async (args) => {
+      await api.run(cli)
       cli.logger.info('Listening on http://localhost:' + api.port)
     },
     api,
@@ -187,5 +198,8 @@ if (require.main == module) {
 
   cli.parse().catch((err) => {
     console.error(err)
+    try {
+      cli.logger.error(err.message)
+    } catch {}
   })
 }
