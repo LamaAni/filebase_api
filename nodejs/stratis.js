@@ -373,6 +373,8 @@ class StratisRequestEnvironmentBank {
  * sends the request to the next handler.
  * to true.
  * (if search query api='api_version', means api request)
+ * @property {boolean} show_application_errors If true, prints the application errors to the http 500 response.
+ * To be used for debug, may expose sensitive information.
  */
 
 class Stratis extends events.EventEmitter {
@@ -406,6 +408,7 @@ class Stratis extends events.EventEmitter {
     ejs_options = {},
     access_filter = null,
     next_handler_on_forbidden = false,
+    show_application_errors = false,
   } = {}) {
     super()
 
@@ -429,6 +432,7 @@ class Stratis extends events.EventEmitter {
     this.access_filter = access_filter
     this.next_handler_on_forbidden = next_handler_on_forbidden
     this.ejs_environment_require = ejs_environment_require
+    this.show_application_errors = show_application_errors
 
     /** @type {ejs.Options} */
     this.ejs_options = {
@@ -768,6 +772,7 @@ class Stratis extends events.EventEmitter {
           return require(module_path)
         }
     }
+
     res.send(
       await ejs.renderFile(info.filepath, ejs_data, {
         async: true,
@@ -841,12 +846,36 @@ class Stratis extends events.EventEmitter {
             return next_rsp
           }
         }
-
-        if (websocket.is_websocket_request(req))
-          await this._handle_websocket_request(info, env, req, res, next)
-        else if (info.url.searchParams.get('api') == this.api_version)
-          await this._handle_api_request(info, env, req, res, next)
-        else await this._handle_file_request(info, env, req, res, next)
+        let is_file_request = false
+        try {
+          if (websocket.is_websocket_request(req))
+            await this._handle_websocket_request(info, env, req, res, next)
+          else if (info.url.searchParams.get('api') == this.api_version)
+            await this._handle_api_request(info, env, req, res, next)
+          else {
+            is_file_request = true
+            await this._handle_file_request(info, env, req, res, next)
+          }
+        } catch (err) {
+          const newline = is_file_request ? '<br>\n' : '\n'
+          console.error(err)
+          res.status(500).send(
+            this.show_application_errors == true
+              ? [
+                  (err.stack || '').split('\n').join(newline),
+                  'as_json: ' +
+                    JSON.stringify(
+                      {
+                        message: err.message || '',
+                        stack: err.stack.split('\n'),
+                      },
+                      null,
+                      2
+                    ),
+                ].join(newline + newline)
+              : 'Application error'
+          )
+        }
       } finally {
         // cleanup.
         this._clean_stratis_request_args(req)

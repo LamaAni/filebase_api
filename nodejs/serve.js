@@ -178,6 +178,17 @@ class StratisCli {
       parse: (v) => v === true || v == 'true',
     }
 
+    /** If true, sends the application error details to the client with 500 http response. */
+    this.show_app_errors = false
+    /** @type {CliArgument} */
+    this.__$show_app_errors = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_SHOW_APP_ERRORS',
+      default: this.show_app_errors,
+      description:
+        'If true, sends the application error details to the client with 500 http response.',
+    }
+
     this._api = null
     this._app = express()
   }
@@ -186,6 +197,7 @@ class StratisCli {
     if (this._api == null) {
       this._api = new Stratis({
         ejs_environment_require: this.ejs_add_require,
+        show_application_errors: this.show_app_errors,
       })
     }
     return this._api
