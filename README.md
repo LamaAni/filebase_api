@@ -90,10 +90,6 @@ Notice, `*.code.js` in NodeJS or `*.code.py` in python are unauthorized to all c
 
 1. code files - file that expose python or node functions to `REST API`, `JS API` or `Websocket API` requests.
 1. template files - templated sources. All template files can be imported into one another.
-1. initialization file - When using the command line interface, the file `[serve-path]/stratis.js` can be used to initialize the web services, where,
-   ```javascript
-   module.exports = (stratis, express_app, cli) => {}
-   ```
 
 ### Default file extensions and behaviors
 

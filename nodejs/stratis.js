@@ -356,6 +356,8 @@ class StratisRequestEnvironmentBank {
  * @property {Object<string,(...args, req:Request, res: Response, next:NextFunction)=>void>} api_methods A collection
  * of core api methods to expose.
  * @property {Object<string, any>} ejs_environment A collection to render time objects to expose.
+ * @property {boolean} ejs_environment_require IF true, adds the require method to the ejs call. Required
+ * Files can only be loaded in main (not imported template files), and are loaded only once.
  * @property {RegExp} filepath_and_query_regexp The filepath and query regexp. Must return two groups.
  * @property {string} codefile_postfix The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
@@ -382,6 +384,7 @@ class Stratis extends events.EventEmitter {
   constructor({
     api_methods = {},
     ejs_environment = {},
+    ejs_environment_require = true,
     template_extensions = [
       '.html',
       '.htm',
@@ -425,6 +428,7 @@ class Stratis extends events.EventEmitter {
     this.template_extensions = template_extensions
     this.access_filter = access_filter
     this.next_handler_on_forbidden = next_handler_on_forbidden
+    this.ejs_environment_require = ejs_environment_require
 
     /** @type {ejs.Options} */
     this.ejs_options = {
@@ -443,11 +447,17 @@ class Stratis extends events.EventEmitter {
      * @type {[StratisCodeObject]}
      */
     this.env_objects = []
-    Object.keys(api_methods).forEach((k) =>
-      this.env_objects.push(
-        new StratisCodeObject(api_methods[k], 'API_METHOD', k)
+
+    Object.keys(api_methods)
+      .filter(
+        (k) => api_methods[k] != null && typeof api_methods[k] == 'function'
       )
-    )
+      .forEach((k) =>
+        this.env_objects.push(
+          new StratisCodeObject(api_methods[k], 'API_METHOD', k)
+        )
+      )
+
     Object.keys(ejs_environment).forEach((k) =>
       this.env_objects.push(
         new StratisCodeObject(ejs_environment[k], 'TEMPLATE_ARG', k)
@@ -742,6 +752,21 @@ class Stratis extends events.EventEmitter {
         o = (...args) => call_to(...args, req, res)
       }
       ejs_data[k] = o
+    }
+
+    if (this.ejs_environment_require === true && ejs_data.require == null) {
+      ejs_data.require =
+        /**
+         * @param {string|any} module_path
+         */
+        (module_path) => {
+          if (typeof module_path == 'string' && !module_path.startsWith('/')) {
+            if (module_path.startsWith('./'))
+              module_path = module_path.substr(2)
+            module_path = path.join(path.dirname(info.filepath), module_path)
+          }
+          return require(module_path)
+        }
     }
     res.send(
       await ejs.renderFile(info.filepath, ejs_data, {
