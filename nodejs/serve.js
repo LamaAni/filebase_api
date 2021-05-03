@@ -347,10 +347,12 @@ if (require.main == module) {
   )
 
   cli.parse().catch((err) => {
-    console.error(err)
     try {
+      console.error(err)
       cli.logger.error(err.message)
-    } catch {}
-    process.exit(1)
+    } catch (err) {
+    } finally {
+      process.exit(1)
+    }
   })
 }
