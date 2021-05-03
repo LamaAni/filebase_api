@@ -235,8 +235,8 @@ class StratisCli {
           'Could not load ssl key'
         ),
         cert: await this._get_value_or_file_content(
-          this.ssl_cert_cert,
-          this.cert_key_path,
+          this.ssl_cert,
+          this.ssl_cert_path,
           'Could not load ssl certificate'
         ),
       }
