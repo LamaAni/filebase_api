@@ -351,5 +351,6 @@ if (require.main == module) {
     try {
       cli.logger.error(err.message)
     } catch {}
+    process.exit(1)
   })
 }
