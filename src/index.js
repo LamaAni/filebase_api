@@ -9,7 +9,7 @@ const {
   as_stratis_template_arg,
 } = require('./stratis')
 
-const { StratisCli } = require('./serve')
+const { StratisCli } = require('./cli')
 
 const websocket = require('./websocket')
 

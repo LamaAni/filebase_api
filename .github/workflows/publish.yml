@@ -85,7 +85,7 @@ jobs:
 
       - name: 'build & push'
         run: |
-          docker/nodejs/build
+          docker/build
         env:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_USERNAME: lamaani

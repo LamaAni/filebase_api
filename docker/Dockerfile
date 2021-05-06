@@ -37,10 +37,10 @@ ENV PS1="\A \h \w > "\
     ENABLE_GIT_AUTOSYNC="${ENABLE_GIT_AUTOSYNC}"
 
 WORKDIR /www
-COPY ./docker/nodejs/entrypoint /entrypoint
+COPY ./docker/entrypoint /entrypoint
 
 WORKDIR /usr/lib/stratis
-COPY ./nodejs ./nodejs
+COPY ./src ./src
 COPY ./package.json .
 
 RUN npm install && npm install -g . &&\
