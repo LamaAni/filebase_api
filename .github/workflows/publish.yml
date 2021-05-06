@@ -9,7 +9,7 @@ on:
       - released
 jobs:
   publish-to-github-as-npm:
-    name: 'Publish to github as npm package'
+    name: '(RE) Publish to github as npm package'
     runs-on: ubuntu-latest
     steps:
       - name: 'Read commit args'
@@ -41,35 +41,35 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  create_python_package-pypi:
-    runs-on: ubuntu-latest
-    name: 'Publish to PyPi as python package'
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel twine
+  # create_python_package-pypi:
+  #   runs-on: ubuntu-latest
+  #   name: 'Publish to PyPi as python package'
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v2
+  #       with:
+  #         python-version: '3.x'
+  #     - name: Install dependencies
+  #       run: |
+  #         python -m pip install --upgrade pip
+  #         pip install setuptools wheel twine
 
-      - name: 'Read commit args'
-        id: args
-        uses: LamaAni/parse-commit-args-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: 'Read commit args'
+  #       id: args
+  #       uses: LamaAni/parse-commit-args-action@master
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish
-        env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-          VERSION: '${{steps.args.outputs.version}}'
-        run: |
-          cd python
-          python setup.py sdist bdist_wheel
-          twine upload dist/*
+  #     - name: Build and publish
+  #       env:
+  #         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+  #         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+  #         VERSION: '${{steps.args.outputs.version}}'
+  #       run: |
+  #         cd python
+  #         python setup.py sdist bdist_wheel
+  #         twine upload dist/*
 
   create_node_js_docker:
     runs-on: ubuntu-latest

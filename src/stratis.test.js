@@ -1,7 +1,13 @@
 const { Stratis } = require('./index')
 const path = require('path')
 
-const serve_path = path.join(__dirname, '..', 'examples', 'node', 'public')
+const serve_path = path.join(
+  __dirname,
+  '..',
+  'examples',
+  'basic_website',
+  'public'
+)
 const app = new Stratis({}).server(path.resolve(serve_path))
 const port = 8080
 
