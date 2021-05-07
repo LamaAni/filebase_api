@@ -7,7 +7,8 @@
     "stratis": "src/cli.js"
   },
   "files": [
-    "src/*"
+    "src/*",
+    "examples/*"
   ],
   "scripts": {
     "start": "src/cli.js"
@@ -25,7 +26,7 @@
     "kubernetes"
   ],
   "dependencies": {
-    "@lamaani/infer": "github:lamaani/infer",
+    "@lamaani/infer": "github:lamaani/infer#",
     "cookie-parser": "^1.4.5",
     "cookie-session": "^1.4.0",
     "ejs": "^3.1.6",
