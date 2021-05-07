@@ -18,10 +18,15 @@ See more info about planned language implementations [below](#future-implementat
 
 Example of an implementation in NodeJs,
 
-On the server,
+On the server, if we have,
 
-1. index.html - Html EJS template to be compiled and run on client.
-2. index.code.js - The API code for index.html, exposed to the client.
+1. /www/index.html - Html EJS template to be compiled and run on client.
+2. /www/index.code.js - The API code for index.html, exposed to the client.
+
+Run command (using the cli):
+```shell
+stratis /www
+```
 
 <table>
 <tr>
@@ -71,13 +76,13 @@ module.exports = {
 <tr>
 </table>
 
-Or when using REST,
+To call the index.html api with REST,
 
 ```url
 http://[my_domain]/index.html?API=v1&x=40
 ```
 
-Notice, `*.code.js` in NodeJS or `*.code.py` in python are unauthorized to all callers.
+`*.code.js` will never be served to any client and is private.
 
 # Core principles
 
