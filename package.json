@@ -6,6 +6,9 @@
   "bin": {
     "stratis": "src/cli.js"
   },
+  "files": [
+    "src/*"
+  ],
   "scripts": {
     "start": "src/cli.js"
   },
