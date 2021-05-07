@@ -1,5 +1,5 @@
 #!/bin/bash
-REPO_PATH="$(realpath "$(dirname "${BASH_SOURCE[0]}")/../..")"
+REPO_PATH="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 
 echo "Building @ $REPO_PATH"
 
