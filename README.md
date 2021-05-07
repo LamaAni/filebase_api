@@ -10,7 +10,7 @@ A simple web template engine for fast APIs and websites.  This repo favors very 
 Implemented in,
 1. NodeJS, with EJS backend and the express.js webserver.
 
-See more info about planned language implementations [below](#future-implementation)).
+See more info about planned language implementations [below](#future-implementation).
 
 # ALPHA
 
