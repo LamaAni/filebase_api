@@ -205,13 +205,17 @@ Feel free to ping me in issues or directly on LinkedIn to contribute.
 
 # Future implementation
 
-We are considering implementing the web service for a few languages following the above rendering rules.
-This may prove to be very helpful in case one wishes to add a very light and easy to implement
-webservice to an already running application, or as a kubernetes side car.
+Implementing the stratis low-impact webserver in multiple languages may prove
+very helpful for dockerized (or pod running) micros-services and processing jobs; it may provide an easy way to
+generate an interface for monitoring and interacting with running containers or allow
+web interfaces to be created for visual monitoring, without little to no impact on the required resources.
 
 ## Currently under consideration
-1. Python, using Jinja as template backend.
-2. Go, using go templates as template backend. (Subject to change)
+1. Python, using Jinja as template backend. This would prove very helpful for data science processing.
+2. Go, using go templates as template backend. May prove helpful to monitor kubernetes services.
+
+
+That said, other languages may be considered.
 
 # Licence
 
