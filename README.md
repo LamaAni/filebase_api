@@ -208,7 +208,7 @@ Feel free to ping me in issues or directly on LinkedIn to contribute.
 Implementing the stratis low-impact webserver in multiple languages may prove
 very helpful for dockerized (or pod running) micros-services and processing jobs; it may provide an easy way to
 generate an interface for monitoring and interacting with running containers or allow
-web interfaces to be created for visual monitoring, without little to no impact on the required resources.
+web interfaces to be created for visual monitoring, with little to no impact on the required resources.
 
 ## Currently under consideration
 1. Python, using Jinja as template backend. This would prove very helpful for data science processing.
