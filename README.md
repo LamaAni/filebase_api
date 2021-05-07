@@ -21,7 +21,7 @@ Example of an implementation in NodeJs,
 On the server, if we have,
 
 1. /www/index.html - Html EJS template to be compiled and run on client.
-2. /www/index.code.js - The API code for index.html, exposed to the client.
+2. /www/index.code.js - The API and template code for index.html.
 
 Run command (using the cli):
 ```shell
@@ -52,6 +52,7 @@ stratis /www
     </script>
   </head>
   <body>
+    <div><%- my_val %></div>
     <div id="content_box">
       <!-- will show 42 after client responds -->
     </div>
@@ -69,6 +70,7 @@ async function test_remote_call(x, req, rsp) {
 
 module.exports = {
   test_remote_call: test_remote_call,
+  my_val: 'my_val', // can also be an object.
 }
 ```
 
