@@ -12,11 +12,7 @@ Implemented in,
 
 See more info about planned language implementations [below](#future-implementation).
 
-# ALPHA
-
-### WARNING
-
-This project is undergoing structural changes and should be used with care.
+# BETA
 
 # TL;DR
 
