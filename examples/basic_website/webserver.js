@@ -1,4 +1,4 @@
-const { Stratis } = require('../../nodejs/index')
+const { Stratis } = require('../../src/index')
 const path = require('path')
 
 const serve_directory_fullpath = path.resolve(path.join(__dirname, 'public'))

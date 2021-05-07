@@ -5,7 +5,7 @@ require('../require_file.js')
 
 <%
 // uncomment to throw an error.
-this_will_throw_an_error()
+// this_will_throw_an_error()
 %>
 
 <!DOCTYPE html5>
@@ -15,7 +15,7 @@ this_will_throw_an_error()
     <script src="https://code.jquery.com/jquery-3.6.0.js" lang="javascript"></script>
     <%- render_stratis_script_tag() %>
     <script lang="javascript">
-        stratis.test_remote_call("from client").then(val => {
+        stratis.test_remote_call("this value was sent to the remote from the client").then(val => {
             $("#remote_rslt").html(val)
         })
     </script>
@@ -25,7 +25,7 @@ this_will_throw_an_error()
     test class: <%=(new helpers.CodeClass()).val%>
 </div>
 <div>
-    Remote Value: <p id="remote_rslt"></p>
+    Remote responded with echo: <p id="remote_rslt" style="margin: 10px; background-color: yellow;"></p>
 </div>
 
 </html>

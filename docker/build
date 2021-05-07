@@ -19,7 +19,7 @@ for tag in "${TAGS[@]}"; do
     IMAGE_NAMES+=("$DOCKER_REPOSITORY:${tag}")
 done
 
-docker build -t "${IMAGE_NAMES[0]}" -f "$REPO_PATH/docker/nodejs/Dockerfile" "$REPO_PATH" || exit $?
+docker build -t "${IMAGE_NAMES[0]}" -f "$REPO_PATH/docker/Dockerfile" "$REPO_PATH" || exit $?
 for name in "${IMAGE_NAMES[@]}"; do
     docker tag "${IMAGE_NAMES[0]}" "${name}" || exit $?
     docker push "$name" || exit $?

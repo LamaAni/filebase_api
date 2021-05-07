@@ -2,9 +2,16 @@
   "name": "@lamaani/stratis",
   "version": "0.2.24",
   "description": "A simple web template engine for fast apis and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
-  "main": "nodejs/index.js",
+  "main": "src/index.js",
   "bin": {
-    "stratis": "nodejs/serve.js"
+    "stratis": "src/cli.js"
+  },
+  "files": [
+    "src/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "start": "src/cli.js"
   },
   "repository": {
     "type": "git",
@@ -19,7 +26,7 @@
     "kubernetes"
   ],
   "dependencies": {
-    "@lamaani/infer": "github:lamaani/infer",
+    "@lamaani/infer": "github:lamaani/infer#0.1.7",
     "cookie-parser": "^1.4.5",
     "cookie-session": "^1.4.0",
     "ejs": "^3.1.6",
