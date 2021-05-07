@@ -52,7 +52,7 @@ stratis /www
     </script>
   </head>
   <body>
-    <div><%- my_val %></div>
+    <div><%- div_text %></div>
     <div id="content_box">
       <!-- will show 42 after client responds -->
     </div>
@@ -70,7 +70,7 @@ async function test_remote_call(x, req, rsp) {
 
 module.exports = {
   test_remote_call: test_remote_call,
-  my_val: 'my_val', // can also be an object.
+  div_text: 'text to show in div', // can also be an object.
 }
 ```
 
