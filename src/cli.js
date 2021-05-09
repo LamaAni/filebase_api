@@ -7,6 +7,7 @@ const fs = require('fs')
 const express = require('express')
 const http = require('http')
 const https = require('https')
+const { Request, Response, NextFunction } = require('express/index')
 
 const { Stratis } = require('./stratis')
 
@@ -54,7 +55,7 @@ class StratisCli {
     }
 
     /** The https port to use. If null, do not listen on ssl. */
-    this.https_port = null
+    this.https_port = 8443
     /** @type {CliArgument} */
     this.__$https_port = {
       type: 'named',
@@ -62,10 +63,21 @@ class StratisCli {
       default: this.https_port,
       description: 'The https port to use. If empty, do not listen on ssl.',
       parse: (val) => {
-        if (val == null || val.trim().length == 0) return null
         if (typeof val == 'number') return val
+        if (val == null || val.trim().length == 0) return null
         return parseInt(val)
       },
+    }
+
+    /** If true enable https. https port must be defined. */
+    this.enable_https = false
+    /** @type {CliArgument} */
+    this.__$enable_https = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_ENABLE_HTTPS',
+      default: this.enable_https,
+      description:
+        'If true enable https. https port must be defined. If enabled, all connections not whitelisted in allow_http_for will be redirected to https.',
     }
 
     /** The ssl key (certificate decrypt key) */
@@ -189,6 +201,61 @@ class StratisCli {
         'If true, sends the application error details to the client with 500 http response.',
     }
 
+    /** @type {[RegExp]} An array or newline seperated list of regular expressions to allow http connections. Only active in the case where https is active. */
+    this.allow_http_for = []
+    /** @type {CliArgument} */
+    this.__$allow_http_for = {
+      type: 'named',
+      environmentVariable: 'STRATIS_ALLOW_HTTP_FOR',
+      default: this.allow_http_for,
+      collectMultiple: true,
+      description:
+        'A newline separated list of regular expressions to match against the request path. Active if enable_https.',
+      parse:
+        /**
+         * @param {string} v
+         * @returns {RegExp| [RegExp]}
+         */
+        (v) => {
+          if (v instanceof RegExp) return v
+          assert(typeof v == 'string')
+          const v_arr = v
+            .trim()
+            .split('\n')
+            .filter((v) => v.length > 0)
+            .map((v) => new RegExp(v))
+
+          assert(v_arr.length > 0, 'invalid array length for allow_http_for')
+
+          this.allow_http_for = this.allow_http_for.concat(
+            v_arr.slice(0, v_arr.length - 1)
+          )
+
+          return v_arr[v_arr.length - 1]
+        },
+    }
+
+    /** If true, includes the domain in the http_allow_for */
+    this.full_url_in_http_allow = false
+    /** @type {CliArgument} */
+    this.__$full_url_in_http_allow = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_FULL_URL_IN_HTTP_ALLOW',
+      default: this.full_url_in_http_allow,
+      description:
+        'If true, the http_allow_for will be matched to the full url.',
+    }
+
+    /** If true, denies localhost connections to use http. */
+    this.no_localhost_http = false
+    /** @type {CliArgument} */
+    this.__$no_localhost_http = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_NO_LOCALHOST_HTTP',
+      default: this.allow_localhost_http,
+      description: 'If true, denies localhost connections to use http.',
+    }
+
     this._api = null
     this._app = express()
   }
@@ -227,7 +294,7 @@ class StratisCli {
    */
   async _listen(cli, listen_sync) {
     let ssl_certificates = null
-    if (this.https_port) {
+    if (this.enable_https) {
       ssl_certificates = {
         key: await this._get_value_or_file_content(
           this.ssl_key,
@@ -262,6 +329,21 @@ class StratisCli {
   }
 
   /**
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  async redirect_to_https(req, res, next) {
+    // In case a port was provided. Otherwise we should get an https request.
+    const full_hostname = req
+      .get('host')
+      .replace(/[:][0-9]+$/, ':' + this.https_port)
+
+    // not https. redirect.
+    res.redirect('https://' + full_hostname + req.originalUrl)
+  }
+
+  /**
    * Call to run the stratis cli.
    * @param {Cli} cli The command line interface.
    * @param {bool} listen_sync If true, await listen to the port.
@@ -293,6 +375,37 @@ class StratisCli {
         typeof init_stratis == 'function',
         `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
       )
+    }
+
+    if (this.enable_https) {
+      cli.logger.info(
+        `Auto redirecting all traffic ${this.port}(http) -> ${this.https_port} (https) `
+      )
+
+      this.app.use((req, res, next) => {
+        if (req.protocol != 'http') return next()
+        if (
+          !this.no_localhost_http &&
+          (req.hostname == 'localhost' || req.hostname.endsWith('.localhost'))
+        ) {
+          return next()
+        }
+
+        const check_url = this.full_url_in_http_allow
+          ? req.protocol + '://' + req.get('host') + req.path
+          : req.path
+
+        if (this.allow_http_for.some((re) => re.test(check_url))) {
+          return next()
+        }
+
+        cli.logger.debug(
+          `Redirect ${req.protocol} to https ` + req.originalUrl,
+          '~>'.cyan
+        )
+
+        this.redirect_to_https(req, res, next)
+      })
     }
 
     const redirect = (req, res, next) => {
