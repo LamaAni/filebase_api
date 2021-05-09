@@ -201,7 +201,7 @@ class StratisCli {
         'If true, sends the application error details to the client with 500 http response.',
     }
 
-    /** @type {[RegExp]} An array or newline seperated list of regular expressions to allow http connections. Only active in the case where https is active. */
+    /** @type {[RegExp]} An array or newline separated list of regular expressions to allow http connections. Only active in the case where https is active. */
     this.allow_http_for = []
     /** @type {CliArgument} */
     this.__$allow_http_for = {
