@@ -189,6 +189,17 @@ class StratisCli {
         'If true, sends the application error details to the client with 500 http response.',
     }
 
+    /** If true, auto redirects all incoming traffic to https */
+    this.auto_redirect_to_https = false
+    /** @type {CliArgument} */
+    this.__$auto_redirect_to_https = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_AUTO_REDIRECT_TO_HTTPS',
+      default: this.auto_redirect_to_https,
+      description:
+        'If true, auto redirects all incoming traffic to https. If https_port is not defined defaults to 8433',
+    }
+
     this._api = null
     this._app = express()
   }
@@ -293,6 +304,29 @@ class StratisCli {
         typeof init_stratis == 'function',
         `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
       )
+    }
+
+    if (this.auto_redirect_to_https) {
+      this.https_port = this.https_port || 8433
+      cli.logger.info(
+        `Auto redirecting all traffic ${this.port}(http) -> ${this.https_port} (https) `
+      )
+
+      this.app.use((req, res, next) => {
+        if (req.protocol != 'http') return next()
+        cli.logger.debug(
+          `Redirect ${req.protocol} to https ` + req.originalUrl,
+          '~>'.cyan
+        )
+
+        // In case a port was provided. Otherwise we should get an https request.
+        const hostname_corrected_port = req
+          .get('host')
+          .replace(/[:][0-9]+$/, ':' + this.https_port)
+
+        // not https. redirect.
+        res.redirect('https://' + hostname_corrected_port + req.originalUrl)
+      })
     }
 
     const redirect = (req, res, next) => {
