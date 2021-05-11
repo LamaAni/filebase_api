@@ -31,7 +31,8 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
           scope: '@lamaani'
 
-      - run: |
+      - name: "Publish version to github"
+        run: |
           echo "Publishing version ${{steps.args.outputs.version}}" &&
           git config --global user.email "actions@no-a-server.com" &&
           git config --global user.name "github actions" &&
