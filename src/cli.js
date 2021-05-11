@@ -344,6 +344,28 @@ class StratisCli {
   }
 
   /**
+   * Call to run the stratis cli. (Overrideable)
+   * @param {Cli} cli The command line interface.
+   */
+  async invoke_initialization_scripts(cli) {
+    if (this.init_script_path != null) {
+      const script_path = path.resolve(this.init_script_path)
+      assert(
+        fs.existsSync(script_path),
+        `Init script file not found @ ${script_path}`
+      )
+
+      const init_stratis = require(script_path)
+      assert(
+        typeof init_stratis == 'function',
+        `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
+      )
+
+      init_stratis(this.api, this.app, cli)
+    }
+  }
+
+  /**
    * Call to run the stratis cli.
    * @param {Cli} cli The command line interface.
    * @param {bool} listen_sync If true, await listen to the port.
@@ -362,20 +384,20 @@ class StratisCli {
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
 
-    let init_stratis = null
+    // let init_stratis = null
 
-    if (this.init_script_path != null) {
-      assert(
-        fs.existsSync(this.init_script_path),
-        `Init script file not found @ ${this.init_script_path}`
-      )
+    // if (this.init_script_path != null) {
+    //   assert(
+    //     fs.existsSync(this.init_script_path),
+    //     `Init script file not found @ ${this.init_script_path}`
+    //   )
 
-      init_stratis = require(this.init_script_path)
-      assert(
-        typeof init_stratis == 'function',
-        `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
-      )
-    }
+    //   init_stratis = require(this.init_script_path)
+    //   assert(
+    //     typeof init_stratis == 'function',
+    //     `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
+    //   )
+    // }
 
     if (this.enable_https) {
       cli.logger.info(
@@ -431,7 +453,8 @@ class StratisCli {
       cli.logger.info('Initialized stratis service middleware and routes')
     }
 
-    if (init_stratis) await init_stratis(this.api, this.app, cli)
+    await this.invoke_initialization_scripts(cli)
+
     if (!stratis_init_called) this.api.init_service()
 
     this.api.init_service = null
