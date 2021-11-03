@@ -91,6 +91,26 @@ payload: { "arg": "value" }
 
 On POST the payload is mapped to the first value of the function, and json parsing is attempted.
 
+# Client-Side html page structure
+
+If on the server-side html template (page), in the head tag, you add,
+
+```html
+<html>
+  <head>
+    <%- render_stratis_script_tag() %>
+    <script lang="javascript">
+      stratis.my_remote_method("a value")
+    </script>
+  </head>
+  <body>
+    my page
+  </body>
+</html>
+```
+
+A javascript object named `stratis` will be created in the client browser, that includes all the exposed page function as defined in `[filepath].code.js`. E.g, for the above example, the `code.js` file can
+
 # Server website structure
 
 Stratis uses files paths and extensions to specify application behavior. e.g.,
