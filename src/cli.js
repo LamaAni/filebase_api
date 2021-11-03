@@ -374,8 +374,9 @@ class StratisCli {
    * @param {Cli} cli The command line interface.
    * @param {bool} listen_sync If true, await listen to the port.
    */
-  async run(cli, listen_sync = false) {
+  async run(cli = null, listen_sync = false) {
     let stat = null
+    cli = cli || new Cli({ name: 'stratis' })
     cli.logger.level = this.log_level
     try {
       stat = await fs.promises.stat(this.serve_path)
