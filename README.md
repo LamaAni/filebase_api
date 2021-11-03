@@ -1,11 +1,13 @@
 # Stratis file based webserver and API generator
 
-A simple web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods, or can run parallel to your application.
+### BETA
+
+A file based web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods, that can run parallel/sidecar with your application.
 
 1. Command line server startup.
 2. Built-in REST API.
-3. Build-in Websocket API.
-4. Live update for changes in the file contents.
+3. Build-in WebSocket API.
+4. Live update (triggered by file changes).
 
 Implemented in,
 
@@ -13,16 +15,12 @@ Implemented in,
 
 See more info about planned language implementations [below](#future-implementation).
 
-# BETA
-
 # TL;DR
-
-Example of an implementation in NodeJs,
 
 On the server, if we have,
 
 1. /www/index.html - Html EJS template to be compiled and run on client.
-2. /www/index.code.js - The API and template code for index.html.
+2. /www/index.code.js - The API methods and templating objects for index.html.
 
 Run command (using the cli):
 
