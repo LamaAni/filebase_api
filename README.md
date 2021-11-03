@@ -100,7 +100,7 @@ If on the server-side html template (page), in the head tag, you add,
   <head>
     <%- render_stratis_script_tag() %>
     <script lang="javascript">
-      stratis.my_remote_method("a value")
+      stratis.my_remote_method({value: "a value"})
     </script>
   </head>
   <body>
@@ -109,7 +109,7 @@ If on the server-side html template (page), in the head tag, you add,
 </html>
 ```
 
-A javascript object named `stratis` will be created in the client browser, that includes all the exposed page function as defined in `[filepath].code.js`. E.g, for the above example, the `code.js` file can
+A javascript object named `stratis` will be created in the client browser, that includes all the exposed page api function as defined in `[filepath].code.js`. See below website structure.
 
 # Server website structure
 
