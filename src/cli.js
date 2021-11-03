@@ -38,8 +38,12 @@ class StratisCli {
       environmentVariable: 'STRATIS_SERVE_PATH',
       description:
         'The path where to find the public files (all files will be exposed)',
-      parse: (p) =>
-        p == null || p.trim().length == 0 ? null : path.resolve(p),
+      parse: (p) => {
+        if (p == null || p.trim().length == 0) return null
+        let resolved = path.resolve(p)
+        if (resolved == null) return p
+        return resolved
+      },
     }
 
     /** The webserver port*/
@@ -375,29 +379,12 @@ class StratisCli {
     cli.logger.level = this.log_level
     try {
       stat = await fs.promises.stat(this.serve_path)
-    } catch (err) {
-      this.serve_path = null
-    }
+    } catch (err) {}
 
     assert(
-      this.serve_path != null && stat.isDirectory(),
+      this.serve_path != null && stat != null && stat.isDirectory(),
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
-
-    // let init_stratis = null
-
-    // if (this.init_script_path != null) {
-    //   assert(
-    //     fs.existsSync(this.init_script_path),
-    //     `Init script file not found @ ${this.init_script_path}`
-    //   )
-
-    //   init_stratis = require(this.init_script_path)
-    //   assert(
-    //     typeof init_stratis == 'function',
-    //     `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
-    //   )
-    // }
 
     if (this.enable_https) {
       cli.logger.info(
