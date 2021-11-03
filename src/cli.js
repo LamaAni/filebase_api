@@ -9,7 +9,7 @@ const http = require('http')
 const https = require('https')
 const { Request, Response, NextFunction } = require('express/index')
 
-const { Stratis } = require('./stratis')
+const { Stratis } = require('./webserver/stratis.js')
 
 class StratisCli {
   /**

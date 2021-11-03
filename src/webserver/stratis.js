@@ -1,15 +1,15 @@
+const express = require('express')
 const events = require('events')
-const { assert } = require('./common')
-const { Request, Response, NextFunction } = require('express/index')
 const path = require('path')
 const fs = require('fs')
 const ejs = require('ejs')
 const mime = require('mime')
-const express = require('express')
-const { split_stream_once, stream_to_buffer } = require('./streams')
 const stream = require('stream')
+const { Request, Response, NextFunction } = require('express/index')
 
-const websocket = require('./websocket')
+const websocket = require('../websocket.js')
+const { split_stream_once, stream_to_buffer } = require('../streams.js')
+const { assert } = require('../common.js')
 
 const Stratis_core_source = fs.readFileSync(
   path.join(__dirname, 'stratis.core.js'),
@@ -259,9 +259,8 @@ class StratisRequestEnvironment {
   async load_request(api, info) {
     this.created = new Date()
     this.has_codefile = fs.existsSync(info.codefilepath)
-    this.last_modification_timestamps = await this.__get_modification_timestamps(
-      info
-    )
+    this.last_modification_timestamps =
+      await this.__get_modification_timestamps(info)
 
     if (this.has_codefile) delete require.cache[info.codefilepath]
     this.codefile_module = this.has_codefile ? require(info.codefilepath) : {}
