@@ -99,7 +99,7 @@ Stratis uses files paths and extensions to specify application behavior. e.g.,
   the public path specifier.
 - `/public/v1/api.js` would be an api code file, since it ends in `api.js`
 
-### Access control
+## Access control
 
 **public** files can be downloaded.
 `*.code.js` files are always private.
@@ -112,11 +112,11 @@ Files that match the regex,
 
 would be public or private respectively. The regex can match multiple times. If a path matched `private` once it would be private.
 
-#### Access control defaults
+### Access control defaults
 
 All files are by default public unless the folder `[serve_path]/public` exists. This value can also be set via the command line interface.
 
-### Pages (rendered templates)
+## Pages (rendered templates)
 
 Page files are rendered as templates if downloaded, and can have attached page code, remote methods and a rest api. Files with path `[filepath].[ext]` are considered page files if,
 
@@ -125,7 +125,7 @@ Page files are rendered as templates if downloaded, and can have attached page c
 
 Page files are rendered as templates using the `ejs` template engine.
 
-### Code files
+## Code files
 
 Code files define the methods/ejs objects/configuration of the page. A file will be a code file if its path ends with, `.code.js`. Where,
 
@@ -152,7 +152,7 @@ module.exports = {
 }
 ```
 
-### REST API calls
+## REST API calls
 
 Code file methods are exposed as REST api, where both the payload and query string is parsed as the method
 arguments. To call a page api,
@@ -179,7 +179,7 @@ And `context` is:
 }
 ```
 
-### WebSocket API calls
+## WebSocket API calls
 
 Code files methods are exposed as WebSocket api. You can connect a websocket to the page api via,
 
@@ -210,7 +210,7 @@ where the `args` are mapped to the first argument of the function, and `context`
 
 ```
 
-## Built in api methods
+## Built in API methods
 
 The following methods will be available on all pages, through the api or while rendering the template.
 
