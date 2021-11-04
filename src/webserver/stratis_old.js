@@ -14,8 +14,8 @@ const { assert } = require('../common.js')
 const { STRATIS_CLIENTSIDE_SOURCE } = require('./consts.js')
 
 /**
- * @typedef {import('./events').StratisEventListenRegister} StratisEventListenRegister
- * @typedef {import('./events').StratisEventEmitter} StratisEventEmitter
+ * @typedef {import('./interfaces').StratisEventListenRegister} StratisEventListenRegister
+ * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
  */
 
 /**
@@ -376,7 +376,7 @@ class Stratis extends events.EventEmitter {
     api_methods = {},
     ejs_environment = {},
     ejs_environment_require = true,
-    template_extensions = [
+    page_file_ext = [
       '.html',
       '.htm',
       '.xhtml',
@@ -416,7 +416,7 @@ class Stratis extends events.EventEmitter {
     this.cache_max_lifetime = cache_max_lifetime
     this.client_request_timeout = client_request_timeout || 1000
     this.api_version = api_version
-    this.template_extensions = template_extensions
+    this.page_file_ext = page_file_ext
     this.access_filter = access_filter
     this.next_handler_on_forbidden = next_handler_on_forbidden
     this.ejs_environment_require = ejs_environment_require
@@ -730,7 +730,7 @@ class Stratis extends events.EventEmitter {
    * @param {NextFunction} next call next
    */
   async _handle_file_request(info, env, req, res, next) {
-    const is_template = this.template_extensions.some((ext) =>
+    const is_template = this.page_file_ext.some((ext) =>
       info.filepath.endsWith(ext)
     )
     if (!is_template) return res.sendFile(info.filepath)

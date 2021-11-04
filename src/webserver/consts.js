@@ -6,4 +6,5 @@ module.exports = {
     path.join(__dirname, 'clientside.js'),
     'utf-8'
   ),
+  DEFAULT_PAGE_FILE_EXT: ['.html', '.htm', '.css'],
 }

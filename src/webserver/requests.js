@@ -1,6 +1,7 @@
 const { throws } = require('assert')
 const path = require('path')
 const { assert, path_stat, path_exists } = require('../common.js')
+const is_websocket_request = require('../websocket.js').is_websocket_request
 
 /**
  * @typedef {import('fs').Stats} Stats
@@ -27,7 +28,6 @@ class StratisRequest {
     request,
     access_mode = null,
     find_access_modifiers = /[^\w](private|public)([^\w]|$)/g,
-    codefile_extention = '.code.js',
   } = {}) {
     // Validate input
     assert(
@@ -39,7 +39,6 @@ class StratisRequest {
 
     this.serve_path = serve_path
     this.find_access_modifiers = find_access_modifiers
-    this.codefile_extention = codefile_extention
     this.default_path = default_path
 
     this._stratis = stratis
@@ -53,6 +52,8 @@ class StratisRequest {
     this._query_path = null
     /** @type {string} */
     this._api_path = null
+    this._filepath_exists = false
+    this._is_page = false
   }
 
   get stratis() {
@@ -84,25 +85,28 @@ class StratisRequest {
   }
 
   get codepath() {
-    return this.query_path.replace(/\.[^/.]+$/, '') + this.codefile_extention
+    return (
+      this.query_path.replace(/\.[^/.]+$/, '') + this.stratis.codefile_extention
+    )
   }
 
   get is_websocket_request() {
-    return this.request.protocol == 'ws:' || this.request.protocol == 'wss:'
+    return is_websocket_request(this.request)
   }
 
   /**
    * @type {boolean}
    */
   get is_page() {
-    if (this.query_path == null) return false
-    if (this._is_page == null)
-      this._is_page =
-        new Set(this.stratis.template_extensions).has(
-          path.extname(this.query_path)
-        ) || path_exists(this.codepath)
+    return this._is_page || false
+  }
 
-    return this._is_page
+  get is_codefile() {
+    return this.filepath.endsWith(this.stratis.codefile_extention)
+  }
+
+  get filepath_exists() {
+    return this._filepath_exists || false
   }
 
   /**
@@ -137,14 +141,15 @@ class StratisRequest {
   async initialize() {
     const paths = await this._resolve_query_path()
     if (paths == null) return
-
+    this._filepath_exists = true
     this._query_path = paths.query_path
     this._api_path = paths.api_path
 
     // check access modifiers
-    if (this.filepath.endsWith(this.codefile_extention)) {
-      // codefiles are always private.
+    if (this.is_codefile) {
+      // codefiles are always private and never a page.
       this._access_mode = 'private'
+      return
     } else {
       let modifiers = new Set(
         this.query_path.matchAll(this.find_access_modifiers)
@@ -156,6 +161,11 @@ class StratisRequest {
         this._access_mode = 'public'
       }
     }
+
+    this._is_page =
+      new Set(this.stratis.page_file_ext).has(
+        path.extname(this.query_path)
+      ) || (await path_exists(this.codepath))
 
     return this
   }
