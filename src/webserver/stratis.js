@@ -11,21 +11,11 @@ const websocket = require('../websocket.js')
 const { split_stream_once, stream_to_buffer } = require('../streams.js')
 const { assert } = require('../common.js')
 
-const Stratis_core_source = fs.readFileSync(
-  path.join(__dirname, 'stratis.core.js'),
-  'utf-8'
-)
+const { STRATIS_CLIENTSIDE_SOURCE } = require('./consts.js')
 
 /**
- * @typedef {(event: 'error', listener: (error: Error) => void) => this} StratisEventListenError
- * @typedef {(event: 'log', listener: (level:string, ...args) => void) => this} StratisEventListenLog
- * @typedef {StratisEventListenError & StratisEventListenLog} StratisEventListenRegister
- */
-
-/**
- * @typedef {(event: 'error', error:Error) => this} StratisEventEmitError
- * @typedef {(event: 'log', level:'DEBUG'|'INFO'|'WARN'|'ERROR', ...args) => this} StratisEventEmitLog
- * @typedef {StratisEventEmitError & StratisEventEmitLog} StratisEventEmitter
+ * @typedef {import('./events').StratisEventListenRegister} StratisEventListenRegister
+ * @typedef {import('./events').StratisEventEmitter} StratisEventEmitter
  */
 
 /**
@@ -241,7 +231,7 @@ class StratisRequestEnvironment {
    * @param {Stratis} api
    */
   render_api_script(api) {
-    return ejs.render(Stratis_core_source, {
+    return ejs.render(STRATIS_CLIENTSIDE_SOURCE, {
       stratis: api,
       Stratis_methods: [
         '\n', // needed for comment override
@@ -415,7 +405,6 @@ class Stratis extends events.EventEmitter {
     this.on
     /** @type {StratisEventListenRegister} */
     this.once
-
     /** @type {StratisEventEmitter} */
     this.emit
 
