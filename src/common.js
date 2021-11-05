@@ -19,10 +19,25 @@ async function path_exists(
   return false
 }
 
+function deep_merge_objects(target, ...to_merge) {
+  // Iterate through `source` properties and if an `Object` set property to merge of `target` and `source` properties
+  for (const source of to_merge) {
+    for (const key of Object.keys(source)) {
+      if (source[key] instanceof Object)
+        Object.assign(source[key], deep_merge_objects(target[key], source[key]))
+    }
+
+    // Join `target` and modified `source`
+    Object.assign(target || {}, source)
+  }
+  return target
+}
+
 module.exports = {
   assert: (condition, ...data) => {
-    if (condition != true) throw Error(...data)
+    if (condition != true) throw new Error(...data)
   },
   path_exists,
   path_stat,
+  deep_merge_objects,
 }

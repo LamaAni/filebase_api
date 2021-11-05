@@ -18,6 +18,7 @@ const {
 
 const { StratisRequest } = require('./requests.js')
 const { StratisCodeModuleBank } = require('./code.js')
+const { StratisEJSTemplateBank } = require('./templates')
 
 const {
   StratisPageApiCall,
@@ -34,6 +35,7 @@ const {
  * @typedef {import('./interfaces').StratisApiWebSocketRequestArgs} StratisApiWebSocketRequestArgs
  * @typedef {import('./code').StratisCodeModule} StratisCodeModule
  * @typedef {import('./code').StratisCodeModuleBankOptions} StratisCodeModuleBankOptions
+ * @typedef {import('./templates').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
  */
 
 /**
@@ -53,7 +55,8 @@ const {
  * @property {[string]} page_file_ext A list of page default extensions to match.
  * @property {Object<string,StratisApiMethod} api_methods A collection of core api methods to expose.
  * @property {StratisEJSOptions} ejs_options A collection of stratis extended ejs options.
- * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank.
+ * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank
+ * @property {StratisEJSTemplateBankOptions} templates_bank_options A collection of template bank options.
  * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
  * @property {integer} cache_check_minimal_interval The minimal interval for cache checking [ms]
@@ -72,6 +75,7 @@ class Stratis extends events.EventEmitter {
     page_file_ext = DEFAULT_PAGE_FILE_EXT,
     api_methods = {},
     code_module_bank_options = {},
+    templates_bank_options = {},
     codefile_extension = 'code.js',
     show_application_errors = false,
     default_access_mode = null,
@@ -110,15 +114,17 @@ class Stratis extends events.EventEmitter {
     this.cache_max_lifetime = cache_max_lifetime
     this.client_request_timeout = client_request_timeout || 1000
     this.page_file_ext = page_file_ext
-    this.access_filter = access_filter
-    this.next_handler_on_forbidden = next_handler_on_forbidden
-    this.ejs_environment_require = ejs_environment_require
     this.show_application_errors = show_application_errors
 
     // collections
     this.code_module_bank = new StratisCodeModuleBank(
       this,
       code_module_bank_options
+    )
+
+    this.template_bank = new StratisEJSTemplateBank(
+      this,
+      templates_bank_options
     )
   }
 

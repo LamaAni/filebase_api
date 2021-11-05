@@ -1,5 +1,5 @@
 const ejs = require('ejs')
-const { assert, path_stat } = require('../common')
+const { assert, path_stat, deep_merge_objects } = require('../common')
 const { CacheDictionary } = require('./collections')
 const fs = require('fs')
 
@@ -73,9 +73,13 @@ class StratisEJSTemplate {
     const stats = await path_stat(this.template_filepath)
     assert(stats != null, `Template file ${this.template_filepath} not found.`)
 
-    this._render = ejs.compile(
-      await fs.promises.readFile(this.template_filepath)
+    const template_string = await fs.promises.readFile(
+      this.template_filepath,
+      'utf-8'
     )
+    this._render = ejs.compile(template_string, {
+      context: this,
+    })
   }
 
   /**
@@ -99,12 +103,12 @@ class StratisEJSTemplate {
       code_module_data = code_module.as_ejs_render_data()
     }
 
-    const render_data = Object.apply(
+    const render_data = deep_merge_objects(
       {},
       code_module_data,
-      render_context.data,
+      context.data,
       data,
-      render_context.data_overrides
+      context.data_overrides
     )
 
     return await this._render(render_data)
@@ -117,6 +121,13 @@ class StratisEJSTemplate {
  * requires file system stats check.
  * @typedef {CacheDictionaryOptions & StratisEJSTemplateBankOptionsExtend} StratisEJSTemplateBankOptions
  */
+
+const STRATIS_EJS_TEMPLATE_BANK_DEFAULT_OPTIONS = {
+  cleaning_interval: 10000,
+  interval: 1000,
+  reload_template_interval: 1000,
+  reset_cache_timestamp_on_get: true,
+}
 
 class StratisEJSTemplateBank {
   /**
@@ -153,7 +164,7 @@ class StratisEJSTemplateBank {
   create_render_context(data = {}) {
     const render_context = new StratisEJSTemplateRenderContext(data)
 
-    render_context.data_overrides['invoke'] = (template_filepath) => {
+    render_context.data_overrides['include'] = (template_filepath) => {
       return this.load(template_filepath).render(
         render_context.data,
         this.recompile_interval,
@@ -167,9 +178,10 @@ class StratisEJSTemplateBank {
   /**
    * Loads the stratis ejs template and returns it. Will use cache if possible.
    * @param {string} template_filepath The path to the template file
+   * @param {boolean} no_cache Do not use cache.
    * @returns {StratisEJSTemplate} The template
    */
-  load(template_filepath) {
+  load(template_filepath, no_cache = false) {
     /**
      * @type {StratisEJSTemplate}
      */
@@ -182,10 +194,20 @@ class StratisEJSTemplateBank {
     return template
   }
 
-  async render(template_filepath) {}
+  /**
+   *
+   * @param {string} template_filepath The path to the template to render.
+   * @param {ejs.Data} data The template render data
+   * @returns
+   */
+  async render(template_filepath, data = {}) {
+    return await this.load(template_filepath).render(data)
+  }
 }
 
 module.exports = {
   StratisEJSOptions: STRATIS_EJS_DEFAULT_OPTIONS,
-  StratisEJSTemplate,
+  StratisEJSTemplateBankOptions: STRATIS_EJS_TEMPLATE_BANK_DEFAULT_OPTIONS,
+  StratisEJSTemplateBank,
+  StratisEJSTemplateRenderContext,
 }

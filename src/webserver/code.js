@@ -110,16 +110,20 @@ class StratisCodeModule {
     const stats = await path_stat(this.code_filepath)
 
     if (stats == null) {
-      this.module = {}
+      this._module = {}
       this._last_code_filepath_change_ms = null
     } else if (stats.mtime != this._last_code_filepath_change_ms) {
       this._last_code_filepath_change_ms = stats.mtime
       this._module = require(this.code_filepath)
+      assert(
+        typeof this.module == 'object',
+        'All template code files must return a dictionary.'
+      )
     }
 
-    code_objects = {}
+    let code_objects = {}
 
-    for (let key of this._module) {
+    for (let key of Object.keys(this._module)) {
       /** @type {StratisCodeObject} */
       let code_object = this._module[key]
       if (!code_object instanceof StratisCodeObject)
@@ -169,7 +173,7 @@ class StratisCodeModuleBank {
   }
 
   get cache() {
-    return this.cache
+    return this._cache
   }
 
   /**
@@ -197,5 +201,6 @@ module.exports = {
   StratisCodeModule,
   StratisCodeModuleBank,
   StratisCodeObject,
-  StratisCodeObjectTypeEnum,
+  /** @type {StratisCodeObjectTypeEnum} */
+  StratisCodeObjectTypeEnum: {},
 }

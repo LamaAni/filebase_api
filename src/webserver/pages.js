@@ -166,7 +166,7 @@ class StratisPageApiCall extends StratisPageCall {
   async invoke() {}
 }
 
-class StratisPageRenderRequest {
+class StratisPageRenderRequest extends StratisPageCall {
   /**
    * Implements behavior for a page render request
    * @param {StratisRequest} request
