@@ -1,4 +1,5 @@
 const ejs = require('ejs')
+const { assert, path_stat } = require('../common')
 
 /**
  * @typedef {Object} StratisEJSOptionsExtension
@@ -25,15 +26,31 @@ class StratisEJSTemplate {
    */
   constructor(template_filepath) {
     this.template_filepath = template_filepath
+
     /** @type {Date} */
     this._last_compiled = null
+    /** @type {number} */
+    this._last_file_change_ms = null
+
+    this._compiled_ejs_template = null
   }
 
   /**
-   * Compile the stratis template.
-   * @param {number} recompile_interval
+   * Compile the stratis template
+   * @param {number} recompile_interval The interval in which to check changes in the file
+   * and recompile if needed.
    */
-  async compile(recompile_interval) {}
+  async compile(recompile_interval = 1000) {
+    const elapsed_since_last_compiled =
+      this._last_compiled == null ? Infinity : new Date() - this._last_compiled
+
+    if (elapsed_since_last_compiled < recompile_interval) return
+
+    const stats = await path_stat(this.template_filepath)
+    assert(stats != null, `Template file ${this.template_filepath} not found.`)
+
+    this._compiled_ejs_template = ejs.compile()
+  }
 }
 
 module.exports = {
