@@ -20,8 +20,18 @@
  */
 
 /**
- * @typedef {string|number|Object} JsonCompatible
+ * @typedef {string | number | {}} JsonCompatible
+ */
+
+/**
  * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible} StratisApiMethod
+ */
+
+/**
+ * @typedef {Object} StratisApiWebSocketRequestArgs
+ * @property {string} rid The request id.
+ * @property {string} method_name The api method to invoke.
+ * @property {Object} args The api method arguments.
  */
 
 module.exports = {
@@ -31,4 +41,6 @@ module.exports = {
   StratisEventListenRegister: () => {},
   /** @type {StratisApiMethod} */
   StratisApiMethod: () => {},
+  /** @type {JsonCompatible} */
+  JsonCompatible: {},
 }

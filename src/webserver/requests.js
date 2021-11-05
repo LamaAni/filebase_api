@@ -11,8 +11,10 @@ const is_websocket_request = require('../websocket.js').is_websocket_request
 
 /**
  * The type of code object. See documentation in readme.
- * @typedef {"public" | "private" } StratisFileAccessMode
+ * @typedef {"public" | "private", "secure" } StratisFileAccessMode
  */
+
+const ACCESS_MODIFIERS_MATCH_REGEX = /[^\w](private|public|secure)([^\w]|$)/g
 
 class StratisRequest {
   /**
@@ -21,28 +23,34 @@ class StratisRequest {
    * @param {Stratis} param0.stratis
    * @param {Request} param0.request
    * @param {StratisFileAccessMode} param0.access_mode
+   * @param {boolean} param0.log_errors
+   * @param {boolean} param0.return_errors_to_client
    */
   constructor({
     serve_path,
     stratis,
     request,
     access_mode = null,
-    find_access_modifiers = /[^\w](private|public)([^\w]|$)/g,
+    access_modifiers_match_regex = ACCESS_MODIFIERS_MATCH_REGEX,
+    log_errors = true,
+    return_errors_to_client = false,
   } = {}) {
     // Validate input
     assert(
       serve_path != null && typeof serve_path == 'string',
-      'src path acnnot be null and must be a string'
+      'src path cannot be null and must be a string'
     )
     assert(stratis != null, 'stratis cannot be null')
     assert(request != null, 'request cannot be null')
 
     this.serve_path = serve_path
-    this.find_access_modifiers = find_access_modifiers
+    this.access_modifiers_match_regex = access_modifiers_match_regex
     this.default_path = default_path
 
     this._stratis = stratis
     this._request = request
+    this._log_errors = log_errors
+    this._return_errors_to_client = return_errors_to_client
     this._url = new URL(request.url, `http://${request.headers.host}`)
 
     /** @type {StratisFileAccessMode} */
@@ -86,12 +94,20 @@ class StratisRequest {
 
   get codepath() {
     return (
-      this.query_path.replace(/\.[^/.]+$/, '') + this.stratis.codefile_extention
+      this.query_path.replace(/\.[^/.]+$/, '') + this.stratis.codefile_extension
     )
   }
 
   get is_websocket_request() {
     return is_websocket_request(this.request)
+  }
+
+  get return_errors_to_client() {
+    return this._return_errors_to_client
+  }
+
+  get log_errors() {
+    return this._log_errors
   }
 
   /**
@@ -102,7 +118,7 @@ class StratisRequest {
   }
 
   get is_codefile() {
-    return this.filepath.endsWith(this.stratis.codefile_extention)
+    return this.filepath.endsWith(this.stratis.codefile_extension)
   }
 
   get filepath_exists() {
@@ -152,7 +168,7 @@ class StratisRequest {
       return
     } else {
       let modifiers = new Set(
-        this.query_path.matchAll(this.find_access_modifiers)
+        this.query_path.matchAll(this.access_modifiers_match_regex)
       )
 
       if (modifiers.has('private')) {
@@ -163,9 +179,8 @@ class StratisRequest {
     }
 
     this._is_page =
-      new Set(this.stratis.page_file_ext).has(
-        path.extname(this.query_path)
-      ) || (await path_exists(this.codepath))
+      new Set(this.stratis.page_file_ext).has(path.extname(this.query_path)) ||
+      (await path_exists(this.codepath))
 
     return this
   }

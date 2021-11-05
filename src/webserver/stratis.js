@@ -11,15 +11,29 @@ const websocket = require('../websocket.js')
 const { split_stream_once, stream_to_buffer } = require('../streams.js')
 const { assert } = require('../common.js')
 
-const { STRATIS_CLIENTSIDE_SOURCE } = require('./consts.js')
+const {
+  STRATIS_CLIENTSIDE_SOURCE,
+  DEFAULT_PAGE_FILE_EXT,
+} = require('./consts.js')
+
 const { StratisRequest } = require('./requests.js')
-const { request } = require('http')
+const { StratisCodeModuleBank } = require('./code.js')
+
+const {
+  StratisPageApiCall,
+  StratisPageRenderRequest,
+  StratisPageCallContext,
+} = require('./pages.js')
 
 /**
  * @typedef {import('./interfaces').StratisEventListenRegister} StratisEventListenRegister
  * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
  * @typedef {import('./requests').StratisFileAccessMode} StratisFileAccessMode
  * @typedef {import('./interfaces').StratisApiMethod} StratisApiMethod
+ * @typedef {import('./templates').StratisEJSOptions} StratisEJSOptions
+ * @typedef {import('./interfaces').StratisApiWebSocketRequestArgs} StratisApiWebSocketRequestArgs
+ * @typedef {import('./code').StratisCodeModule} StratisCodeModule
+ * @typedef {import('./code').StratisCodeModuleBankOptions} StratisCodeModuleBankOptions
  */
 
 /**
@@ -28,28 +42,24 @@ const { request } = require('http')
  * function was called then do not process in the middleware.
  * @property {boolean} next_on_private Call the next express handler if the current
  * filepath request is private.
+ * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
+ * NOTE! To be used for debug, may expose sensitive information.
+ * @property {boolean} log_errors If true, prints the application errors to the logger.
  */
 
 /**
  * Interface for Stratis options.
  * @typedef {Object} StratisOptions
- * @property {[string]} page_file_ext A list of page default extensions.
- * @property {Object<string,StratisApiMethod} api_methods A collection
- * of core api methods to expose.
- * @property {Object<string, any>} ejs_environment A collection to render time objects to expose.
- * @property {boolean} ejs_environment_require IF true, adds the require method to the ejs call. Required
- * Files can only be loaded in main (not imported template files), and are loaded only once.
- * @property {string} codefile_extention The file extension (without starting .) for recognizing code files.
+ * @property {[string]} page_file_ext A list of page default extensions to match.
+ * @property {Object<string,StratisApiMethod} api_methods A collection of core api methods to expose.
+ * @property {StratisEJSOptions} ejs_options A collection of stratis extended ejs options.
+ * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank.
+ * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
- * @property {boolean} log_errors_to_console Auto log all errors to console.
  * @property {integer} cache_check_minimal_interval The minimal interval for cache checking [ms]
  * @property {integer} cache_clean_interval The minimal interval for cache cleaning [ms]
  * @property {integer} cache_max_lifetime The maximal cache lifetime [ms]
  * @property {integer} client_request_timeout The client side request timeout [ms]
- * @property {ejs.Options} ejs_options The ejs options.
- * @property {(filepath)=>boolean} access_filter If true, then allow the file to be accessed from the web. Defaults
- * @property {boolean} show_application_errors If true, prints the application errors to the http 500 response.
- * To be used for debug, may expose sensitive information.
  */
 
 class Stratis extends events.EventEmitter {
@@ -59,24 +69,15 @@ class Stratis extends events.EventEmitter {
    * @param {StratisOptions} param0
    */
   constructor({
-    page_file_ext = [
-      '.html',
-      '.htm',
-      '.xhtml',
-      '.js',
-      '.css',
-      '.api.yaml',
-      '.api.json',
-    ],
+    page_file_ext = DEFAULT_PAGE_FILE_EXT,
     api_methods = {},
-    codefile_extention = 'code.js',
+    code_module_bank_options = {},
+    codefile_extension = 'code.js',
     show_application_errors = false,
     default_access_mode = null,
 
     // ejs templating
     ejs_options = {},
-    ejs_environment = {},
-    ejs_environment_require = true,
 
     // logging
     logger = null,
@@ -97,8 +98,13 @@ class Stratis extends events.EventEmitter {
     /** @type {StratisEventEmitter} */
     this.emit
 
+    /** @type {console | {}} */
     this.logger = logger || console
-    this.codefile_extention = codefile_extention
+
+    /** @type {StratisEJSOptions} */
+    this.ejs_options = ejs_options
+
+    this.codefile_extension = codefile_extension
     this.cache_check_minimal_interval = cache_check_minimal_interval
     this.cache_clean_interval = cache_clean_interval
     this.cache_max_lifetime = cache_max_lifetime
@@ -108,6 +114,21 @@ class Stratis extends events.EventEmitter {
     this.next_handler_on_forbidden = next_handler_on_forbidden
     this.ejs_environment_require = ejs_environment_require
     this.show_application_errors = show_application_errors
+
+    // collections
+    this.code_module_bank = new StratisCodeModuleBank(
+      this,
+      code_module_bank_options
+    )
+  }
+
+  /**
+   * @param {Error} err
+   * @param {StratisRequest} stratis_request
+   */
+  _emit_error(err, stratis_request) {
+    if (stratis_request.log_errors) this.logger.error(err)
+    this.emit('error', err)
   }
 
   /**
@@ -116,7 +137,53 @@ class Stratis extends events.EventEmitter {
    * @param {NextFunction} next
    */
   async handle_websocket_request(stratis_request, res, next) {
-    websocket((ws, req) => {})
+    websocket((ws, ws_request) => {
+      ws.on('message', async (data) => {
+        /** @type {StratisApiWebSocketRequestArgs} */
+        let ws_request_args = {}
+        try {
+          ws_request_args = await StratisPageApiCall.parse_api_call_args(data)
+          if (
+            ws_request_args.rid == null ||
+            ws_request_args.method_name == null ||
+            typeof ws_request_args.args != 'object'
+          )
+            throw Error(
+              'Invalid stratis api websocket request. Expected {rid:string, method_name:string, args:{} }'
+            )
+
+          const call = new StratisPageApiCall(
+            stratis_request,
+            ws_request_args.method_name,
+            ws_request_args.args
+          )
+
+          const rsp_data = await call.invoke()
+          ws.send(
+            JSON.stringify({
+              rid: ws_request_args.rid,
+              response: rsp_data,
+            })
+          )
+        } catch (err) {
+          this._emit_error(err, stratis_request)
+          try {
+            ws.send(
+              JSON.stringify({
+                rid: ws_request_args.rid,
+                error: err,
+              })
+            )
+          } catch (err) {
+            this._emit_error(err, stratis_request)
+          }
+        }
+      })
+
+      ws.on('open', () => this.emit('websocket_open', ws))
+      ws.on('close', () => this.emit('websocket_close', ws))
+      ws.on('error', (err) => this._emit_error(err, stratis_request))
+    })
   }
 
   /**
@@ -124,14 +191,64 @@ class Stratis extends events.EventEmitter {
    * @param {Response} res
    * @param {NextFunction} next
    */
-  async handle_page_request(stratis_request, res, next) {}
+  async handle_page_api_call(stratis_request, res, next) {
+    // resolve api method path.
+    const method_name = stratis_request.api_path
+      .split('/')
+      .filter((v) => v.trim().length > 0)
+      .join('.')
+
+    const call = new StratisPageApiCall(
+      stratis_request,
+      method_name,
+      await StratisPageApiCall.parse_api_call_args(
+        stratis_request.request.body
+      ),
+      true
+    )
+
+    const rslt = await call.invoke()
+    if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
+
+    return res.end(rslt)
+  }
+
+  /**
+   * @param {StratisRequest} stratis_request
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  async handle_page_render_request(stratis_request, res, next) {}
+
+  /**
+   * @param {StratisRequest} stratis_request
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  async handle_page_request(stratis_request, res, next) {
+    // a page request can be either:
+    // page render request
+    // page api request.
+    if (stratis_request.api_path != null)
+      return await this.handle_page_api_call(stratis_request, req, next)
+    else
+      return await this.handle_page_render_request(stratis_request, req, next)
+  }
 
   /**
    * Creates an express middleware that serves requests.
    * @param {string} serve_path The path to server
    * @param {StratisMiddlewareOptions} options
    */
-  middleware(serve_path, { filter = null, next_on_private = true } = {}) {
+  middleware(
+    serve_path,
+    {
+      filter = null,
+      next_on_private = true,
+      return_errors_to_client = false,
+      log_errors = true,
+    } = {}
+  ) {
     if (!fs.existsSync(serve_path))
       throw new Error(`Stratis search path ${serve_path} dose not exist`)
 
@@ -154,45 +271,55 @@ class Stratis extends events.EventEmitter {
      * @param {NextFunction} next
      */
     const intercept = async (req, res, next) => {
-      // check filtering.
-      if (filter != null) {
-        let filter_called_next = false
-        let filter_rslt = filter(req, res, (...args) => {
-          filter_called_next = true
-          return next(...args)
-        })
-        if (filter_called_next) return filter_rslt
-      }
-
       const stratis_request = new StratisRequest({
-        serve_path: serve_path,
+        serve_path,
         stratis: this,
         request: req,
-        default_access_mode: default_access_mode,
+        access_mode: default_access_mode,
+        return_errors_to_client: return_errors_to_client,
+        log_errors: log_errors,
       })
 
-      await stratis_request.initialize()
+      // check filtering.
+      try {
+        if (filter != null) {
+          let filter_called_next = false
+          let filter_rslt = filter(req, res, (...args) => {
+            filter_called_next = true
+            return next(...args)
+          })
+          if (filter_called_next) return filter_rslt
+        }
 
-      // filepath dose not exist. Move on to next handler.
-      if (!stratis_request.filepath_exists) return next()
+        await stratis_request.initialize()
 
-      // check permissions
-      if (stratis_request.access_mode == 'private') {
-        if (next_on_private) return next()
-        if (stratis_request.is_codefile)
-          res.write('Direct access to codefiles is always forbidden')
-        return res.sendStatus(403)
+        // filepath dose not exist. Move on to next handler.
+        if (!stratis_request.filepath_exists) return next()
+
+        // check permissions
+        if (stratis_request.access_mode == 'private') {
+          if (next_on_private) return next()
+          if (stratis_request.is_codefile)
+            res.write('Direct access to codefiles is always forbidden')
+          return res.sendStatus(403)
+        }
+
+        if (!stratis_request.is_page)
+          // file download.
+          return res.sendFile(stratis_request.filepath)
+
+        if (stratis_request.is_websocket_request)
+          // open websocket
+          return this.handle_websocket_request(stratis_request, res, next)
+
+        return this.handle_page_request(stratis_request, res, next)
+      } catch (err) {
+        // returning the application error
+        if (stratis_request.return_errors_to_client)
+          res.write(`${err}`).sendStatus(500)
+        this._emit_error(err, stratis_request)
+        next(err)
       }
-
-      if (!stratis_request.is_page)
-        // file download.
-        return res.sendFile(stratis_request.filepath)
-
-      if (stratis_request.is_websocket_request)
-        // open websocket
-        return this.handle_websocket_request(stratis_request, res, next)
-
-      return this.handle_page_request(stratis_request, res, next)
     }
 
     return intercept

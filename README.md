@@ -140,7 +140,7 @@ All files are by default public unless the folder `[serve_path]/public` exists. 
 
 Page files are rendered as templates if downloaded, and can have attached page code, remote methods and a rest api. Files with path `[filepath].[ext]` are considered page files if,
 
-1. Match the ext: `html`, `htm`, `.html`, `.htm`, `.js`, `.css`
+1. Match the ext: `html`, `htm`, `.html`, `.css`, `.json`, `.yaml`
 1. There exists a file named `[filepath].code.js`
 
 Page files are rendered as templates using the `ejs` template engine.
@@ -212,7 +212,7 @@ Where the WebSocket payload is,
 ```json
 {
   "rid": "[the request id]",
-  "invoke": "[the function name]",
+  "method_name": "[the function name]",
   "args": {
     "send_from_client": "value"
   }

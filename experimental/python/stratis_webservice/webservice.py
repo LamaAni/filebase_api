@@ -17,7 +17,7 @@ from sanic.exceptions import NotFound, ServerError
 from concurrent.futures import CancelledError
 
 from zcommon.shell import logger
-from zcommon.fs import strip_path_extention
+from zcommon.fs import strip_path_extension
 from zcommon.textops import json_dump_with_types
 from zthreading.events import AsyncEventHandler
 
@@ -102,7 +102,7 @@ class FilebaseApi(FilebaseTemplateService, AsyncEventHandler):
         sub_path = sub_path.strip().lstrip("/")
 
         if not sub_path.endswith(self.config.module_file_marker):
-            file_path = self.resolve_path(strip_path_extention(sub_path) + self.config.module_file_marker)
+            file_path = self.resolve_path(strip_path_extension(sub_path) + self.config.module_file_marker)
         else:
             if not self.config.is_remote_access_allowed(sub_path):
                 return None
