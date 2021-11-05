@@ -93,9 +93,7 @@ class StratisRequest {
   }
 
   get codepath() {
-    return (
-      this.query_path.replace(/\.[^/.]+$/, '') + this.stratis.codefile_extension
-    )
+    return this.stratis.compose_codefile_path(this.query_path)
   }
 
   get is_websocket_request() {
@@ -118,7 +116,7 @@ class StratisRequest {
   }
 
   get is_codefile() {
-    return this.filepath.endsWith(this.stratis.codefile_extension)
+    return this.stratis.is_codefile(this.query_path)
   }
 
   get filepath_exists() {

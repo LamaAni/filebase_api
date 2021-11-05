@@ -123,6 +123,21 @@ class Stratis extends events.EventEmitter {
   }
 
   /**
+   * Compose codefile path for the code file.
+   * @param {string} file_path The file path to compose a codefile for.
+   */
+  compose_codefile_path(file_path) {
+    return file_path.replace(/\.[^/.]+$/, '') + this.codefile_extension
+  }
+
+  /**
+   * @param {string} file_path The filepath to check
+   */
+  is_codefile(file_path) {
+    return file_path.endsWith(this.codefile_extension)
+  }
+
+  /**
    * @param {Error} err
    * @param {StratisRequest} stratis_request
    */

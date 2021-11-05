@@ -53,14 +53,16 @@ class StratisCodeObject {
 
 class StratisCodeModule {
   /**
-   * @param {string} codefile
+   * @param {StratisCodeModuleBank} bank
+   * @param {string} code_filepath
    */
-  constructor(codefile) {
-    this.codefile = codefile
+  constructor(bank, code_filepath) {
+    this._bank = bank
+    this.code_filepath = code_filepath
     /** @type {Date} */
     this._last_loaded = null
     /** @type {number} */
-    this._last_codefile_change_ms = null
+    this._last_code_filepath_change_ms = null
 
     /**
      * @type {Object<string,StratisCodeObject>}
@@ -73,12 +75,24 @@ class StratisCodeModule {
     this._module = {}
   }
 
+  /**
+   * The cache bank for stratis code modules.
+   */
+  get bank() {
+    return this._bank
+  }
+
   get code_objects() {
     return this._code_objects
   }
 
   get module() {
     return this.module
+  }
+
+  as_ejs_render_data() {
+    // returns the code modules as ejs render data
+    return this.code_objects
   }
 
   /**
@@ -93,14 +107,14 @@ class StratisCodeModule {
     // check skip reload check.
     if (elapsed_since_last_loaded < reload_interval) return
 
-    const stats = await path_stat(this.codefile)
+    const stats = await path_stat(this.code_filepath)
 
     if (stats == null) {
       this.module = {}
-      this._last_codefile_change_ms = null
-    } else if (stats.mtime != this._last_codefile_change_ms) {
-      this._last_codefile_change_ms = stats.mtime
-      this._module = require(this.codefile)
+      this._last_code_filepath_change_ms = null
+    } else if (stats.mtime != this._last_code_filepath_change_ms) {
+      this._last_code_filepath_change_ms = stats.mtime
+      this._module = require(this.code_filepath)
     }
 
     code_objects = {}
@@ -129,7 +143,7 @@ class StratisCodeModule {
  * @typedef {CacheDictionaryOptions & StratisCodeModuleBankOptionsExtend} StratisCodeModuleBankOptions
  */
 
-class StratisCodeModuleBank extends CacheDictionary {
+class StratisCodeModuleBank {
   /**
    * Holds code rendering and loading bank for code files.
    * Changes in the files cause reload of the file cache.
@@ -140,37 +154,38 @@ class StratisCodeModuleBank extends CacheDictionary {
     stratis,
     {
       interval = 1000,
-      cache_clean_interval = 10000,
+      cleaning_interval = 10000,
       reset_cache_timestamp_on_get = true,
       reload_module_interval = 1000,
     } = {}
   ) {
-    super({
+    this.stratis = stratis
+    this.reload_module_interval = reload_module_interval
+    this._cache = new CacheDictionary({
       interval,
       cleaning_interval,
       reset_cache_timestamp_on_get,
     })
-
-    this.stratis = stratis
-    this.reload_module_interval = reload_module_interval
   }
 
-  get bank() {
-    return this._bank
+  get cache() {
+    return this.cache
   }
 
   /**
-   * Returns a code module from a codefile path.
-   * @param {string} codefile
+   * Returns a code module from a code_filepath path.
+   * @param {string} code_filepath The module filepath.
+   * @param {boolean} no_cache Do not use cache
+   * @returns {StratisCodeModule} The code module.
    */
-  async load(codefile) {
+  async load(code_filepath, no_cache = false) {
     /**
      * @type {StratisCodeModule}
      */
-    let code_module = this.get(codefile)
+    let code_module = no_cache ? null : this.cache.get(code_filepath)
     if (code_module == null) {
-      code_module = new StratisCodeModule(codefile)
-      this.set(codefile, code_module)
+      code_module = new StratisCodeModule(this, code_filepath)
+      this.cache.set(code_filepath, code_module)
     }
 
     await code_module.load(this.reload_module_interval)
