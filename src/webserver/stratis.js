@@ -76,7 +76,7 @@ class Stratis extends events.EventEmitter {
     api_methods = {},
     code_module_bank_options = {},
     templates_bank_options = {},
-    codefile_extension = 'code.js',
+    codefile_extension = '.code.js',
     show_application_errors = false,
     default_access_mode = null,
 

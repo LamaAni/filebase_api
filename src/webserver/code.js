@@ -65,9 +65,9 @@ class StratisCodeModule {
     this._last_code_filepath_change_ms = null
 
     /**
-     * @type {Object<string,StratisCodeObject>}
+     * @type {[StratisCodeObject]}
      */
-    this._code_objects = {}
+    this._code_objects = []
 
     /**
      * @type {Object}
@@ -87,12 +87,23 @@ class StratisCodeModule {
   }
 
   get module() {
-    return this.module
+    return this._module
   }
 
-  as_ejs_render_data() {
-    // returns the code modules as ejs render data
-    return this.code_objects
+  as_render_data() {
+    if (this._render_data == null) {
+      this._render_data = {}
+      this.code_objects.forEach((o) => (this._render_data[o.name] = o.val))
+    }
+    return this._render_data
+  }
+
+  as_api_invoke_dict() {
+    if (this._api_invoke_dict == null) {
+      this._api_invoke_dict = {}
+      this.code_objects.forEach((o) => (this._api_invoke_dict[o.name] = o.val))
+    }
+    return this._api_invoke_dict
   }
 
   /**
@@ -121,21 +132,23 @@ class StratisCodeModule {
       )
     }
 
-    let code_objects = {}
+    let code_objects = []
 
     for (let key of Object.keys(this._module)) {
       /** @type {StratisCodeObject} */
       let code_object = this._module[key]
-      if (!code_object instanceof StratisCodeObject)
+      if (!(code_object instanceof StratisCodeObject))
         code_object = new StratisCodeObject({ val: code_object, name: key })
       else {
         // assign the key as name if not defined.
         code_object.name = code_object.name || key
       }
-      code_objects[this.code_objects.name] = code_object
+      code_objects.push(code_object)
     }
 
-    this._code_objects = this.code_objects
+    this._api_invoke_dict = null
+    this._render_data = null
+    this._code_objects = code_objects
     this._last_loaded = new Date()
   }
 }

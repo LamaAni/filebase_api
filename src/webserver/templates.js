@@ -36,7 +36,6 @@ class StratisEJSTemplateRenderContext {
    * @param {ejs.Data} data The template data (as dictionary)
    */
   constructor(data = {}) {
-    this.invoked_templates = new Set()
     this._template = null
     this._data = data
   }
@@ -102,14 +101,16 @@ class StratisEJSTemplateRenderContext {
    * Prepares and returns the EJS data objects
    * @returns {ejs.Data} The data to include in the template render.
    */
-  get_ejs_render_data() {
+  async get_ejs_render_data() {
     let code_modules = {}
     if (this.template.stratis != null)
-      code_modules = this.template.stratis.code_module_bank.load(
-        this.template.stratis.compose_codefile_path(
-          this.template.template_filepath
+      code_modules = (
+        await this.template.stratis.code_module_bank.load(
+          this.template.stratis.compose_codefile_path(
+            this.template.template_filepath
+          )
         )
-      )
+      ).as_render_data()
 
     return Object.assign(
       {
@@ -204,7 +205,7 @@ class StratisEJSTemplate {
 
     context.assign_template(this)
 
-    const render_data = context.get_ejs_render_data()
+    const render_data = await context.get_ejs_render_data()
     return await this._render(render_data)
   }
 }
