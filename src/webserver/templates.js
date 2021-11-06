@@ -2,6 +2,10 @@ const ejs = require('ejs')
 const { assert, path_stat, deep_merge_objects } = require('../common')
 const { CacheDictionary } = require('./collections')
 const fs = require('fs')
+const path = require('path')
+
+// adding string functions
+require('./templates.strings.js')
 
 /**
  * @typedef {import('./stratis').Stratis} Stratis
@@ -27,10 +31,96 @@ const STRATIS_EJS_DEFAULT_OPTIONS = {
 }
 
 class StratisEJSTemplateRenderContext {
+  /**
+   * Holds the the render context data and methods.
+   * @param {ejs.Data} data The template data (as dictionary)
+   */
   constructor(data = {}) {
     this.invoked_templates = new Set()
-    this.data_overrides = {}
-    this.data = data
+    this._template = null
+    this._data = data
+  }
+
+  /**
+   * The active template.
+   * @type {StratisEJSTemplate}
+   */
+  get template() {
+    return this._template
+  }
+
+  /**
+   * The added template data.
+   */
+  get data() {
+    return this._data
+  }
+
+  /**
+   * The template bank.
+   */
+  get template_bank() {
+    return this.template.bank
+  }
+
+  /**
+   * The stratis api.
+   */
+  get stratis() {
+    return this.template.stratis
+  }
+
+  /**
+   * Includes another template for the current template filepath.
+   * @param {string} fpath The path to include
+   */
+  async include(fpath) {
+    assert(typeof fpath == 'string', 'Include filepath must be a string')
+    fpath = fpath.trim()
+    if (!path.isAbsolute(fpath)) {
+      const current_template_path = path.dirname(
+        this.template.template_filepath
+      )
+      fpath = path.resolve(path.join(current_template_path, fpath))
+    }
+
+    const calling_template = this.template
+    const include_result = await this.template_bank.render(fpath, this)
+    this.assign_template(calling_template)
+    return include_result
+  }
+
+  /**
+   * Assign the current executing template.
+   * @param {StratisEJSTemplate} template The template to prepare.
+   */
+  assign_template(template) {
+    this._template = template
+  }
+
+  /**
+   * Prepares and returns the EJS data objects
+   * @returns {ejs.Data} The data to include in the template render.
+   */
+  get_ejs_render_data() {
+    let code_modules = {}
+    if (this.template.stratis != null)
+      code_modules = this.template.stratis.code_module_bank.load(
+        this.template.stratis.compose_codefile_path(
+          this.template.template_filepath
+        )
+      )
+
+    return Object.assign(
+      {
+        include: async (...args) => await this.include(...args),
+        stratis: this.stratis,
+        __dirname: path.dirname(this.template.template_filepath),
+        __filename: this.template.template_filepath,
+      },
+      code_modules,
+      this.data || {}
+    )
   }
 }
 
@@ -60,15 +150,29 @@ class StratisEJSTemplate {
   }
 
   /**
-   * Compile the stratis template
-   * @param {number} recompile_interval The interval in which to check changes in the file
-   * and recompile if needed.
+   * The stratis api reference.
    */
-  async compile(recompile_interval = 1000) {
+  get stratis() {
+    return this.bank.stratis
+  }
+
+  /**
+   * @type {number} The template recompile interval.
+   */
+  get recompile_interval() {
+    return this.bank == null
+      ? Infinity
+      : this.bank.recompile_template_interval || Infinity
+  }
+
+  /**
+   * Compile the stratis template if needed.
+   */
+  async compile() {
     const elapsed_since_last_compiled =
       this._last_compiled == null ? Infinity : new Date() - this._last_compiled
 
-    if (elapsed_since_last_compiled < recompile_interval) return
+    if (elapsed_since_last_compiled < this.recompile_interval) return
 
     const stats = await path_stat(this.template_filepath)
     assert(stats != null, `Template file ${this.template_filepath} not found.`)
@@ -77,47 +181,37 @@ class StratisEJSTemplate {
       this.template_filepath,
       'utf-8'
     )
+
     this._render = ejs.compile(template_string, {
       context: this,
+      async: true,
     })
   }
 
   /**
    * Renders the template. Will compile the template if needed.
-   * @param {ejs.Data} data The ejs render data to add as template parameters.
-   * @param {number} recompile_interval The interval in which to check changes in the file
-   * @param {StratisEJSTemplateRenderContext} context The active render context.
+   * @param {ejs.Data | StratisEJSTemplateRenderContext} context The active render context.
    * and recompile if needed.
    * @returns
    */
-  async render(data = {}, recompile_interval = 1000, context = null) {
-    context = context || this.bank.create_render_context(data)
-    await this.compile(recompile_interval)
+  async render(context = null) {
+    await this.compile()
 
-    let code_module_data = {}
+    context =
+      context instanceof StratisEJSTemplateRenderContext
+        ? context
+        : new StratisEJSTemplateRenderContext(context)
 
-    if (this.bank.stratis != null) {
-      let code_module = await this.bank.stratis.code_module_bank.load(
-        this.bank.stratis.compose_codefile_path(this.template_filepath)
-      )
-      code_module_data = code_module.as_ejs_render_data()
-    }
+    context.assign_template(this)
 
-    const render_data = deep_merge_objects(
-      {},
-      code_module_data,
-      context.data,
-      data,
-      context.data_overrides
-    )
-
+    const render_data = context.get_ejs_render_data()
     return await this._render(render_data)
   }
 }
 
 /**
  * @typedef {Object} StratisEJSTemplateBankOptionsExtend
- * @property {number} reload_template_interval The interval in which to try and reload an existing module.
+ * @property {number} recompile_template_interval The interval in which to try and reload an existing module.
  * requires file system stats check.
  * @typedef {CacheDictionaryOptions & StratisEJSTemplateBankOptionsExtend} StratisEJSTemplateBankOptions
  */
@@ -125,7 +219,7 @@ class StratisEJSTemplate {
 const STRATIS_EJS_TEMPLATE_BANK_DEFAULT_OPTIONS = {
   cleaning_interval: 10000,
   interval: 1000,
-  reload_template_interval: 1000,
+  recompile_template_interval: 1000,
   reset_cache_timestamp_on_get: true,
 }
 
@@ -140,12 +234,12 @@ class StratisEJSTemplateBank {
     {
       cleaning_interval = 10000,
       interval = 1000,
-      reload_template_interval = 1000,
+      recompile_template_interval = 1000,
       reset_cache_timestamp_on_get = true,
     } = {}
   ) {
     this._stratis = stratis
-    this.reload_template_interval = reload_template_interval
+    this.recompile_template_interval = recompile_template_interval
     this._cache = new CacheDictionary({
       interval,
       cleaning_interval,
@@ -166,7 +260,7 @@ class StratisEJSTemplateBank {
 
     render_context.data_overrides['include'] = (template_filepath) => {
       return this.load(template_filepath).render(
-        render_context.data,
+        render_context._data,
         this.recompile_interval,
         render_context
       )
@@ -197,11 +291,11 @@ class StratisEJSTemplateBank {
   /**
    *
    * @param {string} template_filepath The path to the template to render.
-   * @param {ejs.Data} data The template render data
+   * @param {ejs.Data | StratisEJSTemplateRenderContext} context Render context. If null then created.
    * @returns
    */
-  async render(template_filepath, data = {}) {
-    return await this.load(template_filepath).render(data)
+  async render(template_filepath, context = null) {
+    return await this.load(template_filepath).render(context)
   }
 }
 

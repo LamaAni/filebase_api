@@ -35,7 +35,7 @@ function deep_merge_objects(target, ...to_merge) {
 
 module.exports = {
   assert: (condition, ...data) => {
-    if (condition != true) throw new Error(...data)
+    if (condition != true) throw newError(...data)
   },
   path_exists,
   path_stat,
