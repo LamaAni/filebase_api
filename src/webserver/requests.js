@@ -45,7 +45,6 @@ class StratisRequest {
 
     this.serve_path = serve_path
     this.access_modifiers_match_regex = access_modifiers_match_regex
-    this.default_path = default_path
 
     this._stratis = stratis
     this._request = request
@@ -143,8 +142,8 @@ class StratisRequest {
     }
 
     return {
-      query_path: path.join(cur_path_items),
-      api_path: path.join(path_items),
+      query_path: path.join(...cur_path_items),
+      api_path: path.join(...path_items),
     }
   }
 

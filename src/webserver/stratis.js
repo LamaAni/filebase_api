@@ -1,6 +1,7 @@
 const express = require('express')
 const events = require('events')
 const path = require('path')
+const fs = require('fs')
 const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../websocket.js')
 const { assert, with_timeout } = require('../common.js')
@@ -71,7 +72,6 @@ const {
 
 const STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS = {
   api_code_path: path.join(__dirname, 'clientside.js'),
-  timeout: null,
 }
 
 class Stratis extends events.EventEmitter {
@@ -108,7 +108,7 @@ class Stratis extends events.EventEmitter {
      * @type {StratisClientSideApiOptions}
      */
     this.client_api = Object.assign(
-      {},
+      { timeout: this.timeout },
       STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
       client_api || {}
     )
@@ -250,6 +250,7 @@ class Stratis extends events.EventEmitter {
    */
   async handle_page_render_request(stratis_request, res, next) {
     const call = new StratisPageRenderRequest(stratis_request)
+    const context = new StratisPageCallContext()
     return res.end(await call.render())
   }
 
@@ -263,9 +264,9 @@ class Stratis extends events.EventEmitter {
     // page render request
     // page api request.
     if (stratis_request.api_path != null)
-      return await this.handle_page_api_call(stratis_request, req, next)
+      return await this.handle_page_api_call(stratis_request, res, next)
     else
-      return await this.handle_page_render_request(stratis_request, req, next)
+      return await this.handle_page_render_request(stratis_request, res, next)
   }
 
   /**
@@ -364,6 +365,19 @@ class Stratis extends events.EventEmitter {
     }
 
     return intercept
+  }
+
+  /**
+   * Creates a new express server to use with the Stratis.
+   * @param {string} src The path to the folder to serve.
+   * @param {express.Express} app The express app to use, if null create one.
+   * @returns {express.Express} The express app to use. You can do express.listen
+   * to start the app.
+   */
+  server(src, app = null) {
+    app = app || express()
+    app.use(this.middleware(src))
+    return app
   }
 }
 

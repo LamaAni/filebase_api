@@ -1,8 +1,33 @@
-const _stratis_ws_protocol =
-  window.location.protocol == 'https:' ? 'wss:' : 'ws:'
-let _stratis__websocket = new WebSocket(
-  _stratis_ws_protocol + '//' + window.location.host + window.location.pathname
-)
+class StratisClient extends EventTarget {
+  constructor() {
+    this.protocol = window.location.protocol == 'https:' ? 'wss:' : 'ws:'
+    this.timeout = parseInt('<%-stratis.client_api.timeout%>')
+
+    this.websocket = new WebSocket(
+      this.protocol + '//' + window.location.host + window.location.pathname
+    )
+  }
+
+  make_request_id() {
+    const S4 = function () {
+      return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1)
+    }
+    return (
+      S4() +
+      S4() +
+      '-' +
+      S4() +
+      '-' +
+      S4() +
+      '-' +
+      S4() +
+      '-' +
+      S4() +
+      S4() +
+      S4()
+    )
+  }
+}
 
 const _stratis__websocket_invoke_listener = new EventTarget()
 
@@ -31,13 +56,6 @@ _stratis__websocket.addEventListener('message', (ev) => {
     stratis.error(err)
   }
 })
-
-const _stratis_make_id_chars =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-const _stratis_make_id_chars_length = _stratis_make_id_chars.length
-const _stratis_ws_request_response_timeout = parseInt(
-  '<%-stratis.client_request_timeout%>'
-)
 
 /**
  * Makes a stratis request id

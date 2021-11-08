@@ -10,7 +10,7 @@ async function path_stat(path) {
 
 async function path_exists(
   path,
-  { allow_directory = true, allow_file = true }
+  { allow_directory = true, allow_file = true } = {}
 ) {
   let stat = await path_stat(path)
   if (stat == null) return false
