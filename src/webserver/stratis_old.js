@@ -8,6 +8,7 @@ const stream = require('stream')
 const { Request, Response, NextFunction } = require('express/index')
 
 const websocket = require('../websocket.js')
+
 const { split_stream_once, stream_to_buffer } = require('../streams.js')
 const { assert } = require('../common.js')
 
@@ -774,7 +775,9 @@ class Stratis extends events.EventEmitter {
    */
   middleware(src) {
     if (!fs.existsSync(src))
-      throw new Error(`Stratis search path ${src} dose not exist`)
+      throw new StratisNotFoundError(
+        `Stratis search path ${src} dose not exist`
+      )
     const src_stat = fs.statSync(src)
 
     assert(

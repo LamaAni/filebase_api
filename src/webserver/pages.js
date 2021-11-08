@@ -1,4 +1,5 @@
 const stream = require('stream')
+const { StratisNotFoundError } = require('./errors.js')
 const { assert } = require('../common')
 const { split_stream_once, stream_to_buffer } = require('../streams.js')
 
@@ -96,21 +97,21 @@ class StratisPageApiCall extends StratisPageCall {
   /**
    * Implements behavior for an api call.
    * @param {StratisRequest} request
-   * @param {string} method_name The name of the method to call.
+   * @param {string} name The name of the method to call.
    * @param {object} args The method args to include.
    * @param {boolean} include_query_args If true, query args are included in the call args.
    */
-  constructor(request, method_name, args = null, include_query_args = false) {
+  constructor(request, name, args = null, include_query_args = false) {
     super(request)
-    this._method_name = method_name
+    this._name = name
     this._args = null
 
     if (include_query_args) this.merge_args(this.get_search_params_dictionary())
     this.merge_args(args)
   }
 
-  get method_name() {
-    return this._method_name
+  get name() {
+    return this._name
   }
 
   get args() {
@@ -163,19 +164,39 @@ class StratisPageApiCall extends StratisPageCall {
    * Invokes the api call.
    * @returns {JsonCompatible} The json compatible return value.
    */
-  async invoke() {}
+  async invoke() {
+    // load the code module for the api
+    const code_module = (
+      await this.request.stratis.code_module_bank.load(this.request.codepath)
+    ).as_api_invoke_dict()
+
+    if (code_module[this.name] == null) {
+      throw new StratisNotFoundError('Api method or object not found')
+    }
+  }
 }
 
 class StratisPageRenderRequest extends StratisPageCall {
   /**
    * Implements behavior for a page render request
    * @param {StratisRequest} request
+   * @param {Response} response
    */
-  constructor(request) {
+  constructor(request, response) {
     super(request)
+    this.response = response
   }
 
-  async render() {}
+  async render(req, res) {
+    return await this.request.stratis.template_bank.render(
+      this.request.filepath,
+      {
+        req: this.request.request,
+        res: this.response,
+        session: this.request.request.session || {},
+      }
+    )
+  }
 }
 
 module.exports = {

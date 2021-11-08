@@ -212,7 +212,7 @@ Where the WebSocket payload is,
 ```json
 {
   "rid": "[the request id]",
-  "method_name": "[the function name]",
+  "name": "[the function or object name]",
   "args": {
     "send_from_client": "value"
   }
@@ -240,17 +240,19 @@ The following methods will be available on all pages, through the api or while r
 
 ## Built in EJS template objects
 
-Template objects (Overrideable),
+Template objects (Overridable),
 
 1. `session` - The session = `req.session` if exists otherwise an empty dictionary.
-2. `req` - the http request
-3. `res` - the http response
-
-Appended to request(Cannot be overridden)
-
-1. `req.stratis` - the stratis API object.
-1. `req.stratis_info` - the stratis API parsed request info (Native).
-1. `req.stratis_env` - the stratis API rendered environment (Native).
+1. `req` - the http request.
+1. `res` - the http response.
+1. `context` - the stratis render context object,
+   ```javascript
+   {
+     stratis,
+     template,
+     data,
+   }
+   ```
 
 # Contribution
 

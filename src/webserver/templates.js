@@ -1,6 +1,7 @@
 const ejs = require('ejs')
 const { assert, path_stat, deep_merge_objects } = require('../common')
 const { CacheDictionary } = require('./collections')
+const { StratisNotFoundError } = require('./errors')
 const fs = require('fs')
 const path = require('path')
 
@@ -15,7 +16,7 @@ require('./templates.strings.js')
 /**
  * @typedef {Object} StratisEJSOptionsExtension
  * @property {bool} require If true, add stratis (special) require to the ejs rendering
- * @property {bool} environment A dictionary of key/value pairs to add to the ejs environment.
+ * @property {{}} environment A dictionary of key/value pairs to add to the ejs environment.
  * Will overwrite any api_method!
  *
  * @typedef {ejs.Options & StratisEJSOptionsExtension} StratisEJSOptions
@@ -176,7 +177,12 @@ class StratisEJSTemplate {
     if (elapsed_since_last_compiled < this.recompile_interval) return
 
     const stats = await path_stat(this.template_filepath)
-    assert(stats != null, `Template file ${this.template_filepath} not found.`)
+    assert(
+      stats != null,
+      new StratisNotFoundError(
+        `Template file ${this.template_filepath} not found.`
+      )
+    )
 
     const template_string = await fs.promises.readFile(
       this.template_filepath,

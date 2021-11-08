@@ -30,7 +30,7 @@
 /**
  * @typedef {Object} StratisApiWebSocketRequestArgs
  * @property {string} rid The request id.
- * @property {string} method_name The api method to invoke.
+ * @property {string} name The api method to invoke.
  * @property {Object} args The api method arguments.
  */
 

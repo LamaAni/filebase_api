@@ -1,21 +1,20 @@
 const express = require('express')
 const events = require('events')
 const path = require('path')
-const fs = require('fs')
-const ejs = require('ejs')
-const mime = require('mime')
-const stream = require('stream')
 const { Request, Response, NextFunction } = require('express/index')
-
 const websocket = require('../websocket.js')
-const { split_stream_once, stream_to_buffer } = require('../streams.js')
-const { assert } = require('../common.js')
+const { assert, with_timeout } = require('../common.js')
 
 const {
   STRATIS_CLIENTSIDE_SOURCE,
   DEFAULT_PAGE_FILE_EXT,
 } = require('./consts.js')
 
+const {
+  StratisNotFoundError,
+  StratisError,
+  StratisTimeOutError,
+} = require('./errors')
 const { StratisRequest } = require('./requests.js')
 const { StratisCodeModuleBank } = require('./code.js')
 const { StratisEJSTemplateBank } = require('./templates')
@@ -53,16 +52,14 @@ const {
  * Interface for Stratis options.
  * @typedef {Object} StratisOptions
  * @property {[string]} page_file_ext A list of page default extensions to match.
- * @property {Object<string,StratisApiMethod} api_methods A collection of core api methods to expose.
+ * @property {Object<string,StratisApiMethod|string|{}>} common_api A collection of core api objects or
+ * methods to expose.
  * @property {StratisEJSOptions} ejs_options A collection of stratis extended ejs options.
  * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank
- * @property {StratisEJSTemplateBankOptions} templates_bank_options A collection of template bank options.
+ * @property {StratisEJSTemplateBankOptions} template_bank_options A collection of template bank options.
  * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
- * @property {integer} cache_check_minimal_interval The minimal interval for cache checking [ms]
- * @property {integer} cache_clean_interval The minimal interval for cache cleaning [ms]
- * @property {integer} cache_max_lifetime The maximal cache lifetime [ms]
- * @property {integer} client_request_timeout The client side request timeout [ms]
+ * @property {integer} timeout The client side request timeout [ms]
  */
 
 class Stratis extends events.EventEmitter {
@@ -73,27 +70,26 @@ class Stratis extends events.EventEmitter {
    */
   constructor({
     page_file_ext = DEFAULT_PAGE_FILE_EXT,
-    api_methods = {},
+    common_api = {},
     code_module_bank_options = {},
-    templates_bank_options = {},
+    template_bank_options = {},
     codefile_extension = '.code.js',
     show_application_errors = false,
-    default_access_mode = null,
-
-    // ejs templating
     ejs_options = {},
-
-    // logging
-    logger = null,
-    log_errors_to_console = true,
-
-    // cache
-    cache_check_minimal_interval = 10,
-    cache_clean_interval = 1000,
-    cache_max_lifetime = 5 * 60 * 1000,
-    client_request_timeout = 1 * 60 * 1000,
+    logger = console,
+    timeout = 1000 * 60,
   } = {}) {
     super()
+
+    this.page_file_ext = page_file_ext
+    this.common_api = common_api
+    this.logger = logger || console
+    this.ejs_options = ejs_options
+    this.codefile_extension = codefile_extension
+    this.timeout =
+      typeof timeout != 'number' || timeout <= 0 ? Infinity : this.timeout
+
+    this.show_application_errors = show_application_errors
 
     /** @type {StratisEventListenRegister} */
     this.on
@@ -102,30 +98,12 @@ class Stratis extends events.EventEmitter {
     /** @type {StratisEventEmitter} */
     this.emit
 
-    /** @type {console | {}} */
-    this.logger = logger || console
-
-    /** @type {StratisEJSOptions} */
-    this.ejs_options = ejs_options
-
-    this.codefile_extension = codefile_extension
-    this.cache_check_minimal_interval = cache_check_minimal_interval
-    this.cache_clean_interval = cache_clean_interval
-    this.cache_max_lifetime = cache_max_lifetime
-    this.client_request_timeout = client_request_timeout || 1000
-    this.page_file_ext = page_file_ext
-    this.show_application_errors = show_application_errors
-
     // collections
     this.code_module_bank = new StratisCodeModuleBank(
       this,
       code_module_bank_options
     )
-
-    this.template_bank = new StratisEJSTemplateBank(
-      this,
-      templates_bank_options
-    )
+    this.template_bank = new StratisEJSTemplateBank(this, template_bank_options)
   }
 
   /**
@@ -166,20 +144,27 @@ class Stratis extends events.EventEmitter {
           ws_request_args = await StratisPageApiCall.parse_api_call_args(data)
           if (
             ws_request_args.rid == null ||
-            ws_request_args.method_name == null ||
+            ws_request_args.name == null ||
             typeof ws_request_args.args != 'object'
           )
             throw Error(
-              'Invalid stratis api websocket request. Expected {rid:string, method_name:string, args:{} }'
+              'Invalid stratis api websocket request. Expected {rid:string, name:string, args:{} }'
             )
 
           const call = new StratisPageApiCall(
             stratis_request,
-            ws_request_args.method_name,
+            ws_request_args.name,
             ws_request_args.args
           )
 
-          const rsp_data = await call.invoke()
+          const rsp_data = with_timeout(
+            async () => {
+              return await call.invoke()
+            },
+            this.timeout,
+            new StratisTimeOutError('Websocket request timed out')
+          )
+
           ws.send(
             JSON.stringify({
               rid: ws_request_args.rid,
@@ -192,7 +177,9 @@ class Stratis extends events.EventEmitter {
             ws.send(
               JSON.stringify({
                 rid: ws_request_args.rid,
-                error: err,
+                error: this.return_errors_to_client
+                  ? `${err}`
+                  : 'Error while serving request',
               })
             )
           } catch (err) {
@@ -214,14 +201,14 @@ class Stratis extends events.EventEmitter {
    */
   async handle_page_api_call(stratis_request, res, next) {
     // resolve api method path.
-    const method_name = stratis_request.api_path
+    const name = stratis_request.api_path
       .split('/')
       .filter((v) => v.trim().length > 0)
       .join('.')
 
     const call = new StratisPageApiCall(
       stratis_request,
-      method_name,
+      name,
       await StratisPageApiCall.parse_api_call_args(
         stratis_request.request.body
       ),
@@ -239,7 +226,10 @@ class Stratis extends events.EventEmitter {
    * @param {Response} res
    * @param {NextFunction} next
    */
-  async handle_page_render_request(stratis_request, res, next) {}
+  async handle_page_render_request(stratis_request, res, next) {
+    const call = new StratisPageRenderRequest(stratis_request)
+    return resp.end(await call.render())
+  }
 
   /**
    * @param {StratisRequest} stratis_request
@@ -271,7 +261,9 @@ class Stratis extends events.EventEmitter {
     } = {}
   ) {
     if (!fs.existsSync(serve_path))
-      throw new Error(`Stratis search path ${serve_path} dose not exist`)
+      throw new StratisNotFoundError(
+        `Stratis search path ${serve_path} dose not exist`
+      )
 
     const src_stat = fs.statSync(serve_path)
 
@@ -329,17 +321,23 @@ class Stratis extends events.EventEmitter {
           // file download.
           return res.sendFile(stratis_request.filepath)
 
-        if (stratis_request.is_websocket_request)
-          // open websocket
-          return this.handle_websocket_request(stratis_request, res, next)
-
-        return this.handle_page_request(stratis_request, res, next)
+        return await with_timeout(
+          async () => {
+            if (stratis_request.is_websocket_request)
+              // open websocket
+              return this.handle_websocket_request(stratis_request, res, next)
+            return this.handle_page_request(stratis_request, res, next)
+          },
+          this.timeout,
+          new StratisTimeOutError('timed out processing request')
+        )
       } catch (err) {
         // returning the application error
-        if (stratis_request.return_errors_to_client)
-          res.write(`${err}`).sendStatus(500)
         this._emit_error(err, stratis_request)
-        next(err)
+        res.status(err instanceof StratisError ? err.http_response_code : 500)
+
+        if (stratis_request.return_errors_to_client) res.end(`${err}`)
+        else next(err)
       }
     }
 
