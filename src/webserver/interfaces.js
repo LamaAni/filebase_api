@@ -24,7 +24,7 @@
  */
 
 /**
- * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible} StratisApiMethod
+ * @typedef {string|number|{}|(args:{}|string, context: StratisPageCallContext)=>JsonCompatible} StratisApiObject
  */
 
 /**
@@ -39,8 +39,8 @@ module.exports = {
   StratisEventEmitter: () => {},
   /** @type {StratisEventListenRegister} */
   StratisEventListenRegister: () => {},
-  /** @type {StratisApiMethod} */
-  StratisApiMethod: () => {},
+  /** @type {StratisApiObject} */
+  StratisApiObject: () => {},
   /** @type {JsonCompatible} */
   JsonCompatible: {},
 }

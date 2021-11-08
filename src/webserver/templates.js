@@ -35,10 +35,13 @@ class StratisEJSTemplateRenderContext {
   /**
    * Holds the the render context data and methods.
    * @param {ejs.Data} data The template data (as dictionary)
+   * @param {ejs.Data} overridable_data A data object to serve as a base for the
+   * merge of all data. Will be override by any method or data value.
    */
-  constructor(data = {}) {
+  constructor(data = {}, overridable_data = {}) {
     this._template = null
     this._data = data
+    this._overridable_data = overridable_data
   }
 
   /**
@@ -54,6 +57,10 @@ class StratisEJSTemplateRenderContext {
    */
   get data() {
     return this._data
+  }
+
+  get overridable_data() {
+    return this._overridable_data
   }
 
   /**
@@ -111,12 +118,13 @@ class StratisEJSTemplateRenderContext {
             this.template.template_filepath
           )
         )
-      ).as_render_data()
+      ).as_render_objects()
 
     return Object.assign(
+      {},
+      this.overridable_data || {},
       {
         include: async (...args) => await this.include(...args),
-        stratis: this.stratis,
         __dirname: path.dirname(this.template.template_filepath),
         __filename: this.template.template_filepath,
       },

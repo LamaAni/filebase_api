@@ -29,7 +29,7 @@ const {
  * @typedef {import('./interfaces').StratisEventListenRegister} StratisEventListenRegister
  * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
  * @typedef {import('./requests').StratisFileAccessMode} StratisFileAccessMode
- * @typedef {import('./interfaces').StratisApiMethod} StratisApiMethod
+ * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
  * @typedef {import('./templates').StratisEJSOptions} StratisEJSOptions
  * @typedef {import('./interfaces').StratisApiWebSocketRequestArgs} StratisApiWebSocketRequestArgs
  * @typedef {import('./code').StratisCodeModule} StratisCodeModule
@@ -49,10 +49,16 @@ const {
  */
 
 /**
+ * @typedef {Object} StratisClientSideApiOptions
+ * @property {string} api_code_path The path to the api code to use (render)
+ * @property {number} timeout The client side api timeout. Defaults to server side timeout.
+ */
+
+/**
  * Interface for Stratis options.
  * @typedef {Object} StratisOptions
  * @property {[string]} page_file_ext A list of page default extensions to match.
- * @property {Object<string,StratisApiMethod|string|{}>} common_api A collection of core api objects or
+ * @property {Object<string,StratisApiObject>} common_api A collection of core api objects or
  * methods to expose.
  * @property {StratisEJSOptions} ejs_options A collection of stratis extended ejs options.
  * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank
@@ -60,7 +66,13 @@ const {
  * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
  * @property {integer} timeout The client side request timeout [ms]
+ * @property {StratisClientSideApiOptions} client_api client api options.
  */
+
+const STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS = {
+  api_code_path: path.join(__dirname, 'clientside.js'),
+  timeout: null,
+}
 
 class Stratis extends events.EventEmitter {
   /**
@@ -78,6 +90,7 @@ class Stratis extends events.EventEmitter {
     ejs_options = {},
     logger = console,
     timeout = 1000 * 60,
+    client_api = null,
   } = {}) {
     super()
 
@@ -90,6 +103,15 @@ class Stratis extends events.EventEmitter {
       typeof timeout != 'number' || timeout <= 0 ? Infinity : this.timeout
 
     this.show_application_errors = show_application_errors
+
+    /**
+     * @type {StratisClientSideApiOptions}
+     */
+    this.client_api = Object.assign(
+      {},
+      STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
+      client_api || {}
+    )
 
     /** @type {StratisEventListenRegister} */
     this.on
@@ -228,7 +250,7 @@ class Stratis extends events.EventEmitter {
    */
   async handle_page_render_request(stratis_request, res, next) {
     const call = new StratisPageRenderRequest(stratis_request)
-    return resp.end(await call.render())
+    return res.end(await call.render())
   }
 
   /**

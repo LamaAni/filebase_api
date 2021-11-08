@@ -2,12 +2,14 @@ const stream = require('stream')
 const { StratisNotFoundError } = require('./errors.js')
 const { assert } = require('../common')
 const { split_stream_once, stream_to_buffer } = require('../streams.js')
+const { StratisEJSTemplateRenderContext } = require('./templates')
 
 /**
  * @typedef {import('./requests.js').StratisRequest} StratisRequest
  */
 
 /**
+ * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
  * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
  * @typedef {import('express/index').NextFunction} NextFunction
@@ -34,11 +36,22 @@ class StratisPageCallContext {
    * Implements the call context for stratis
    * @param {StratisPageCallContextOptions} param0
    */
-  constructor({ stratis_request, res, next, ws = null } = {}) {
+  constructor({ stratis_request, res = null, next = null, ws = null } = {}) {
+    assert(stratis_request != null, 'Stratis request cannot be null')
+    this.__internal_call = {}
     this._stratis_request = stratis_request
     this._res = res
     this._ws = ws
     this._next = next
+
+    /**
+     * @type {{}} The code module dictionary for the request.
+     */
+    this._code_module = null
+  }
+
+  get is_websocket_request() {
+    return this.ws != null
   }
 
   get stratis_request() {
@@ -65,14 +78,74 @@ class StratisPageCallContext {
     return this.stratis_request.stratis
   }
 
+  get session() {
+    return this.req.session
+  }
+
   get next() {
     return this._next
   }
 
+  get_api_objects() {
+    return {
+      render_stratis_api_description: this.render_stratis_api_description,
+      render_stratis_browser_api_script: this.render_stratis_browser_api_script,
+      render_stratis_script_tag: this.render_stratis_script_tag,
+    }
+  }
+
+  get_render_objects() {
+    return Object.assign({}, this.get_api_objects(), {
+      req: this.req,
+      res: this.res,
+      session: this.session,
+      context: this,
+    })
+  }
+
   /**
-   * Call to initialize the context.
+   * @returns {Object<string, StratisApiObject>}
    */
-  async initialize() {}
+  async get_code_module_objects() {
+    return Object.assign(
+      this.get_api_objects(),
+      (
+        await this.stratis.code_module_bank.load(this.stratis_request.codepath)
+      ).as_api_objects()
+    )
+  }
+
+  /**
+   * Template method. Renders the file api script tag.
+   */
+  render_stratis_script_tag() {
+    return `<script lang="javascript" src='${this.request.serve_path}/render_stratis_browser_api_script'></script>`
+  }
+
+  /**
+   * Render stratis api script.
+   */
+  async render_stratis_browser_api_script() {
+    /** @type {StratisRequestEnvironment} */
+    return await this.request.stratis.template_bank.render(
+      this.stratis.client_api.api_code_path,
+      {
+        code_module: await this.get_code_module_objects(),
+        request: this.stratis_request,
+        stratis: this.stratis,
+      }
+    )
+  }
+
+  async render_stratis_api_description() {
+    const code_module = await this.get_code_module_objects()
+    const api_description = {
+      api: stratis.api_version,
+      methods: Object.keys(code_module),
+    }
+
+    return JSON.stringify(api_description)
+  }
 }
 
 class StratisPageCall {
@@ -82,6 +155,10 @@ class StratisPageCall {
    */
   constructor(request) {
     this.request = request
+  }
+
+  get stratis() {
+    return this.request.stratis
   }
 
   get_search_params_dictionary() {
@@ -162,17 +239,21 @@ class StratisPageApiCall extends StratisPageCall {
 
   /**
    * Invokes the api call.
+   * @param {StratisPageCallContext} context
    * @returns {JsonCompatible} The json compatible return value.
    */
-  async invoke() {
+  async invoke(context) {
     // load the code module for the api
-    const code_module = (
-      await this.request.stratis.code_module_bank.load(this.request.codepath)
-    ).as_api_invoke_dict()
+    const code_module = Object.assign(
+      context.get_api_objects(),
+      await context.get_code_module_objects()
+    )
 
     if (code_module[this.name] == null) {
       throw new StratisNotFoundError('Api method or object not found')
     }
+
+    return await code_module[this.name](this.args, context)
   }
 }
 
@@ -180,21 +261,24 @@ class StratisPageRenderRequest extends StratisPageCall {
   /**
    * Implements behavior for a page render request
    * @param {StratisRequest} request
-   * @param {Response} response
    */
-  constructor(request, response) {
+  constructor(request) {
     super(request)
-    this.response = response
   }
 
-  async render(req, res) {
+  /**
+   * Render a stratis request.
+   * @param {StratisPageCallContext} context The request
+   * @returns {JsonCompatible} response
+   */
+  async render(context) {
+    const template_render_context = new StratisEJSTemplateRenderContext(
+      {},
+      context.get_render_objects()
+    )
     return await this.request.stratis.template_bank.render(
       this.request.filepath,
-      {
-        req: this.request.request,
-        res: this.response,
-        session: this.request.request.session || {},
-      }
+      template_render_context
     )
   }
 }

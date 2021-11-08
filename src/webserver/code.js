@@ -3,7 +3,7 @@ const { assert, path_stat } = require('../common')
 const { CacheDictionary } = require('./collections')
 
 /**
- * @typedef {import('./interfaces').StratisApiMethod} StratisApiMethod
+ * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
  * @typedef {import('./stratis').Stratis} Stratis
  * @typedef {import('./collections').CacheDictionaryOptions} CacheDictionaryOptions
  */
@@ -89,8 +89,10 @@ class StratisCodeModule {
   get module() {
     return this._module
   }
-
-  as_render_data() {
+  /**
+   * @returns {Object<string,StratisApiObject>}
+   */
+  as_render_objects() {
     if (this._render_data == null) {
       this._render_data = {}
       this.code_objects.forEach((o) => (this._render_data[o.name] = o.val))
@@ -98,7 +100,11 @@ class StratisCodeModule {
     return this._render_data
   }
 
-  as_api_invoke_dict() {
+  /**
+   *
+   * @returns {Object<string,StratisApiObject>}
+   */
+  as_api_objects() {
     if (this._api_invoke_dict == null) {
       this._api_invoke_dict = {}
       this.code_objects.forEach((o) => (this._api_invoke_dict[o.name] = o.val))
