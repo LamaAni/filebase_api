@@ -15,6 +15,7 @@ const {
   StratisNotFoundError,
   StratisError,
   StratisTimeOutError,
+  StratisNotAuthorizedError,
 } = require('./errors')
 const { StratisRequest } = require('./requests.js')
 const { StratisCodeModuleBank } = require('./code.js')
@@ -39,20 +40,22 @@ const {
  */
 
 /**
+ * @typedef {Object} StratisClientSideApiOptions
+ * @property {string} api_code_path The path to the api code to use (render)
+ * @property {number} timeout The client side api timeout. Defaults to server side timeout.
+ */
+
+/**
  * @typedef {Object} StratisMiddlewareOptions
  * @property {(req:Request,res:Response,next:NextFunction)=>{}} filter Path filter, if next
  * function was called then do not process in the middleware.
+ * @property {(req:Request,res:Response,next:NextFunction)=>{}} security_filter Secure resources validation filter.
+ * return false or throw error when not accesable. Defaults to allow all.
  * @property {boolean} next_on_private Call the next express handler if the current
  * filepath request is private.
  * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
  * NOTE! To be used for debug, may expose sensitive information.
  * @property {boolean} log_errors If true, prints the application errors to the logger.
- */
-
-/**
- * @typedef {Object} StratisClientSideApiOptions
- * @property {string} api_code_path The path to the api code to use (render)
- * @property {number} timeout The client side api timeout. Defaults to server side timeout.
  */
 
 /**
@@ -299,8 +302,9 @@ class Stratis extends events.EventEmitter {
     serve_path,
     {
       filter = null,
-      next_on_private = true,
-      return_errors_to_client = false,
+      security_filter = null,
+      next_on_private = false,
+      return_errors_to_client = true,
       log_errors = true,
     } = {}
   ) {
@@ -359,6 +363,17 @@ class Stratis extends events.EventEmitter {
           if (stratis_request.is_codefile)
             res.write('Direct access to codefiles is always forbidden')
           return res.sendStatus(403)
+        }
+
+        if (
+          security_filter != null &&
+          stratis_request.access_mode == 'secure'
+        ) {
+          if (!security_filter(req, res, next)) {
+            throw new StratisNotAuthorizedError(
+              `Cannot access or find ${stratis_request.query_path}`
+            )
+          }
         }
 
         if (!stratis_request.is_page)

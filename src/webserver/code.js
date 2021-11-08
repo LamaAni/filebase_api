@@ -131,6 +131,7 @@ class StratisCodeModule {
       this._last_code_filepath_change_ms = null
     } else if (stats.mtime != this._last_code_filepath_change_ms) {
       this._last_code_filepath_change_ms = stats.mtime
+      delete require.cache[this.code_filepath]
       this._module = require(this.code_filepath)
       assert(
         typeof this.module == 'object',

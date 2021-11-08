@@ -11,10 +11,11 @@ const is_websocket_request = require('../websocket.js').is_websocket_request
 
 /**
  * The type of code object. See documentation in readme.
- * @typedef {"public" | "private", "secure" } StratisFileAccessMode
+ * @typedef { "public" | "private" | "secure" } StratisFileAccessMode
  */
 
-const ACCESS_MODIFIERS_MATCH_REGEX = /[^\w](private|public|secure)([^\w]|$)/g
+const ACCESS_MODIFIERS_MATCH_REGEX =
+  /([^\w]|^)(private|public|secure)([^\w]|$)/g
 
 class StratisRequest {
   /**
@@ -167,15 +168,14 @@ class StratisRequest {
       this._access_mode = 'private'
       return
     } else {
-      let modifiers = new Set(
-        this.query_path.matchAll(this.access_modifiers_match_regex)
-      )
+      const modifires_matches = [
+        ...this.query_path.matchAll(this.access_modifiers_match_regex),
+      ]
+      const modifiers = new Set(modifires_matches.map((m) => m[2]))
 
-      if (modifiers.has('private')) {
-        this._access_mode = 'private'
-      } else if (modifiers.has('public')) {
-        this._access_mode = 'public'
-      }
+      if (modifiers.has('private')) this._access_mode = 'private'
+      else if (modifiers.has('secure')) this._access_mode = 'secure'
+      else this._access_mode = 'public'
     }
 
     this._is_page =

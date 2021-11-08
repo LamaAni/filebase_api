@@ -30,4 +30,5 @@ module.exports = {
   StratisError,
   StratisNotFoundError,
   StratisTimeOutError,
+  StratisNotAuthorizedError,
 }
