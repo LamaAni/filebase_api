@@ -56,6 +56,7 @@ const {
  * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
  * NOTE! To be used for debug, may expose sensitive information.
  * @property {boolean} log_errors If true, prints the application errors to the logger.
+ * @property {boolean} ignore_empty_path If true, next handler on empty path.
  */
 
 /**
@@ -77,6 +78,13 @@ const STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS = {
   api_code_path: path.join(__dirname, 'clientside.js'),
 }
 
+/**
+ * @type {StratisEJSOptions}
+ */
+const STRATIS_DEFAULT_EJS_OPTIONS = {
+  require: true,
+}
+
 class Stratis extends events.EventEmitter {
   /**
    * Creates a file api handler that can be used to generate
@@ -90,7 +98,7 @@ class Stratis extends events.EventEmitter {
     template_bank_options = {},
     codefile_extension = '.code.js',
     show_application_errors = false,
-    ejs_options = {},
+    ejs_options = STRATIS_DEFAULT_EJS_OPTIONS,
     logger = console,
     timeout = 1000 * 60,
     client_api = null,
@@ -100,7 +108,11 @@ class Stratis extends events.EventEmitter {
     this.page_file_ext = page_file_ext
     this.common_api = common_api
     this.logger = logger || console
-    this.ejs_options = ejs_options
+    this.ejs_options = Object.assign(
+      {},
+      STRATIS_DEFAULT_EJS_OPTIONS,
+      ejs_options
+    )
     this.codefile_extension = codefile_extension
     this.timeout =
       typeof timeout != 'number' || timeout <= 0 ? Infinity : timeout
@@ -306,6 +318,7 @@ class Stratis extends events.EventEmitter {
       next_on_private = false,
       return_errors_to_client = true,
       log_errors = true,
+      ignore_empty_path = true,
     } = {}
   ) {
     if (!fs.existsSync(serve_path))
@@ -332,6 +345,8 @@ class Stratis extends events.EventEmitter {
      * @param {NextFunction} next
      */
     const intercept = async (req, res, next) => {
+      if (ignore_empty_path && req.path == '/') return next()
+
       const stratis_request = new StratisRequest({
         serve_path,
         stratis: this,

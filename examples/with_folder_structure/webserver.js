@@ -11,7 +11,7 @@ app.all('/test', (req, rsp, next) => {
 
 // redirect all.
 app.use((req, rsp, next) => {
-  rsp.redirect('/index.html')
+  rsp.redirect('/public/index.html')
 })
 
 app.listen(port, () =>

@@ -78,23 +78,41 @@ class StratisEJSTemplateRenderContext {
   }
 
   /**
+   * @param {string} rpath
+   * @returns The template relative path
+   */
+  resolve_template_relative_path(rpath) {
+    rpath = rpath.trim()
+    if (!path.isAbsolute(rpath)) {
+      const current_template_path = path.dirname(
+        this.template.template_filepath
+      )
+      rpath = path.resolve(path.join(current_template_path, rpath))
+    }
+    return rpath
+  }
+
+  /**
    * Includes another template for the current template filepath.
    * @param {string} fpath The path to include
    */
   async include(fpath) {
     assert(typeof fpath == 'string', 'Include filepath must be a string')
-    fpath = fpath.trim()
-    if (!path.isAbsolute(fpath)) {
-      const current_template_path = path.dirname(
-        this.template.template_filepath
-      )
-      fpath = path.resolve(path.join(current_template_path, fpath))
-    }
+    fpath = this.resolve_template_relative_path(fpath)
 
     const calling_template = this.template
     const include_result = await this.template_bank.render(fpath, this)
     this.assign_template(calling_template)
     return include_result
+  }
+
+  /**
+   * @param {string} pkg The package to require
+   */
+  template_require(pkg) {
+    if (pkg.startsWith('.') || pkg.startsWith('/'))
+      return require(this.resolve_template_relative_path(pkg))
+    else return require(pkg)
   }
 
   /**
@@ -120,11 +138,15 @@ class StratisEJSTemplateRenderContext {
         )
       ).as_render_objects()
 
+    const include = async (...args) => await this.include(...args)
+    const template_require = (...args) => this.template_require(...args)
+
     return Object.assign(
       {},
       this.overridable_data || {},
       {
-        include: async (...args) => await this.include(...args),
+        include,
+        require: this.stratis.ejs_options.require ? template_require : null,
         __dirname: path.dirname(this.template.template_filepath),
         __filename: this.template.template_filepath,
       },
@@ -268,20 +290,6 @@ class StratisEJSTemplateBank {
 
   get stratis() {
     return this._stratis
-  }
-
-  create_render_context(data = {}) {
-    const render_context = new StratisEJSTemplateRenderContext(data)
-
-    render_context.data_overrides['include'] = (template_filepath) => {
-      return this.load(template_filepath).render(
-        render_context._data,
-        this.recompile_interval,
-        render_context
-      )
-    }
-
-    return render_context
   }
 
   /**

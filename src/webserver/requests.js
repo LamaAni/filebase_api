@@ -54,7 +54,7 @@ class StratisRequest {
     this._url = new URL(request.url, `http://${request.headers.host}`)
 
     /** @type {StratisFileAccessMode} */
-    this._access_mode = access_mode || stratis.default_access_mode
+    this._access_mode = access_mode || 'public'
 
     /** @type {string} */
     this._query_path = null
@@ -175,7 +175,7 @@ class StratisRequest {
 
       if (modifiers.has('private')) this._access_mode = 'private'
       else if (modifiers.has('secure')) this._access_mode = 'secure'
-      else this._access_mode = 'public'
+      else if (modifiers.has('public')) this._access_mode = 'public'
     }
 
     this._is_page =

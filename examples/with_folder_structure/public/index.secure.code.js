@@ -1,6 +1,6 @@
 module.exports = {
   print_something: async () => {
-    return 'something'
+    return 'secure something by name'
   },
   a_value: {
     some: 'value',
