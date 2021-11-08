@@ -92,7 +92,10 @@ class StratisRequest {
   }
 
   get codepath() {
-    return this.stratis.compose_codefile_path(this.query_path)
+    return path.join(
+      this.serve_path,
+      this.stratis.compose_codefile_path(this.query_path)
+    )
   }
 
   get is_websocket_request() {
@@ -143,7 +146,7 @@ class StratisRequest {
 
     return {
       query_path: path.join(...cur_path_items),
-      api_path: path.join(...path_items),
+      api_path: path_items.length == 0 ? null : path.join(...path_items),
     }
   }
 

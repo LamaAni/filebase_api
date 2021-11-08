@@ -1,5 +1,12 @@
 const fs = require('fs')
 
+function assert(condition, ...data) {
+  if (condition != true)
+    throw data.length == 1 && data[0] instanceof Error
+      ? data[0]
+      : new Error(...data)
+}
+
 async function path_stat(path) {
   try {
     return await fs.promises.stat(path)
@@ -40,6 +47,11 @@ function deep_merge_objects(target, ...to_merge) {
  * @param {Error} timeout_error The timeout error.
  */
 async function with_timeout(method, timeout, timeout_error) {
+  assert(
+    typeof timeout == 'number' && timeout > 0,
+    'timeout muse be a number larger than zero'
+  )
+
   return await new Promise((resolve, reject) => {
     const timeout_id = setTimeout(() => {
       reject(timeout_error || 'timeout ' + timeout)
@@ -63,12 +75,7 @@ module.exports = {
    * @param {boolean} condition
    * @param  {...any} data The data or errors to throw.
    */
-  assert: (condition, ...data) => {
-    if (condition != true)
-      throw data.length == 1 && data[0] instanceof Error
-        ? data[0]
-        : new Error(...data)
-  },
+  assert,
   path_exists,
   path_stat,
   with_timeout,

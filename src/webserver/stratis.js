@@ -100,7 +100,7 @@ class Stratis extends events.EventEmitter {
     this.ejs_options = ejs_options
     this.codefile_extension = codefile_extension
     this.timeout =
-      typeof timeout != 'number' || timeout <= 0 ? Infinity : this.timeout
+      typeof timeout != 'number' || timeout <= 0 ? Infinity : timeout
 
     this.show_application_errors = show_application_errors
 
@@ -119,6 +119,8 @@ class Stratis extends events.EventEmitter {
     this.once
     /** @type {StratisEventEmitter} */
     this.emit
+
+    this.on('error', (...args) => this._internal_on_emit_error(...args))
 
     // collections
     this.code_module_bank = new StratisCodeModuleBank(
@@ -147,9 +149,8 @@ class Stratis extends events.EventEmitter {
    * @param {Error} err
    * @param {StratisRequest} stratis_request
    */
-  _emit_error(err, stratis_request) {
+  _internal_on_emit_error(err, stratis_request) {
     if (stratis_request.log_errors) this.logger.error(err)
-    this.emit('error', err)
   }
 
   /**
@@ -164,6 +165,7 @@ class Stratis extends events.EventEmitter {
         let ws_request_args = {}
         try {
           ws_request_args = await StratisPageApiCall.parse_api_call_args(data)
+          ws_request_args.args = ws_request_args.args || {}
           if (
             ws_request_args.rid == null ||
             ws_request_args.name == null ||
@@ -179,9 +181,16 @@ class Stratis extends events.EventEmitter {
             ws_request_args.args
           )
 
-          const rsp_data = with_timeout(
+          const context = new StratisPageCallContext({
+            stratis_request,
+            next,
+            res: null,
+            ws,
+          })
+
+          const rsp_data = await with_timeout(
             async () => {
-              return await call.invoke()
+              return await call.invoke(context)
             },
             this.timeout,
             new StratisTimeOutError('Websocket request timed out')
@@ -194,7 +203,7 @@ class Stratis extends events.EventEmitter {
             })
           )
         } catch (err) {
-          this._emit_error(err, stratis_request)
+          this.emit('error', err, stratis_request)
           try {
             ws.send(
               JSON.stringify({
@@ -205,15 +214,15 @@ class Stratis extends events.EventEmitter {
               })
             )
           } catch (err) {
-            this._emit_error(err, stratis_request)
+            this.emit('error', err, stratis_request)
           }
         }
       })
 
       ws.on('open', () => this.emit('websocket_open', ws))
       ws.on('close', () => this.emit('websocket_close', ws))
-      ws.on('error', (err) => this._emit_error(err, stratis_request))
-    })
+      ws.on('error', (err) => this.emit('error', err, stratis_request))
+    })(stratis_request.request, res, next)
   }
 
   /**
@@ -237,7 +246,14 @@ class Stratis extends events.EventEmitter {
       true
     )
 
-    const rslt = await call.invoke()
+    const context = new StratisPageCallContext({
+      stratis_request,
+      next,
+      res,
+      ws: null,
+    })
+
+    const rslt = await call.invoke(context)
     if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
 
     return res.end(rslt)
@@ -250,8 +266,13 @@ class Stratis extends events.EventEmitter {
    */
   async handle_page_render_request(stratis_request, res, next) {
     const call = new StratisPageRenderRequest(stratis_request)
-    const context = new StratisPageCallContext()
-    return res.end(await call.render())
+    const context = new StratisPageCallContext({
+      stratis_request,
+      next,
+      res,
+      ws: null,
+    })
+    return res.end(await call.render(context))
   }
 
   /**
@@ -356,7 +377,7 @@ class Stratis extends events.EventEmitter {
         )
       } catch (err) {
         // returning the application error
-        this._emit_error(err, stratis_request)
+        this.emit('error', err, stratis_request)
         res.status(err instanceof StratisError ? err.http_response_code : 500)
 
         if (stratis_request.return_errors_to_client) res.end(`${err}`)
