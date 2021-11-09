@@ -128,7 +128,8 @@ class StratisPageCallContext {
    * Template method. Renders the file api script tag.
    */
   render_stratis_script_tag() {
-    return `<script lang="javascript" src='${this.stratis_request.query_path}/render_stratis_browser_api_script'></script>`
+    const request_filename = path.basename(this.stratis_request.query_path)
+    return `<script lang="javascript" src='${request_filename}/render_stratis_browser_api_script'></script>`
   }
 
   /**

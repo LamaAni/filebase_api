@@ -4,6 +4,8 @@ const path = require('path')
 const http = require('http')
 const https = require('https')
 const express = require('express')
+const cookie_parser = require('cookie-parser')
+const cookie_session = require('cookie-session')
 
 const { Request, Response, NextFunction } = require('express/index')
 const { Cli, CliArgument } = require('@lamaani/infer')
@@ -14,6 +16,31 @@ const { assert } = require('./common')
 /**
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
  */
+
+/**
+ * @typedef {Object} StratisSessionOptions
+ * /**
+ * Create a new cookie session middleware.
+ * @typedef {object} CookieSessionOptions
+ * @property {string} name The session cookie name
+ * @property {[string]} keys The signature keys.
+ * @property {number} maxAge number representing the milliseconds from Date.now() for expiry
+ * @property {Date} expires Date indicating the cookie's expiration date (expires at the end of session by default).
+ * @property {string} path string indicating the path of the cookie (/ by default).
+ * @property {string} domain string indicating the domain of the cookie (no default).
+ * @property {boolean} secure boolean indicating whether the cookie is only to be sent over HTTPS (false by default for HTTP, true by default for HTTPS).
+ * @property {boolean} secureProxy boolean indicating whether the cookie is only to be sent over HTTPS (use this if you handle SSL not in your node process).
+ * @property {boolean} httpOnly boolean indicating whether the cookie is only to be sent over HTTP(S), and not made available to client JavaScript (true by default).
+ * @property {boolean} signed boolean indicating whether the cookie is to be signed (true by default).
+ * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
+ */
+
+/** @type {CookieSessionOptions} */
+const DEFAULT_COOKIE_SESSION_OPTIONS = {
+  name: 'stratis_session',
+  maxAge: 1000 * 60 * 60 * 12,
+  overwrite: true,
+}
 
 class StratisCli {
   /**
@@ -49,7 +76,65 @@ class StratisCli {
       },
     }
 
-    
+    /** If true, disables the internal cookie parser */
+    this.cookies_disable = false
+    /** @type {CliArgument} */
+    this.__$cookies_disable = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_COOKIES_DISABLE',
+      default: this.cookies_disable,
+      description: 'If true, disables the internal cookie parser',
+    }
+
+    /** The cookies encryption key to use. If not provided then the cookies are not encrypted. */
+    this.cookies_key = null
+    /** @type {CliArgument} */
+    this.__$cookies_key = {
+      type: 'named',
+      environmentVariable: 'STRATIS_COOKIES_KEY',
+      default: this.cookies_key,
+      description:
+        'The cookies encryption key to use. If not provided then the cookies are not encrypted.',
+    }
+
+    /** If exists, disables the stratis user session (cookies). */
+    this.session_disabled = false
+    /** @type {CliArgument} */
+    this.__$session_disabled = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_SESSION_DISABLED',
+      default: this.session_disabled,
+      description: 'If exists, disables the stratis user session (cookies).',
+    }
+
+    /** The stratis session encryption key. Defaults to the  If not provided then the session will not be encrypted. */
+    this.session_key = null
+    /** @type {CliArgument} */
+    this.__$session_key = {
+      type: 'named',
+      environmentVariable: 'STRATIS_SESSION_KEY',
+      default: this.session_key,
+      description:
+        'The stratis session encryption key. If not provided then the session will not be encrypted.',
+    }
+
+    /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
+    this.session_options = null
+    /** @type {CliArgument} */
+    this.__$session_options = {
+      type: 'named',
+      environmentVariable: 'IFR_SESSION_OPTIONS',
+      default: this.session_options,
+      description:
+        'The session options (https://www.npmjs.com/package/cookie-session) as json.',
+      parse: (val) => {
+        return Object.assign(
+          {},
+          DEFAULT_COOKIE_SESSION_OPTIONS,
+          val == null ? {} : JSON.parse(val)
+        )
+      },
+    }
 
     /** The webserver port*/
     this.port = 8080
@@ -62,8 +147,6 @@ class StratisCli {
       parse: (val) => (typeof val == 'number' ? val : parseInt(val)),
       description: 'The webserver port',
     }
-
-    
 
     /** The https port to use. If null, do not listen on ssl. */
     this.https_port = 8443
@@ -425,6 +508,33 @@ class StratisCli {
 
         this.redirect_to_https(req, res, next)
       })
+    }
+
+    if (!this.cookies_disable) {
+      this.app.use(
+        cookie_parser(this.cookies_key, {
+          decode: this.cookies_key != null,
+        })
+      )
+    }
+
+    if (!this.session_disabled) {
+      /** @type {CookieSessionOptions} */
+      const run_session_options = {
+        secure: this.enable_https,
+        signed: this.session_key != null,
+        keys: [this.session_key || 'insecure_session'],
+      }
+
+      this.app.use(
+        cookie_session(Object.assign(run_session_options, this.session_options))
+      )
+
+      if (this.session_key == null) {
+        cli.logger.warn(
+          'Session enabled but no session sign (encrypt) key was provided. Session state cookie is insecure!'
+        )
+      }
     }
 
     if (typeof this.default_redirect != 'string') {
