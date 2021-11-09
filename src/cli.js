@@ -11,6 +11,10 @@ const { Cli, CliArgument } = require('@lamaani/infer')
 const { Stratis } = require('./webserver/stratis.js')
 const { assert } = require('./common')
 
+/**
+ * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
+ */
+
 class StratisCli {
   /**
    * Implements an infer set of arguments to control the stratis.
@@ -430,32 +434,48 @@ class StratisCli {
     }
 
     let stratis_init_called = false
+    this.api.__server_internal_command = this.api.server
 
-    this.api.init_service = () => {
-      stratis_init_called = true
+    this.api.server =
+      /**
+       * Override server command to allow cli intervention
+       * @param {StratisMiddlewareOptions} options
+       * @param {express.Express} app The express app to use, if null create one.
+       * @returns {express.Express} The express app to use. You can do express.listen
+       * to start the app.
+       */
+      (options = {}, app = null) => {
+        stratis_init_called = true
 
-      if (this.ejs_add_require && this.api)
-        this.app.use((req, res, next) => {
-          cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
-          next()
-        })
+        if (this.ejs_add_require && this.api)
+          this.app.use((req, res, next) => {
+            cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
+            next()
+          })
 
-      this.api.server(this.serve_path, this.app, {
-        return_errors_to_client: this.show_app_errors,
-        log_errors: true,
-        next_on_private: false,
-        next_on_not_found: true,
-      })
+        this.api.__server_internal_command(
+          Object.assign(
+            {
+              serve_path: this.serve_path,
+              return_errors_to_client: this.show_app_errors,
+              log_errors: true,
+              next_on_private: false,
+              next_on_not_found: true,
+            },
+            options
+          ),
+          app || this.app
+        )
 
-      if (this.redirect_all_unknown) this.app.use(redirect)
-      else this.app.all('/', redirect)
+        if (this.redirect_all_unknown) this.app.use(redirect)
+        else this.app.all('/', redirect)
 
-      cli.logger.info('Initialized stratis service middleware and routes')
-    }
+        cli.logger.info('Initialized stratis service middleware and routes')
+      }
 
-    await this.invoke_initialization_scripts(cli)
+    await this.invoke_initialization_scripts(cli.logger || console)
 
-    if (!stratis_init_called) this.api.init_service()
+    if (!stratis_init_called) this.api.server()
 
     this.api.init_service = null
 

@@ -47,6 +47,7 @@ const {
 
 /**
  * @typedef {Object} StratisMiddlewareOptions
+ * @property {string} serve_path The path to serve.
  * @property {(req:Request,res:Response,next:NextFunction)=>{}} filter Path filter, if next
  * function was called then do not process in the middleware.
  * @property {(req:Request,res:Response,next:NextFunction)=>{}} security_filter Secure resources validation filter.
@@ -110,7 +111,10 @@ class Stratis extends events.EventEmitter {
     super()
 
     assert(
-      page_call_context_constructor.prototype instanceof StratisPageCallContext,
+      page_call_context_constructor.prototype.constructor ==
+        StratisPageCallContext ||
+        page_call_context_constructor.prototype instanceof
+          StratisPageCallContext,
       'page_call_context_constructor must be of type StratisPageCallContext'
     )
 
@@ -318,18 +322,18 @@ class Stratis extends events.EventEmitter {
    * @param {string} serve_path The path to server
    * @param {StratisMiddlewareOptions} options
    */
-  middleware(
+  middleware({
     serve_path,
-    {
-      filter = null,
-      security_filter = null,
-      next_on_private = false,
-      next_on_not_found = true,
-      return_errors_to_client = true,
-      log_errors = true,
-      ignore_empty_path = true,
-    } = {}
-  ) {
+    filter = null,
+    security_filter = null,
+    next_on_private = false,
+    next_on_not_found = true,
+    return_errors_to_client = true,
+    log_errors = true,
+    ignore_empty_path = true,
+  } = {}) {
+    assert(serve_path != null, 'Serve path must be defined!')
+
     if (!fs.existsSync(serve_path))
       throw new StratisNotFoundError(
         `Stratis search path ${serve_path} dose not exist`
@@ -437,15 +441,14 @@ class Stratis extends events.EventEmitter {
 
   /**
    * Creates a new express server to use with the Stratis.
-   * @param {string} src The path to the folder to serve.
+   * @param {StratisMiddlewareOptions} options The middleware options.
    * @param {express.Express} app The express app to use, if null create one.
-   * @param {StratisMiddlewareOptions} options
    * @returns {express.Express} The express app to use. You can do express.listen
    * to start the app.
    */
-  server(src, app = null, options = {}) {
+  server(options = {}, app = null) {
     app = app || express()
-    app.use(this.middleware(src, options))
+    app.use(this.middleware(options))
     return app
   }
 }
