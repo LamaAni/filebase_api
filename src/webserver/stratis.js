@@ -97,7 +97,6 @@ class Stratis extends events.EventEmitter {
     code_module_bank_options = {},
     template_bank_options = {},
     codefile_extension = '.code.js',
-    show_application_errors = false,
     ejs_options = STRATIS_DEFAULT_EJS_OPTIONS,
     logger = console,
     timeout = 1000 * 60,
@@ -116,8 +115,6 @@ class Stratis extends events.EventEmitter {
     this.codefile_extension = codefile_extension
     this.timeout =
       typeof timeout != 'number' || timeout <= 0 ? Infinity : timeout
-
-    this.show_application_errors = show_application_errors
 
     /**
      * @type {StratisClientSideApiOptions}
@@ -428,12 +425,13 @@ class Stratis extends events.EventEmitter {
    * Creates a new express server to use with the Stratis.
    * @param {string} src The path to the folder to serve.
    * @param {express.Express} app The express app to use, if null create one.
+   * @param {StratisMiddlewareOptions} options
    * @returns {express.Express} The express app to use. You can do express.listen
    * to start the app.
    */
-  server(src, app = null) {
+  server(src, app = null, options = {}) {
     app = app || express()
-    app.use(this.middleware(src))
+    app.use(this.middleware(src, options))
     return app
   }
 }

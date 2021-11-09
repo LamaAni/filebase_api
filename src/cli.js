@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// command line interface.
-const { Cli, CliArgument } = require('@lamaani/infer')
-const { assert } = require('./common')
-const path = require('path')
 const fs = require('fs')
-const express = require('express')
+const path = require('path')
 const http = require('http')
 const https = require('https')
+const express = require('express')
+
 const { Request, Response, NextFunction } = require('express/index')
+const { Cli, CliArgument } = require('@lamaani/infer')
 
 const { Stratis } = require('./webserver/stratis.js')
+const { assert } = require('./common')
 
 class StratisCli {
   /**
@@ -17,7 +17,6 @@ class StratisCli {
    */
   constructor() {
     this.serve_path = process.cwd()
-
     /** If true, start the stratis listeners. Otherwise init script must start the listeners. */
     this.use_stratis_listeners = true
     /** @type {CliArgument} */
@@ -125,17 +124,18 @@ class StratisCli {
     }
 
     /** The default redirect path to use for (/)*/
-    this.default_redirect = '/index.html'
+    this.default_redirect = null
 
     /** @type {CliArgument} The default redirect path to use for (/)*/
     this.__$default_redirect = {
       type: 'named',
       default: this.default_redirect,
       environmentVariable: 'STRATIS_DEFAULT_REDIRECT',
-      description: 'The default redirect path to use for (/)',
+      description:
+        'The default redirect path to use for (/). Default to public/index.html or index.html',
     }
 
-    /** If true, redirects all unknown request to the default redirect*/
+    /** If true, redirects all unknown requests to the default redirect*/
     this.redirect_all_unknown = false
 
     /** @type {CliArgument} If true, redirects all unknown request to the default redirect*/
@@ -267,8 +267,9 @@ class StratisCli {
   get api() {
     if (this._api == null) {
       this._api = new Stratis({
-        ejs_environment_require: this.ejs_add_require,
-        show_application_errors: this.show_app_errors,
+        ejs_options: {
+          require: this.ejs_add_require,
+        },
       })
     }
     return this._api
@@ -433,7 +434,10 @@ class StratisCli {
           next()
         })
 
-      this.api.server(this.serve_path, this.app)
+      this.api.server(this.serve_path, this.app, {
+        return_errors_to_client: this.show_app_errors,
+        log_errors: true,
+      })
 
       if (this.redirect_all_unknown) this.app.use(redirect)
       else this.app.all('/', redirect)
