@@ -3,7 +3,7 @@ const { Stratis } = require('./webserver/stratis')
 const { JsonCompatible, StratisApiObject } = require('./webserver/interfaces')
 const { StratisPageCallContext } = require('./webserver/pages')
 const { StratisCli } = require('./cli')
-const websocket = require('./websocket')
+const websocket = require('./utils/websocket')
 
 /**
  * @typedef {import('@lamaani/infer').Cli} Cli

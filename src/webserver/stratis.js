@@ -3,7 +3,7 @@ const events = require('events')
 const path = require('path')
 const fs = require('fs')
 const { Request, Response, NextFunction } = require('express/index')
-const websocket = require('../websocket.js')
+const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
 
 const {

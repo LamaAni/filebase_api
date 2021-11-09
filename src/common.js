@@ -5,6 +5,26 @@ function assert(condition, ...data) {
     throw data.length == 1 && data[0] instanceof Error
       ? data[0]
       : new Error(...data)
+  return true
+}
+
+function assert_non_empty_string(value, ...data) {
+  return assert(is_non_empty_string(value), ...data)
+}
+
+function is_non_empty_string(value) {
+  return typeof value == 'string' && value.trim().length > 0
+}
+
+function is_valid_url(value) {
+  if (value instanceof URL) return true
+  if (!is_non_empty_string(value)) return false
+  try {
+    value = URL(value)
+  } catch (err) {
+    return false
+  }
+  return true
 }
 
 async function path_stat(path) {
@@ -76,6 +96,9 @@ module.exports = {
    * @param  {...any} data The data or errors to throw.
    */
   assert,
+  assert_non_empty_string,
+  is_non_empty_string,
+  is_valid_url,
   path_exists,
   path_stat,
   with_timeout,

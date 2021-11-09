@@ -49,6 +49,8 @@ class StratisCli {
       },
     }
 
+    
+
     /** The webserver port*/
     this.port = 8080
 
@@ -60,6 +62,8 @@ class StratisCli {
       parse: (val) => (typeof val == 'number' ? val : parseInt(val)),
       description: 'The webserver port',
     }
+
+    
 
     /** The https port to use. If null, do not listen on ssl. */
     this.https_port = 8443
@@ -434,12 +438,6 @@ class StratisCli {
           this.default_redirect = path.join(redirect_basepath, fname)
       }
     }
-
-    // this.default_redirect =
-    //   this.default_redirect ||
-    //   fs.existsSync(path.join(this.serve_path, 'public'))
-    //     ? '/public/index.html'
-    //     : '/index.html'
 
     const redirect = (req, res, next) => {
       return res.redirect(this.default_redirect)

@@ -2,7 +2,7 @@ const stream = require('stream')
 const path = require('path')
 const { StratisNotFoundError } = require('./errors.js')
 const { assert } = require('../common')
-const { split_stream_once, stream_to_buffer } = require('../streams.js')
+const { split_stream_once, stream_to_buffer } = require('../utils/streams.js')
 const { StratisEJSTemplateRenderContext } = require('./templates')
 
 /**
