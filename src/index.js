@@ -6,6 +6,11 @@ const { StratisCli } = require('./cli')
 const websocket = require('./websocket')
 
 /**
+ * @typedef {import('@lamaani/infer').Cli} Cli
+ * @typedef {import('@lamaani/infer').Logger} CliLogger
+ */
+
+/**
  * @typedef {import('./webserver/stratis').StratisOptions} StratisOptions
  * @typedef {import('./webserver/stratis').StratisEJSOptions} StratisEJSOptions
  * @typedef {import('./webserver/stratis').StratisMiddlewareOptions} StratisMiddlewareOptions
