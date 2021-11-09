@@ -523,7 +523,7 @@ class StratisCli {
       let run_session_options = {
         secure: this.enable_https,
         signed: this.session_key != null,
-        keys: this.session_key || [this.session_key],
+        keys: this.session_key,
       }
 
       run_session_options = Object.assign(
@@ -536,7 +536,7 @@ class StratisCli {
 
       if (this.session_key == null) {
         cli.logger.warn(
-          'Session enabled but no session sign (encrypt) key was provided. Session state cookie is insecure!'
+          'Session enabled but no session_key (encryption) was provided. Session state cookie is insecure!'
         )
       }
     }
