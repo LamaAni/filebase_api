@@ -319,7 +319,6 @@ class Stratis extends events.EventEmitter {
 
   /**
    * Creates an express middleware that serves requests.
-   * @param {string} serve_path The path to server
    * @param {StratisMiddlewareOptions} options
    */
   middleware({
@@ -442,9 +441,8 @@ class Stratis extends events.EventEmitter {
   /**
    * Creates a new express server to use with the Stratis.
    * @param {StratisMiddlewareOptions} options The middleware options.
-   * @param {express.Express} app The express app to use, if null create one.
-   * @returns {express.Express} The express app to use. You can do express.listen
-   * to start the app.
+   * @param {express.Express} app The express app to use, Will auto create or default to cli app.
+   * @returns {express.Express} The express app to use. Will auto create or default to cli app.
    */
   server(options = {}, app = null) {
     app = app || express()

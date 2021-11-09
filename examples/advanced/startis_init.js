@@ -11,6 +11,6 @@
  */
 module.exports = (stratis, app, logger) => {
   logger.info('Before stratis initialization (middleware)')
-  stratis.init_service()
+  stratis.server()
   logger.info('After stratis initialization (middleware)')
 }
