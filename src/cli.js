@@ -419,6 +419,12 @@ class StratisCli {
       })
     }
 
+    this.default_redirect =
+      this.default_redirect ||
+      fs.existsSync(path.join(this.serve_path, 'public'))
+        ? '/public/index.html'
+        : '/index.html'
+
     const redirect = (req, res, next) => {
       res.redirect(this.default_redirect)
     }
