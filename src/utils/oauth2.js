@@ -29,6 +29,8 @@ const {
  * @property {'json' |'form'} body_format The request body format.
  * @property {"header" | "body"} authorization_method
  * @property {[string]} scope the scope to use.
+ * @property {string} session_key The session key to use when recording the oauth token
+ * @property {(req:Request)=>{}} state_generator The oauth state generator.
  */
 
 class StratisOAuth2Provider {
@@ -45,6 +47,8 @@ class StratisOAuth2Provider {
     body_format = 'json',
     authorization_method = 'header',
     scope = ['email'],
+    session_key = 'stratis:oauth2:token',
+    state_generator = null,
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
     assert_non_empty_string(
@@ -60,6 +64,15 @@ class StratisOAuth2Provider {
     assert_non_empty_string(
       authorization_method,
       'authorization_method must be a non empty string'
+    )
+    assert_non_empty_string(
+      cookie_name,
+      'cookie_name must be a non empty string'
+    )
+
+    assert_non_empty_string(
+      session_key,
+      'session_oauth_key must be a non empty string'
     )
 
     assert(token_url, 'authorize_url must be a URL or a non empty string')
@@ -86,13 +99,29 @@ class StratisOAuth2Provider {
     this.redirect_url = redirect_url
 
     this.scope = scope
+    this.cookie_name = cookie_name
+    this.session_key = session_key
+    this.state_generator = state_generator
   }
 
   /**
-   * @returns {(Request,Response, NextFunction)=>{}} Auth middleware
+   * @param {string} auth_redirect_path The authentication path to redirect to.
+   * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
    */
-  middleware() {
-    // parsing hosts and paths
+  filter_middleware(auth_redirect_path) {
+    /**
+     * @param {Request} req
+     * @param {Response} res
+     * @param {NextFunction} next
+     */
+    const intercrept = async (req, res, next) => {}
+    return intercrept
+  }
+
+  /**
+   * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
+   */
+  auth_middleware() {
     /**
      * @param {Request} req
      * @param {Response} res
@@ -122,10 +151,25 @@ class StratisOAuth2Provider {
         },
       })
 
-      const is_authentication_response = 
+      const is_authentication_response = [
+        'response_type',
+        'code',
+        'scope',
+        'state',
+      ].every((k) => k in request_url.searchParams)
     }
 
     return intercept
+  }
+
+  /**
+   * Apply the security authenticator to the express app.
+   * @param {import('express').Express} app
+   * @param {string} path
+   */
+  apply(app, path = 'oauth2') {
+    app.use(path, this.auth_middleware())
+    app.use(this.filter_middleware(path))
   }
 }
 
