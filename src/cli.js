@@ -423,14 +423,26 @@ class StratisCli {
       })
     }
 
-    this.default_redirect =
-      this.default_redirect ||
-      fs.existsSync(path.join(this.serve_path, 'public'))
-        ? '/public/index.html'
-        : '/index.html'
+    if (typeof this.default_redirect != 'string') {
+      const redirect_basepath = fs.existsSync(
+        path.join(this.serve_path, 'public')
+      )
+        ? 'public'
+        : ''
+      for (const fname of ['index.html', 'index.htm', 'api']) {
+        if (fs.existsSync(path.join(this.serve_path, redirect_basepath, fname)))
+          this.default_redirect = path.join(redirect_basepath, fname)
+      }
+    }
+
+    // this.default_redirect =
+    //   this.default_redirect ||
+    //   fs.existsSync(path.join(this.serve_path, 'public'))
+    //     ? '/public/index.html'
+    //     : '/index.html'
 
     const redirect = (req, res, next) => {
-      res.redirect(this.default_redirect)
+      return res.redirect(this.default_redirect)
     }
 
     let stratis_init_called = false
@@ -467,8 +479,15 @@ class StratisCli {
           app || this.app
         )
 
-        if (this.redirect_all_unknown) this.app.use(redirect)
-        else this.app.all('/', redirect)
+        if (this.default_redirect != null) {
+          if (this.redirect_all_unknown) this.app.use(redirect)
+          else this.app.all('/', redirect)
+          cli.logger.info(
+            `Redirecting ${
+              this.redirect_all_unknown ? 'all missing paths (not found)' : '/'
+            } to ${this.default_redirect}`
+          )
+        }
 
         cli.logger.info('Initialized stratis service middleware and routes')
       }
