@@ -231,14 +231,7 @@ Template objects (Overridable),
 1. `session` - The session = `req.session` if exists otherwise an empty dictionary.
 1. `req` - the http request.
 1. `res` - the http response.
-1. `context` - the stratis render context object,
-   ```javascript
-   {
-     stratis,
-     template,
-     data,
-   }
-   ```
+1. `context` - `StratisPageCallContext`, holds information about the stratis render.
 
 # Contribution
 
@@ -246,17 +239,9 @@ Feel free to ping me in issues or directly on LinkedIn to contribute.
 
 # Future implementation
 
-Implementing the stratis low-impact webserver in multiple languages may prove
-very helpful for dockerized (or pod running) micros-services and processing jobs; it may provide an easy way to
-generate an interface for monitoring and interacting with running containers or allow
-web interfaces to be created for visual monitoring, with little to no impact on the required resources.
+Implementing the stratis low-impact webserver and allowing multiple language code files (e.g. `code.py` or `code.go`) would very helpful for dockerized (or pod running) micros-services and processing jobs; it may provide an easy way to generate an interface for monitoring and interacting with running containers or allow web interfaces to be created for visual monitoring, with little to no impact on the required resources.
 
-## Currently under consideration
-
-1. Python, using Jinja as template backend. This would prove very helpful for data science processing.
-2. Go, using go templates as template backend. May prove helpful to monitor kubernetes services.
-
-That said, other languages may be considered.
+Looking for help on this subject.
 
 # Licence
 
