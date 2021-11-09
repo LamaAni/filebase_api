@@ -88,6 +88,8 @@ class StratisPageCallContext {
 
   get_api_objects() {
     return {
+      render_stratis_api_yaml_description: (...args) =>
+        this.render_stratis_api_description(...args),
       render_stratis_api_description: (...args) =>
         this.render_stratis_api_description(...args),
       render_stratis_browser_api_script: (...args) =>
@@ -107,14 +109,19 @@ class StratisPageCallContext {
   }
 
   /**
+   * @param {boolean} include_api_objects
    * @returns {Object<string, StratisApiObject>}
    */
-  async get_code_module_objects() {
+  async get_code_module_objects(include_api_objects = true) {
     const code_module_api_objects = (
       await this.stratis.code_module_bank.load(this.stratis_request.codepath)
     ).as_api_objects()
 
-    return Object.assign(this.get_api_objects(), code_module_api_objects)
+    return Object.assign(
+      {},
+      include_api_objects ? this.get_api_objects() : {},
+      code_module_api_objects
+    )
   }
 
   /**
@@ -141,13 +148,13 @@ class StratisPageCallContext {
   }
 
   async render_stratis_api_description() {
-    const code_module = await this.get_code_module_objects()
+    const code_module = await this.get_code_module_objects(false)
     const api_description = {
-      api: stratis.api_version,
+      path: this.stratis_request.query_path,
       methods: Object.keys(code_module),
     }
 
-    return JSON.stringify(api_description)
+    return JSON.stringify(api_description, null, 2)
   }
 }
 

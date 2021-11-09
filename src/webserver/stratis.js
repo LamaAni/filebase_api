@@ -358,6 +358,9 @@ class Stratis extends events.EventEmitter {
 
       // check filtering.
       try {
+        req.stratis_request = stratis_request
+        req.stratis = this
+
         if (filter != null) {
           let filter_called_next = false
           let filter_rslt = filter(req, res, (...args) => {
@@ -412,6 +415,9 @@ class Stratis extends events.EventEmitter {
 
         if (stratis_request.return_errors_to_client) res.end(`${err}`)
         else next(err)
+      } finally {
+        delete req.stratis_request
+        delete req.stratis
       }
     }
 

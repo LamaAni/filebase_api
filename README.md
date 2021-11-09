@@ -5,9 +5,12 @@
 A file based web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods, that can run parallel/sidecar with your application.
 
 1. Command line server startup.
-2. Built-in REST API.
-3. Build-in WebSocket API.
-4. Live update (triggered by file changes).
+1. Built-in REST API.
+1. Build-in WebSocket API.
+1. Live update (triggered by file changes).
+1. Built in security filter (for requests).
+1. Templating.
+1. Client side (browser) javascript api.
 
 Implemented in,
 
@@ -19,64 +22,45 @@ See more info about planned language implementations [below](#future-implementat
 
 On the server, if we have,
 
-1. /www/index.html - Html EJS template to be compiled and run on client.
-2. /www/index.code.js - The API methods and templating objects for index.html.
+1. /www/index.html - Html EJS template.
+1. /www/index.code.js - The API methods and templating objects for index.html.
+1. /www/relative.html - Html EJS template.
 
-Run command (using the cli):
+Run command (using the cli) :
 
 ```shell
 stratis /www
 ```
 
-<table>
-<tr>
-<td>index.html
-</td>
-<td>index.code.js
-</td>
-</tr>
-<tr>
-  <td>
+Or in code [example](examples/basic/stratis.test.js)
+
+The page html definition `index.html`,
 
 ```html
-<html>
-  <head>
-    <!-- EJS template, render the stratis tag -->
-    <%- render_stratis_script_tag() %>
-    <script lang="javascript">
-      // stratis object added to browser, with
-      // auto generated attached API calls.
-      stratis.test_remote_call({x: 40}).then(val => {
-          document.getElementById("content_box").innerHTML=val
-      })
-    </script>
-  </head>
-  <body>
-    <div><%- div_text %></div>
-    <div id="content_box">
-      <!-- will show 42 after client responds -->
-    </div>
-  </body>
-</html>
+<head>
+  <%- render_stratis_script_tag() %>
+  <script lang="javascript">
+    stratis.print_x_plus_2({x: 40}).then(val => console.log(val))
+    stratis.y().then(val => console.log(val))
+  </script>
+</head>
+<body>
+  <%- print_x_plus_2(40) %> <%- y %> <%- await include('./relative.html') %>
+</body>
 ```
 
-</td>
-  <td>
+The page code api methods `index.code.js`,
 
 ```javascript
-async function test_remote_call({ x }, req, res) {
+async function print_x_plus_2({ x }, req, res) {
   return x + 2
 }
 
 module.exports = {
-  test_remote_call: test_remote_call,
-  div_text: 'text to show in div', // can also be an object.
+  print_x_plus_2,
+  y: 33,
 }
 ```
-
-  </td>
-<tr>
-</table>
 
 `*.code.js` are always **private**. To call the index.html api with REST,
 
@@ -96,17 +80,16 @@ On POST the payload is mapped to the first value of the function, and json parsi
 If on the server-side html template (page), in the head tag, you add,
 
 ```html
-<html>
-  <head>
-    <%- render_stratis_script_tag() %>
-    <script lang="javascript">
-      stratis.my_remote_method({value: "a value"})
-    </script>
-  </head>
-  <body>
-    my page
-  </body>
-</html>
+<head>
+  <%- render_stratis_script_tag() %>
+  <script lang="javascript">
+    stratis.print_x_plus_2({x: 40}).then(val => console.log(val))
+    stratis.y().then(val => console.log(val))
+  </script>
+</head>
+<body>
+  <%- print_x_plus_2(40) %> <%- y %> <%- await include('./relative.html') %>
+</body>
 ```
 
 A javascript object named `stratis` will be created in the client browser, that includes all the exposed page api function as defined in `[filepath].code.js`. See below website structure.
@@ -115,33 +98,41 @@ A javascript object named `stratis` will be created in the client browser, that 
 
 Stratis uses files paths and extensions to specify application behavior. e.g.,
 
-- `/public/index.html` or `/lama.public.html` would be public files since they match
-  the public path specifier.
-- `/public/v1/api.js` would be an api code file, since it ends in `api.js`
+- `/public/index.html` or `/lama.public.html` would be public files since they match the public path specifier.
+- `/private/index.html` or `/lama.private.html` would be private files since they match the private path specifier
+- `/secure/index.html` or `/lama.secure.html` would be secure (See secure filter) files since they match
+  the secure path specifier.
+- `/public/index.code.js` would be an api code file for html since it ends in `.code.js`
+- `/public/my_api` would be an api description, it would only be available if a matching `.code.js` file is found
+- `/public/my_api.code.js` would be an api code file for `my_api` since it ends in `.code.js`
 
 ## Access control
 
 **public** files can be downloaded.
-`*.code.js` files are always private.
+`*.code.js` files are **always** private.
 
 Files that match the regex,
 
 ```regexp
-[^\w](private|public)([^\w]|$)
+([^\w]|^)(private|public|secure)([^\w]|$)
 ```
 
-would be public or private respectively. The regex can match multiple times. If a path matched `private` once it would be private.
+would be public, private or secure respectively, following,
+
+1. If `private` appears the file/path is private.
+1. Else if `secure` appears the file/path is secure.
+1. Else if `public` appears the file/path is public.
 
 ### Access control defaults
 
-All files are by default public unless the folder `[serve_path]/public` exists. This value can also be set via the command line interface.
+All files are by default public unless the folder `[serve_path]/public` exists, then all files are by default private unless under the folder `public`. (See cli to override)
 
 ## Pages (rendered templates)
 
 Page files are rendered as templates if downloaded, and can have attached page code, remote methods and a rest api. Files with path `[filepath].[ext]` are considered page files if,
 
-1. Match the ext: `html`, `htm`, `.html`, `.css`, `.json`, `.yaml`
-1. There exists a file named `[filepath].code.js`
+1. Match the ext: `.htm`, `.html`, `.css`, `.json`, `.yaml`
+1. There exists a file named `[filepath].code.js`, in which the file is rendered as template.
 
 Page files are rendered as templates using the `ejs` template engine.
 
@@ -152,25 +143,40 @@ Code files define the methods/ejs objects/configuration of the page. A file will
 1. Code files are always **private**.
 1. Code files match a page file with the same filename, e.g, the code file, `index.code.js` will match `index.html` and `index.htm`.
 
-A example basic code file,
+A example of a basic code file,
 
 ```javascript
-async function called_from_client({ send_from_client }, context) {
+async function print_server_date_with_prefix({ send_from_client }, context) {
   // return value must json complient.
   return `${sent_from_client}, server date: ${new Date()}`
 }
 
-let my_render_object = {
+let api_static_info = {
   loaded_at: new Date(),
 }
 
 module.exports = {
-  // will be available during rendering.
-  my_render_object,
-  // will be available as client method.
-  called_from_client,
+  api_static_info,
+  print_server_date_with_prefix,
 }
 ```
+
+And `context` is of type `StratisPageCallContext`. Some of its properties,
+
+```javascript
+{
+  req: {}, // the http (express) request object.
+  res: {}, // the http (express) response object.
+  session: {}, // the http session.
+  websocket: {}, // the stratis api websocket (if called through a websocket)
+  ...
+}
+```
+
+The above code file will expose,
+
+1. A method called `print_server_date_with_prefix` that would be available in the browser or under `[page_url]/print_server_date_with_prefix`
+1. An object (will be printed as json or string) that would be available in the browser or under `[page_url]/api_static_info`
 
 ## REST API calls
 
@@ -178,7 +184,7 @@ Code file methods are exposed as REST api, where both the payload and query stri
 arguments. To call a page api,
 
 ```url
-http(s)://mydomain.com/[filepath.ext]/[function_name]?arg1=..&arg2=...
+http(s)://mydomain.com/[filepath.ext]/[api_exposed_method_or_function]?arg1=..&arg2=...
 ```
 
 Where the method first argument is the merge result of the dictionaries,
@@ -188,16 +194,7 @@ Where the method first argument is the merge result of the dictionaries,
    1. If the header `CONTENT_TYPE="application/json"`, parse to json dictionary and merge with previous.
    1. If anything else, then added as the key 'payload'.
 
-And `context` is:
-
-```javascript
-{
-  req: {}, // the http (express) request object.
-  res: {}, // the http (express) response object.
-  session: {}, // the http session.
-  stratis: {}, // the stratis api.
-}
-```
+````
 
 ## WebSocket API calls
 
@@ -205,7 +202,7 @@ Code files methods are exposed as WebSocket api. You can connect a websocket to 
 
 ```url
 ws(s)://mydomain.com/[filepath.ext]
-```
+````
 
 Where the WebSocket payload is,
 
@@ -217,17 +214,6 @@ Where the WebSocket payload is,
     "send_from_client": "value"
   }
 }
-```
-
-where the `args` are mapped to the first argument of the function, and `context` is,
-
-```javascript
-{
-  ws: {}, // The websocket
-  session: {}, // The http session.
-  stratis: {}, // the stratis api.
-}
-
 ```
 
 ## Built in API methods
