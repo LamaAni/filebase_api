@@ -1,210 +1,237 @@
 # Stratis file based webserver and API generator
 
-A simple web template engine for fast APIs and websites.  This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods, or can run parallel to your application.
+### BETA
+
+A file based web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods, that can run parallel/sidecar with your application.
 
 1. Command line server startup.
-2. Built-in REST API.
-3. Build-in Websocket API.
-4. Live update for changes in the file contents.
+1. Built-in REST API.
+1. Build-in WebSocket API.
+1. Live update (triggered by file changes).
+1. Built in security filter (for requests).
+1. Templating.
+1. Client side (browser) javascript api.
 
 Implemented in,
+
 1. NodeJS, with EJS backend and the express.js webserver.
 
 See more info about planned language implementations [below](#future-implementation).
 
-# BETA
-
 # TL;DR
-
-Example of an implementation in NodeJs,
 
 On the server, if we have,
 
-1. /www/index.html - Html EJS template to be compiled and run on client.
-2. /www/index.code.js - The API and template code for index.html.
+1. /www/index.html - Html EJS template.
+1. /www/index.code.js - The API methods and templating objects for index.html.
+1. /www/relative.html - Html EJS template.
 
-Run command (using the cli):
+Run command (using the cli) :
+
 ```shell
 stratis /www
 ```
 
-<table>
-<tr>
-<td>index.html
-</td>
-<td>index.code.js
-</td>
-</tr>
-<tr>
-  <td>
+Or in code [example](examples/basic/stratis.test.js)
+
+The page html definition `index.html`,
 
 ```html
-<html>
-  <head>
-    <!-- EJS template, render the stratis tag -->
-    <%- render_stratis_script_tag() %>
-    <script lang="javascript">
-      // stratis object added to browser, with
-      // auto generated attached API calls.
-      stratis.test_remote_call(40).then(val => {
-          document.getElementById("content_box").innerHTML=val
-      })
-    </script>
-  </head>
-  <body>
-    <div><%- div_text %></div>
-    <div id="content_box">
-      <!-- will show 42 after client responds -->
-    </div>
-  </body>
-</html>
+<head>
+  <%- render_stratis_script_tag() %>
+  <script lang="javascript">
+    stratis.print_x_plus_2({x: 40}).then(val => console.log(val))
+    stratis.y().then(val => console.log(val))
+  </script>
+</head>
+<body>
+  <%- print_x_plus_2(40) %> <%- y %> <%- await include('./relative.html') %>
+</body>
 ```
 
-</td>
-  <td>
+The page code api methods `index.code.js`,
 
 ```javascript
-async function test_remote_call(x, req, rsp) {
+async function print_x_plus_2({ x }, req, res) {
   return x + 2
 }
 
 module.exports = {
-  test_remote_call: test_remote_call,
-  div_text: 'text to show in div', // can also be an object.
+  print_x_plus_2,
+  y: 33,
 }
 ```
 
-  </td>
-<tr>
-</table>
-
-To call the index.html api with REST,
+`*.code.js` are always **private**. To call the index.html api with REST,
 
 ```url
-http://[my_domain]/index.html?API=v1&x=40
+GET http://[my_domain]/index.html/my_api_function?arg1=...&arg2=...
 ```
 
-`*.code.js` will never be served to any client and is private.
-
-# Core principles
-
-1. Uses file extensions to determine the role of each file (template, code file).
-2. Serves a folder, and exposes all of the files in the folder to web requests.
-3. Files that match `[filename].code.js` represents code files. These files are never served.
-4. Files that match `[filename].private.[ext]` are private files that will never be served.
-5. Some files within the public folders are rendered as templates (EJS). The default list of these extensions can be found below.
-
-### Types of files
-
-1. code files - file that expose python or node functions to `REST API`, `JS API` or `Websocket API` requests.
-1. template files - templated sources. All template files can be imported into one another.
-
-### Default file extensions and behaviors
-
-1. `html`, `htm`, `.html`, `.htm`, `.xhtml`, `.js`, `.css` , `.API.yaml`, `.API.json` - files to read as templates
-2. [filepath].code.js - Code files.
-
-You can access the API for any of the template files via, 
-```ini
-[src-uri][file-sub-path]?api=v1&arg0=&arg1=
+```url
+POST http://[my_domain]/index.html/my_api_function
+payload: { "arg": "value" }
 ```
 
-NOTE: the `.API.yaml` and `.API.json` are intended to provide an human/machine readable API definition that can be exposed to the outside world. These are not auto generated, and must be written. You can use the internal method, `render_stratis_API_description` to auto generate 
-the api patterns. e.g.
+On POST the payload is mapped to the first value of the function, and json parsing is attempted.
 
-`my_API.API.yaml`
+# Client-Side html page structure
 
-```yaml
-<%- render_stratis_API_description(true) %>
-```
-
-### Operation and object types
-
-A list of operation and object types that can be defined in a code-file.
-
-1. `API_METHOD` - A method that is exposed as an API call. In browser, a method will appear in the javascript code under `startis.[method name](...args)`. See section about API calls.
-1. `PUSH_NOTIFICATION` - A method, available only when connecting through a websocket, that will send a push notification to the remote websocket. See section about API calls.
-1. `TEMPLATE_ARG` - An argument, that will be available when rendering the template.
-2. `REQUEST_HANDLER` - (NodeJS Only) A request handler, called before the execution of the stratis API, with `(requet,response,next)=>{}`. If next function is invoked, and any following request handlers are skipped.
-
-### Built in
-
-Template objects (Overrideable),
-
-1. `session` - The session = `req.session` if exists otherwise an empty dictionary.
-2. `req` - the http request
-3. `res` - the http response
-
-Appended to request(Cannot be overridden)
-
-1. `req.stratis` - the stratis API object.
-1. `req.stratis_info` - the stratis API parsed request info (Native).
-1. `req.stratis_env` - the stratis API rendered environment (Native).
-
-Methods (Cannot be overridden),
-
-1. `render_stratis_script_tag()` - renders the stratis build in script tag for browser use.
-1. `render_stratis_script()` - renders the stratis script for browsers (Native)
-1. `render_stratis_API_description(as_yaml=true)` - renders the stratis API description as yaml or json. For javascript, in strict
-
-# Using the browser side auto generated `stratis` class
-
-In the html template, at the head tag, (use `{{}}` for python jinja) (following is EJS)
+If on the server-side html template (page), in the head tag, you add,
 
 ```html
-<html>
-  <head>
-    <%- render_stratis_script_tag() %>
-    <script lang="javascript">
-      stratis.my_remote_method("a value")
-    </script>
-  </head>
-  <body></body>
-</html>
+<head>
+  <%- render_stratis_script_tag() %>
+  <script lang="javascript">
+    stratis.print_x_plus_2({x: 40}).then(val => console.log(val))
+    stratis.y().then(val => console.log(val))
+  </script>
+</head>
+<body>
+  <%- print_x_plus_2(40) %> <%- y %> <%- await include('./relative.html') %>
+</body>
 ```
 
-# API specifications
+A javascript object named `stratis` will be created in the client browser, that includes all the exposed page api function as defined in `[filepath].code.js`. See below website structure.
 
-There are two types of API calls.
+# Server website structure
 
-1. Http requests [`GET`, `DELETE`, `PUT`, `POST`, `PATCH`] - both the body and search params are parsed to arguments and content. Search params will override arguments in body.
-1. Websocket requests - The websocket message is the body.
+Stratis uses files paths and extensions to specify application behavior. e.g.,
 
-### API body structure
+- `/public/index.html` or `/lama.public.html` would be public files since they match the public path specifier.
+- `/private/index.html` or `/lama.private.html` would be private files since they match the private path specifier
+- `/secure/index.html` or `/lama.secure.html` would be secure (See secure filter) files since they match
+  the secure path specifier.
+- `/public/index.code.js` would be an api code file for html since it ends in `.code.js`
+- `/public/my_api` would be an api description, it would only be available if a matching `.code.js` file is found
+- `/public/my_api.code.js` would be an api code file for `my_api` since it ends in `.code.js`
+
+## Access control
+
+**public** files can be downloaded.
+`*.code.js` files are **always** private.
+
+Files that match the regex,
+
+```regexp
+([^\w]|^)(private|public|secure)([^\w]|$)
+```
+
+would be public, private or secure respectively, following,
+
+1. If `private` appears the file/path is private.
+1. Else if `secure` appears the file/path is secure.
+1. Else if `public` appears the file/path is public.
+
+### Access control defaults
+
+All files are by default public unless the folder `[serve_path]/public` exists, then all files are by default private unless under the folder `public`. (See cli to override)
+
+## Pages (rendered templates)
+
+Page files are rendered as templates if downloaded, and can have attached page code, remote methods and a rest api. Files with path `[filepath].[ext]` are considered page files if,
+
+1. Match the ext: `.htm`, `.html`, `.css`, `.json`, `.yaml`
+1. There exists a file named `[filepath].code.js`, in which the file is rendered as template.
+
+Page files are rendered as templates using the `ejs` template engine.
+
+## Code files
+
+Code files define the methods/ejs objects/configuration of the page. A file will be a code file if its path ends with, `.code.js`. Where,
+
+1. Code files are always **private**.
+1. Code files match a page file with the same filename, e.g, the code file, `index.code.js` will match `index.html` and `index.htm`.
+
+A example of a basic code file,
+
+```javascript
+async function print_server_date_with_prefix({ send_from_client }, context) {
+  // return value must json complient.
+  return `${sent_from_client}, server date: ${new Date()}`
+}
+
+let api_static_info = {
+  loaded_at: new Date(),
+}
+
+module.exports = {
+  api_static_info,
+  print_server_date_with_prefix,
+}
+```
+
+And `context` is of type `StratisPageCallContext`. Some of its properties,
+
+```javascript
+{
+  req: {}, // the http (express) request object.
+  res: {}, // the http (express) response object.
+  session: {}, // the http session.
+  websocket: {}, // the stratis api websocket (if called through a websocket)
+  ...
+}
+```
+
+The above code file will expose,
+
+1. A method called `print_server_date_with_prefix` that would be available in the browser or under `[page_url]/print_server_date_with_prefix`
+1. An object (will be printed as json or string) that would be available in the browser or under `[page_url]/api_static_info`
+
+## REST API calls
+
+Code file methods are exposed as REST api, where both the payload and query string is parsed as the method
+arguments. To call a page api,
+
+```url
+http(s)://mydomain.com/[filepath.ext]/[api_exposed_method_or_function]?arg1=..&arg2=...
+```
+
+Where the method first argument is the merge result of the dictionaries,
+
+1. `query-string` - the dictionary of arguments.
+1. `payload`:
+   1. If the header `CONTENT_TYPE="application/json"`, parse to json dictionary and merge with previous.
+   1. If anything else, then added as the key 'payload'.
+
+````
+
+## WebSocket API calls
+
+Code files methods are exposed as WebSocket api. You can connect a websocket to the page api via,
+
+```url
+ws(s)://mydomain.com/[filepath.ext]
+````
+
+Where the WebSocket payload is,
 
 ```json
 {
-  "rid" : null,
-  "call": "[method name]",
-  "args": []
+  "rid": "[the request id]",
+  "name": "[the function or object name]",
+  "args": {
+    "send_from_client": "value"
+  }
 }
-["char(30) = ▲"]["binary payload"]
 ```
 
-Where, `rid` is the request random id, used by websocket connections to return the function response and `char(30)` is the record separator char.
+## Built in API methods
 
-When a payload exists, it is attached to the request object as `req.payload`.
-##### WARNING! The JSON body cannot have the record separator char. That would result in a read error.
+The following methods will be available on all pages, through the api or while rendering the template.
 
-### REST request API call structure
+1. `render_stratis_script()` - renders the stratis script for browsers (Native)
+1. `render_stratis_api_yaml_description()` - renders the stratis api description as yaml
+1. `render_stratis_api_json_description()` - renders the stratis api description as json
 
-When sending an http request call,
+## Built in EJS template objects
 
-```ini
-[url]?api=[API_version]&call=[method name]&arg0=[val]&arg1=[val]...
-```
+Template objects (Overridable),
 
-Where the body will be parsed as call arguments.
-
-### Websocket connections
-
-To reach the api for `/index.html` as defined in `/index.code.js`, from a browser
-
-```javascript
-const ws = new WebSocket('/index.html')
-```
-
-The request is identified as a websocket request if `Upgrade=websocket` header is set.
+1. `session` - The session = `req.session` if exists otherwise an empty dictionary.
+1. `req` - the http request.
+1. `res` - the http response.
+1. `context` - `StratisPageCallContext`, holds information about the stratis render.
 
 # Contribution
 
@@ -212,17 +239,9 @@ Feel free to ping me in issues or directly on LinkedIn to contribute.
 
 # Future implementation
 
-Implementing the stratis low-impact webserver in multiple languages may prove
-very helpful for dockerized (or pod running) micros-services and processing jobs; it may provide an easy way to
-generate an interface for monitoring and interacting with running containers or allow
-web interfaces to be created for visual monitoring, with little to no impact on the required resources.
+Implementing the stratis low-impact webserver and allowing multiple language code files (e.g. `code.py` or `code.go`) would very helpful for dockerized (or pod running) micros-services and processing jobs; it may provide an easy way to generate an interface for monitoring and interacting with running containers or allow web interfaces to be created for visual monitoring, with little to no impact on the required resources.
 
-## Currently under consideration
-1. Python, using Jinja as template backend. This would prove very helpful for data science processing.
-2. Go, using go templates as template backend. May prove helpful to monitor kubernetes services.
-
-
-That said, other languages may be considered.
+Looking for help on this subject.
 
 # Licence
 

@@ -7,7 +7,7 @@ const {
   StratisRequestHandler,
   as_stratis_method,
   as_stratis_template_arg,
-} = require('./stratis')
+} = require('./webserver/stratis')
 
 const { StratisCli } = require('./cli')
 

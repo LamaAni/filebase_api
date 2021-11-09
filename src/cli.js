@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// command line interface.
-const { Cli, CliArgument } = require('@lamaani/infer')
-const { assert } = require('./common')
-const path = require('path')
 const fs = require('fs')
-const express = require('express')
+const path = require('path')
 const http = require('http')
 const https = require('https')
-const { Request, Response, NextFunction } = require('express/index')
+const express = require('express')
 
-const { Stratis } = require('./stratis')
+const { Request, Response, NextFunction } = require('express/index')
+const { Cli, CliArgument } = require('@lamaani/infer')
+
+const { Stratis } = require('./webserver/stratis.js')
+const { assert } = require('./common')
 
 class StratisCli {
   /**
@@ -17,7 +17,6 @@ class StratisCli {
    */
   constructor() {
     this.serve_path = process.cwd()
-
     /** If true, start the stratis listeners. Otherwise init script must start the listeners. */
     this.use_stratis_listeners = true
     /** @type {CliArgument} */
@@ -38,8 +37,12 @@ class StratisCli {
       environmentVariable: 'STRATIS_SERVE_PATH',
       description:
         'The path where to find the public files (all files will be exposed)',
-      parse: (p) =>
-        p == null || p.trim().length == 0 ? null : path.resolve(p),
+      parse: (p) => {
+        if (p == null || p.trim().length == 0) return null
+        let resolved = path.resolve(p)
+        if (resolved == null) return p
+        return resolved
+      },
     }
 
     /** The webserver port*/
@@ -121,17 +124,18 @@ class StratisCli {
     }
 
     /** The default redirect path to use for (/)*/
-    this.default_redirect = '/index.html'
+    this.default_redirect = null
 
     /** @type {CliArgument} The default redirect path to use for (/)*/
     this.__$default_redirect = {
       type: 'named',
       default: this.default_redirect,
       environmentVariable: 'STRATIS_DEFAULT_REDIRECT',
-      description: 'The default redirect path to use for (/)',
+      description:
+        'The default redirect path to use for (/). Default to public/index.html or index.html',
     }
 
-    /** If true, redirects all unknown request to the default redirect*/
+    /** If true, redirects all unknown requests to the default redirect*/
     this.redirect_all_unknown = false
 
     /** @type {CliArgument} If true, redirects all unknown request to the default redirect*/
@@ -263,8 +267,9 @@ class StratisCli {
   get api() {
     if (this._api == null) {
       this._api = new Stratis({
-        ejs_environment_require: this.ejs_add_require,
-        show_application_errors: this.show_app_errors,
+        ejs_options: {
+          require: this.ejs_add_require,
+        },
       })
     }
     return this._api
@@ -370,34 +375,18 @@ class StratisCli {
    * @param {Cli} cli The command line interface.
    * @param {bool} listen_sync If true, await listen to the port.
    */
-  async run(cli, listen_sync = false) {
+  async run(cli = null, listen_sync = false) {
     let stat = null
+    cli = cli || new Cli({ name: 'stratis' })
     cli.logger.level = this.log_level
     try {
       stat = await fs.promises.stat(this.serve_path)
-    } catch (err) {
-      this.serve_path = null
-    }
+    } catch (err) {}
 
     assert(
-      this.serve_path != null && stat.isDirectory(),
+      this.serve_path != null && stat != null && stat.isDirectory(),
       `The path ${this.serve_path} could not be found or is not a directory.`
     )
-
-    // let init_stratis = null
-
-    // if (this.init_script_path != null) {
-    //   assert(
-    //     fs.existsSync(this.init_script_path),
-    //     `Init script file not found @ ${this.init_script_path}`
-    //   )
-
-    //   init_stratis = require(this.init_script_path)
-    //   assert(
-    //     typeof init_stratis == 'function',
-    //     `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
-    //   )
-    // }
 
     if (this.enable_https) {
       cli.logger.info(
@@ -445,7 +434,12 @@ class StratisCli {
           next()
         })
 
-      this.api.server(this.serve_path, this.app)
+      this.api.server(this.serve_path, this.app, {
+        return_errors_to_client: this.show_app_errors,
+        log_errors: true,
+        next_on_private: false,
+        next_on_not_found: true,
+      })
 
       if (this.redirect_all_unknown) this.app.use(redirect)
       else this.app.all('/', redirect)

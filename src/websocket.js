@@ -6,7 +6,13 @@ const { Request, Response, NextFunction } = require('express/index')
  * @param {Request} req
  */
 function is_websocket_request(req) {
-    return req.headers.upgrade != null && req.headers.upgrade.toLowerCase() == 'websocket'
+  if (req.protocol == 'ws:' || req.protocol == 'wss:') return true
+  if (
+    req.headers.upgrade != null &&
+    req.headers.upgrade.toLowerCase() == 'websocket'
+  )
+    return true
+  return false
 }
 
 /**
@@ -22,34 +28,40 @@ function is_websocket_request(req) {
  * @returns {(req:Request,res:Response,next:NextFunction)=>{}} Middleware
  */
 function create_express_websocket_middleware(
-    handler,
-    {
-        handleProtocols = null,
-        perMessageDeflate = null,
-        maxPayload = null,
-        before_upgrade = null,
-        error_if_not_websocket = false,
-    } = {},
+  handler,
+  {
+    handleProtocols = null,
+    perMessageDeflate = null,
+    maxPayload = null,
+    before_upgrade = null,
+    error_if_not_websocket = false,
+  } = {}
 ) {
-    const server = new ws.Server({ noServer: true, handleProtocols, perMessageDeflate, maxPayload })
+  const server = new ws.Server({
+    noServer: true,
+    handleProtocols,
+    perMessageDeflate,
+    maxPayload,
+  })
 
-    /**
-     * @param {Request} req
-     * @param {Response} res
-     * @param {NextFunction} next
-     */
-    function middleware(req, res, next) {
-        if (!is_websocket_request(req)) {
-            if (error_if_not_websocket) throw Error('Websocket received a non websocket request')
-            return next()
-        }
-
-        if (before_upgrade) before_upgrade(req, server)
-
-        server.handleUpgrade(req, req.socket, Buffer.from(''), handler)
+  /**
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  function middleware(req, res, next) {
+    if (!is_websocket_request(req)) {
+      if (error_if_not_websocket)
+        throw Error('Websocket received a non websocket request')
+      return next()
     }
 
-    return middleware
+    if (before_upgrade) before_upgrade(req, server)
+
+    server.handleUpgrade(req, req.socket, Buffer.from(''), handler)
+  }
+
+  return middleware
 }
 
 create_express_websocket_middleware.is_websocket_request = is_websocket_request
