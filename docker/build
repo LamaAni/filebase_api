@@ -1,4 +1,10 @@
 #!/bin/bash
+type realpath &>/dev/null
+if [ $? -ne 0 ]; then
+    function realpath() {
+        [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
+    }
+fi
 REPO_PATH="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 
 echo "Building @ $REPO_PATH"
@@ -13,7 +19,6 @@ fi
 : "${IMAGE_TAGS:="local"}"
 TAGS=($IMAGE_TAGS)
 
-
 IMAGE_NAMES=()
 for tag in "${TAGS[@]}"; do
     IMAGE_NAMES+=("$DOCKER_REPOSITORY:${tag}")
@@ -25,4 +30,3 @@ for name in "${IMAGE_NAMES[@]}"; do
     docker push "$name" || exit $?
     echo "Pushed: $name"
 done
-
