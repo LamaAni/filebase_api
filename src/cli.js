@@ -526,9 +526,12 @@ class StratisCli {
         keys: [this.session_key || 'insecure_session'],
       }
 
-      this.app.use(
-        cookie_session(Object.assign(run_session_options, this.session_options))
-      )
+      this.app.use(async (req, res, next) => {
+        const cs = cookie_session(
+          Object.assign(run_session_options, this.session_options)
+        )
+        return await cs(req, res, next)
+      })
 
       if (this.session_key == null) {
         cli.logger.warn(
