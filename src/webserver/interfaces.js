@@ -24,7 +24,7 @@
  */
 
 /**
- * @typedef {string|number|{}|(args:{}|string, context: StratisPageCallContext)=>JsonCompatible} StratisApiObject
+ * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible|string|number|{}} StratisApiObject
  */
 
 /**

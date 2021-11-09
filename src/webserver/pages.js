@@ -137,7 +137,7 @@ class StratisPageCallContext {
   async render_stratis_browser_api_script() {
     /** @type {StratisRequestEnvironment} */
     return await this.stratis_request.stratis.template_bank.render(
-      this.stratis.client_api.api_code_path,
+      this.stratis.client_api_options.api_code_path,
       {
         code_module: await this.get_code_module_objects(),
         request: this.stratis_request,

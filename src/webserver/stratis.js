@@ -73,7 +73,8 @@ const {
  * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
  * @property {integer} timeout The client side request timeout [ms]
- * @property {StratisClientSideApiOptions} client_api client api options.
+ * @property {StratisClientSideApiOptions} client_api_options client api options.
+ * @property {StratisPageCallContext} page_call_context_constructor A page call context constructor
  */
 
 const STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS = {
@@ -98,13 +99,20 @@ class Stratis extends events.EventEmitter {
     common_api = {},
     code_module_bank_options = {},
     template_bank_options = {},
-    codefile_extension = '.code.js',
+    client_api_options = STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
     ejs_options = STRATIS_DEFAULT_EJS_OPTIONS,
+    codefile_extension = '.code.js',
     logger = console,
     timeout = 1000 * 60,
-    client_api = null,
+
+    page_call_context_constructor = StratisPageCallContext,
   } = {}) {
     super()
+
+    assert(
+      page_call_context_constructor.prototype instanceof StratisPageCallContext,
+      'page_call_context_constructor must be of type StratisPageCallContext'
+    )
 
     this.page_file_ext = page_file_ext
     this.common_api = common_api
@@ -115,16 +123,17 @@ class Stratis extends events.EventEmitter {
       ejs_options
     )
     this.codefile_extension = codefile_extension
+    this.page_call_context_constructor = page_call_context_constructor
     this.timeout =
       typeof timeout != 'number' || timeout <= 0 ? Infinity : timeout
 
     /**
      * @type {StratisClientSideApiOptions}
      */
-    this.client_api = Object.assign(
+    this.client_api_options = Object.assign(
       { timeout: this.timeout },
       STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
-      client_api || {}
+      client_api_options || {}
     )
 
     /** @type {StratisEventListenRegister} */
@@ -195,7 +204,7 @@ class Stratis extends events.EventEmitter {
             ws_request_args.args
           )
 
-          const context = new StratisPageCallContext({
+          const context = new this.page_call_context_constructor({
             stratis_request,
             next,
             res: null,
@@ -260,7 +269,7 @@ class Stratis extends events.EventEmitter {
       true
     )
 
-    const context = new StratisPageCallContext({
+    const context = new this.page_call_context_constructor({
       stratis_request,
       next,
       res,
@@ -280,7 +289,7 @@ class Stratis extends events.EventEmitter {
    */
   async handle_page_render_request(stratis_request, res, next) {
     const call = new StratisPageRenderRequest(stratis_request)
-    const context = new StratisPageCallContext({
+    const context = new this.page_call_context_constructor({
       stratis_request,
       next,
       res,
