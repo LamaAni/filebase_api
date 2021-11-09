@@ -37,7 +37,7 @@ const { assert } = require('./common')
 
 /** @type {CookieSessionOptions} */
 const DEFAULT_COOKIE_SESSION_OPTIONS = {
-  name: 'stratis_session',
+  name: 'stratis:session',
   maxAge: 1000 * 60 * 60 * 12,
   overwrite: true,
 }
@@ -119,7 +119,7 @@ class StratisCli {
     }
 
     /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
-    this.session_options = null
+    this.session_options = DEFAULT_COOKIE_SESSION_OPTIONS
     /** @type {CliArgument} */
     this.__$session_options = {
       type: 'named',
@@ -520,18 +520,19 @@ class StratisCli {
 
     if (!this.session_disabled) {
       /** @type {CookieSessionOptions} */
-      const run_session_options = {
+      let run_session_options = {
         secure: this.enable_https,
         signed: this.session_key != null,
-        keys: [this.session_key || 'insecure_session'],
+        keys: this.session_key || [this.session_key],
       }
 
-      this.app.use(async (req, res, next) => {
-        const cs = cookie_session(
-          Object.assign(run_session_options, this.session_options)
-        )
-        return await cs(req, res, next)
-      })
+      run_session_options = Object.assign(
+        {},
+        run_session_options,
+        this.session_options
+      )
+
+      this.app.use(cookie_session(run_session_options))
 
       if (this.session_key == null) {
         cli.logger.warn(

@@ -82,6 +82,22 @@ class StratisPageCallContext {
     return this.req.session
   }
 
+  set session(val) {
+    this.req.session = val
+  }
+
+  /** @type {Object<string,any>} */
+  get cookies() {
+    return this.req.cookies
+  }
+
+  /**
+   * @type {Object<string,any>}
+   */
+  set cookies(val) {
+    this.req.cookies = val
+  }
+
   get next() {
     return this._next
   }
