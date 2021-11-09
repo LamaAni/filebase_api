@@ -53,6 +53,8 @@ const {
  * return false or throw error when not accesable. Defaults to allow all.
  * @property {boolean} next_on_private Call the next express handler if the current
  * filepath request is private.
+ * @property {boolean} next_on_not_found Call the next express handler if the current
+ * filepath request is not found.
  * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
  * NOTE! To be used for debug, may expose sensitive information.
  * @property {boolean} log_errors If true, prints the application errors to the logger.
@@ -313,6 +315,7 @@ class Stratis extends events.EventEmitter {
       filter = null,
       security_filter = null,
       next_on_private = false,
+      next_on_not_found = true,
       return_errors_to_client = true,
       log_errors = true,
       ignore_empty_path = true,
@@ -370,7 +373,9 @@ class Stratis extends events.EventEmitter {
         await stratis_request.initialize()
 
         // filepath dose not exist. Move on to next handler.
-        if (!stratis_request.filepath_exists) return next()
+        if (!stratis_request.filepath_exists)
+          if (next_on_not_found) return next()
+          else throw new StratisNotFoundError()
 
         // check permissions
         if (stratis_request.access_mode == 'private') {

@@ -437,6 +437,8 @@ class StratisCli {
       this.api.server(this.serve_path, this.app, {
         return_errors_to_client: this.show_app_errors,
         log_errors: true,
+        next_on_private: false,
+        next_on_not_found: true,
       })
 
       if (this.redirect_all_unknown) this.app.use(redirect)
