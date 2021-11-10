@@ -13,7 +13,8 @@ const TEST_CLIENT_PASSWORD = 'Jealous-Quelea-15'
 const app = express()
 
 app.use((req, res, next) => {
-  console.log(req.originalUrl)
+  res.set('Cache-Control', 'no-store')
+  console.log(req.url)
   return next()
 })
 

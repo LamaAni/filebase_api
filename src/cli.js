@@ -11,7 +11,7 @@ const { Request, Response, NextFunction } = require('express/index')
 const { Cli, CliArgument } = require('@lamaani/infer')
 
 const { Stratis } = require('./webserver/stratis.js')
-const { assert } = require('./common')
+const { assert, get_express_request_url } = require('./common')
 
 /**
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
@@ -249,17 +249,6 @@ class StratisCli {
       description: 'The log level, DEBUG will show all requests',
     }
 
-    /** Enable cache for requests*/
-    this.cache = false
-
-    /** @type {CliArgument} Enable cache for requests*/
-    this.__$cache = {
-      type: 'flag',
-      default: this.cache,
-      environmentVariable: 'STRATIS_CACHE',
-      description: 'Enable cache for requests',
-    }
-
     /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.
      * Calling stratis.init_service() will register the stratis middleware */
     this.init_script_path = null
@@ -431,12 +420,12 @@ class StratisCli {
    */
   async redirect_to_https(req, res, next) {
     // In case a port was provided. Otherwise we should get an https request.
-    const full_hostname = req
-      .get('host')
-      .replace(/[:][0-9]+$/, ':' + this.https_port)
+    const redirect_to = get_express_request_url(req)
+    redirect_to.protocol = 'https'
+    redirect_to.port = `${this.https_port}`
 
     // not https. redirect.
-    res.redirect('https://' + full_hostname + req.originalUrl)
+    return res.redirect(redirect_to.href)
   }
 
   /**

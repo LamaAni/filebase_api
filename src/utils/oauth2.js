@@ -5,6 +5,7 @@ const {
   assert_non_empty_string,
   is_non_empty_string,
   is_valid_url,
+  get_express_request_url,
 } = require('../common')
 
 /**
@@ -150,8 +151,8 @@ class StratisOAuth2Provider {
         secret: this.client_secret,
       },
       auth: {
-        tokenHost: token_url.host,
-        authorizeHost: authorize_url.host,
+        tokenHost: `${token_url.protocol}//${token_url.host}`,
+        authorizeHost: `${authorize_url.protocol}//${authorize_url.host}`,
         // paths
         tokenPath: this.token_path || token_url.pathname,
         revokePath: this.revoke_path || token_url.pathname,
@@ -203,13 +204,15 @@ class StratisOAuth2Provider {
       const params = this.read_oauth_session_params(req)
       let is_valid = false
       if (params != null) {
-        return next()
+        if (params.access_token != null) {
+          is_valid = true
+        }
       }
+
       if (!is_valid) {
-        const redirecturl = `${auth_redirect_path}?origin=${Buffer.from(
-          req.originalUrl,
-          'utf-8'
-        ).toString('base64')}`
+        const redirecturl = `${auth_redirect_path}?origin=${encodeURIComponent(
+          req.originalUrl
+        )}`
 
         return res.redirect(redirecturl)
       } else next()
@@ -228,7 +231,7 @@ class StratisOAuth2Provider {
      */
     const intercept = async (req, res, next) => {
       const client = this.create_client()
-      const request_url = new URL(req.originalUrl)
+      const request_url = get_express_request_url(req)
       const is_authentication_response = [
         'response_type',
         'code',
@@ -240,7 +243,7 @@ class StratisOAuth2Provider {
 
       const redirect_uri =
         this.redirect_url ||
-        `${request_url.protocol}://${request_url.host}/${request_url.path}`
+        `${request_url.protocol}://${request_url.host}/${request_url.pathname}`
 
       if (is_authentication_response) {
         assert(
@@ -263,13 +266,7 @@ class StratisOAuth2Provider {
 
         return res.redirect(oauth_session_params.state.origin)
       } else {
-        const origin_request =
-          request_url.searchParams['origin'] == null
-            ? '/'
-            : Buffer.from(
-                request_url.searchParams['origin'],
-                'base64'
-              ).toString('utf-8')
+        const origin_request = request_url.searchParams['origin']
 
         const encoded_state = this.write_oauth_session_params(req, res, {
           state: Object.assign(
@@ -288,6 +285,7 @@ class StratisOAuth2Provider {
             redirect_uri: redirect_uri,
             client_id: this.client_id,
             scope: this.scope,
+            state: encoded_state,
           })
         )
       }
@@ -299,9 +297,9 @@ class StratisOAuth2Provider {
   /**
    * Apply the security authenticator to the express app.
    * @param {import('express').Express} app
-   * @param {string} path
+   * @param {string} path The oauth serve path (must start with /)
    */
-  apply(app, path = 'oauth2') {
+  apply(app, path = '/oauth2') {
     app.all(path, this.auth_middleware())
     app.use(this.filter_middleware(path))
   }

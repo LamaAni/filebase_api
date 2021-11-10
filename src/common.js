@@ -27,6 +27,18 @@ function is_valid_url(value) {
   return true
 }
 
+/**
+ * @param {import('express/index').Request} req
+ */
+function get_express_request_url(req) {
+  const full_hostname = req.get('host')
+  let protocol = req.protocol
+  protocol = protocol.trim().endsWith(':')
+    ? protocol.trim()
+    : protocol.trim() + ':'
+  return new URL(`${protocol}//${full_hostname}${req.originalUrl}`)
+}
+
 async function path_stat(path) {
   try {
     return await fs.promises.stat(path)
@@ -103,4 +115,5 @@ module.exports = {
   path_stat,
   with_timeout,
   deep_merge_objects,
+  get_express_request_url,
 }
