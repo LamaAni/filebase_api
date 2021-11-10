@@ -20,7 +20,7 @@ function is_valid_url(value) {
   if (value instanceof URL) return true
   if (!is_non_empty_string(value)) return false
   try {
-    value = URL(value)
+    value = new URL(value)
   } catch (err) {
     return false
   }
