@@ -3,12 +3,10 @@ const express = require('express')
 const cookie_session = require('cookie-session')
 const path = require('path')
 
-const TEST_AUTH_URL = 'https://authorization-server.com/authorize'
-const TEST_TOKEN_URL = 'https://authorization-server.com/authorize'
-const TEST_CLIENT_ID = 'bMwdMwZSO-ad4WFSQmcSsmVI'
-const TEST_CLIENT_SECRET = 'z3lUp162ulA4_aGBW0KJh4i3qcvH21syetepVbYCeVzZsRw9'
-const TEST_CLIENT_USERNAME = 'ill-lion@example.com'
-const TEST_CLIENT_PASSWORD = 'Jealous-Quelea-15'
+const TEST_TOKEN_URL = process.env['TEST_OAUTH2_TOKEN_URL']
+const TEST_AUTH_URL = process.env['TEST_OAUTH2_AUTH_URL'] || TEST_TOKEN_URL
+const TEST_CLIENT_ID = process.env['TEST_OAUTH2_CLIENT_ID']
+const TEST_CLIENT_SECRET = process.env['TEST_OAUTH2_CLIENT_SECRET']
 
 const app = express()
 
@@ -31,6 +29,7 @@ new StratisOAuth2Provider({
   authorize_url: TEST_AUTH_URL,
   client_id: TEST_CLIENT_ID,
   client_secret: TEST_CLIENT_SECRET,
+  scope: ['okta.users.read.self'],
 }).apply(app)
 
 app.use((req, res, next) => {

@@ -1,4 +1,4 @@
-const { AuthorizationCode } = require('simple-oauth2')
+const superagent = require('superagent')
 
 const {
   assert,
@@ -15,15 +15,21 @@ const {
  */
 
 /**
+ * @typedef {Object} OAuthAuthenticationState
+ * @property {string} uuid
+ * @property {string} origin
+ * @property {number} timestamp
+ **/
+
+/**
  * @typedef {Object} OAuthSessionParams
+ * @property {OAuthAuthenticationState} state
  * @property {string} access_token
  * @property {string} id_token
  * @property {number} expires_in
  * @property {string} token_type
  * @property {string} scope
  * @property {string} refresh_token
- * @property {Object} state
- * @property {string} uuid
  * @property {string} timestamp
  */
 
@@ -42,7 +48,10 @@ const {
  * @property {"header" | "body"} authorization_method
  * @property {[string]} scope the scope to use.
  * @property {string} session_key The session key to use when recording the oauth token
+ * @property {boolean} return_errors_to_client If true, write the error value to the client response.
  * @property {(req:Request)=>{}} state_generator The oauth state generator.
+ * @property {number} recheck_interval The number of miliseconds before revalidating the token.
+ * @property {string} response_type The authentication type. Currently supports only code.
  */
 
 class StratisOAuth2Provider {
@@ -56,10 +65,13 @@ class StratisOAuth2Provider {
     revoke_path = null,
     token_path = null,
     redirect_url = null,
-    body_format = 'json',
+    body_format = 'form',
     authorization_method = 'header',
-    scope = ['email'],
+    scope = [],
     session_key = 'stratis:oauth2:token',
+    return_errors_to_client = true,
+    response_type = 'code',
+    recheck_interval = 1000 * 60 * 5,
     state_generator = null,
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
@@ -101,6 +113,7 @@ class StratisOAuth2Provider {
 
     this.client_id = client_id
     this.client_secret = client_secret
+    this.return_errors_to_client = return_errors_to_client == true
 
     this.token_url = new URL(token_url)
     this.authorize_url = authorize_url == null ? null : new URL(authorize_url)
@@ -111,10 +124,12 @@ class StratisOAuth2Provider {
     this.revoke_path = revoke_path || this.authorize_url.pathname
     this.token_path = token_path || this.authorize_url.pathname
     this.redirect_url = redirect_url
+    this.response_type = response_type
 
     this.scope = scope
     this.session_key = session_key
     this.state_generator = state_generator
+    this.recheck_interval = 1000
   }
 
   static create_uuid() {
@@ -137,28 +152,21 @@ class StratisOAuth2Provider {
     )
   }
 
-  create_client() {
-    const token_url = this.token_url
-    const authorize_url = this.authorize_url || this.token_url
+  /**
+   * @param {OAuthAuthenticationState} state
+   * @returns {string}
+   */
+  encode_state(state) {
+    return Buffer.from(JSON.stringify(state), 'utf-8').toString('base64url')
+  }
 
-    return new AuthorizationCode({
-      options: {
-        bodyFormat: this.body_format,
-        authorizationMethod: this.authorization_method,
-      },
-      client: {
-        id: this.client_id,
-        secret: this.client_secret,
-      },
-      auth: {
-        tokenHost: `${token_url.protocol}//${token_url.host}`,
-        authorizeHost: `${authorize_url.protocol}//${authorize_url.host}`,
-        // paths
-        tokenPath: this.token_path || token_url.pathname,
-        revokePath: this.revoke_path || token_url.pathname,
-        authorizePath: this.authorize_path || authorize_url.pathname,
-      },
-    })
+  /**
+   * @param {string} state
+   * @returns {OAuthAuthenticationState}
+   */
+  decode_state(state) {
+    const state_json = Buffer.from(state, 'base64url').toString('utf-8')
+    return JSON.parse(state_json)
   }
 
   /**
@@ -166,13 +174,16 @@ class StratisOAuth2Provider {
    * @returns {OAuthSessionParams} The current session params
    */
   read_oauth_session_params(req) {
-    const session_value =
+    let session_value =
       req.session == null ? null : req.session[this.session_key]
-    return session_value != null
-      ? JSON.parse(
-          Buffer.from(req.session[this.session_key], 'base64').toString('utf-8')
-        )
-      : null
+    if (session_value == null) return null
+    if (typeof session_value == 'string')
+      try {
+        session_value = JSON.parse(session_value)
+      } catch (err) {
+        session_value = {}
+      }
+    return session_value
   }
 
   /**
@@ -181,12 +192,8 @@ class StratisOAuth2Provider {
    * @param {OAuthSessionParams} session_params
    */
   write_oauth_session_params(req, res, session_params) {
-    const encoded_state = Buffer.from(
-      JSON.stringify(session_params),
-      'utf-8'
-    ).toString('base64')
-    req.session[this.session_key] = encoded_state
-    return encoded_state
+    req.session[this.session_key] = session_params
+    return session_params
   }
 
   /**
@@ -230,63 +237,106 @@ class StratisOAuth2Provider {
      * @param {NextFunction} next
      */
     const intercept = async (req, res, next) => {
-      const client = this.create_client()
       const request_url = get_express_request_url(req)
-      const is_authentication_response = [
-        'response_type',
-        'code',
-        'scope',
-        'state',
-      ].every((k) => k in request_url.searchParams)
 
-      const oauth_session_params = this.read_oauth_session_params(req)
+      const query = Object.assign(
+        {},
+        req.query || {},
+        JSON.parse(req.body || '{}')
+      )
 
-      const redirect_uri =
-        this.redirect_url ||
-        `${request_url.protocol}://${request_url.host}/${request_url.pathname}`
+      try {
+        if (query.error != null) throw new Error(`${JSON.stringify(query)}`)
 
-      if (is_authentication_response) {
-        assert(
-          oauth_session_params != null &&
-            oauth_session_params.state == request_url.searchParams['state'],
-          'Invalid token validation request, session state could not retrieve state validation key'
-        )
+        const is_authentication_redirect =
+          req.query.code == null && query.origin != null
+        const is_authentication_response = query.code != null
 
-        const token = await client.getToken({
-          code: request_url.searchParams['code'],
-          redirect_uri: redirect_uri,
-          scope: request_url.searchParams['scope'],
-        })
+        let redirect_uri =
+          this.redirect_url ||
+          `${request_url.protocol}//${request_url.host}${request_url.pathname}`
 
-        this.write_oauth_session_params(
-          req,
-          res,
-          Object.assign({}, oauth_session_params, token)
-        )
+        const oauth_session_params = this.read_oauth_session_params(req)
 
-        return res.redirect(oauth_session_params.state.origin)
-      } else {
-        const origin_request = request_url.searchParams['origin']
+        if (is_authentication_response) {
+          const auth_state = this.decode_state(req.query.state)
 
-        const encoded_state = this.write_oauth_session_params(req, res, {
-          state: Object.assign(
-            {},
-            this.state_generator ? await this.state_generator() : {},
-            {
-              timestamp: new Date().getTime(),
-              uuid: StratisOAuth2Provider.create_uuid(),
-              origin: origin_request,
-            }
-          ),
-        })
+          assert(
+            oauth_session_params != null &&
+              (oauth_session_params.state || {}).uuid == auth_state.uuid,
+            'Invalid token validation request, session state could not retrieve state validation key'
+          )
 
-        res.redirect(
-          client.authorizeURL({
+          const token_url = new URL(this.token_url)
+
+          Object.entries({
+            client_id: this.client_id,
+            client_secret: this.client_secret,
+            grant_type: this.grant_type || 'authorization_code',
+            code: req.query.code,
+            redirect_uri: redirect_uri,
+          })
+            .filter((e) => e[1] != null)
+            .forEach((entry) => token_url.searchParams.set(entry[0], entry[1]))
+
+          const token = (
+            await superagent
+              .post(token_url.href)
+              .set('Content-Type', 'application/x-www-form-urlencoded')
+              .timeout(1000)
+              .send()
+          ).body
+
+          this.write_oauth_session_params(
+            req,
+            res,
+            Object.assign({}, oauth_session_params, token)
+          )
+
+          return res.redirect(oauth_session_params.state.origin)
+        } else if (is_authentication_redirect) {
+          const origin = query.origin || '/'
+
+          const session_params = this.write_oauth_session_params(req, res, {
+            state: Object.assign(
+              {},
+              this.state_generator ? await this.state_generator() : {},
+              {
+                timestamp: new Date().getTime(),
+                uuid: StratisOAuth2Provider.create_uuid(),
+                origin,
+              }
+            ),
+          })
+
+          const authorize_url = new URL(this.authorize_url || this.token_url)
+          for (const entry of Object.entries({
             redirect_uri: redirect_uri,
             client_id: this.client_id,
-            scope: this.scope,
-            state: encoded_state,
-          })
+            response_type: this.response_type,
+            scope:
+              this.scope == null || this.scope.length == 0
+                ? null
+                : this.scope.join(''),
+            state: this.encode_state(session_params.state),
+          })) {
+            if (entry[1] == null) continue
+            authorize_url.searchParams.set(entry[0], entry[1])
+          }
+
+          return res.redirect(authorize_url.href)
+        } else {
+          throw new Error('unknown auth request: ' + request_url.href)
+        }
+      } catch (err) {
+        res.status(500)
+        console.error(err)
+        return res.end(
+          this.return_errors_to_client
+            ? `${err.stack || err}${
+                err.response == null ? '' : '\n' + err.response.text
+              }`
+            : null
         )
       }
     }
