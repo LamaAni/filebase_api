@@ -60,11 +60,7 @@ class StratisOAuth2Provider {
     client_id,
     client_secret,
     token_url,
-    authorize_url = null,
-    authorize_path = null,
-    revoke_path = null,
-    token_path = null,
-    redirect_url = null,
+    authorize_url,
     body_format = 'form',
     authorization_method = 'header',
     scope = [],
@@ -194,6 +190,65 @@ class StratisOAuth2Provider {
   write_oauth_session_params(req, res, session_params) {
     req.session[this.session_key] = session_params
     return session_params
+  }
+
+  /**
+   * Compose a url from a base url and query arguments
+   * @param {string|URL} base_url The base url to compose from
+   * @param {{}} query The query arguments to compose from
+   */
+  compose_url(base_url, query) {
+    const url = new URL(base_url)
+    for (const entry of Object.entries(query)) {
+      if (entry[1] == null) continue
+      url.searchParams.set(entry[0], entry[1])
+    }
+    return url
+  }
+
+  /**
+   * Composes the rep
+   * @param {string} redirect_uri The uri to redirect to.
+   * @param {{}} state The authorize state.
+   * @param {'code'|'token'|'id_token'} response_type Depends on the flow.
+   * https://developer.okta.com/docs/concepts/oauth-openid/#recommended-flow-by-application-type
+   * @returns {URL} the authorize url. Redirect to this url to authorize.
+   */
+  compose_authorize_url(redirect_uri, state = null, response_type = 'code') {
+    return this.compose_url(this.authorize_url, {
+      redirect_uri,
+      client_id: this.client_id,
+      response_type: response_type,
+      scope:
+        this.scope == null || this.scope.length == 0
+          ? null
+          : this.scope.join(''),
+      state: this.encode_state(state),
+    })
+  }
+
+  /**
+   * Return a token for the specified code. Token command should return a json.
+   * @param {string} redirect_uri The uri to redirect to.
+   * @param {string} code The code to return the token for.
+   * @returns {string|{}} The token.
+   */
+  async get_token(redirect_uri, code) {
+    const token_url = this.compose_url({
+      client_id: this.client_id,
+      client_secret: this.client_secret,
+      grant_type: this.grant_type || 'authorization_code',
+      code,
+      redirect_uri,
+    })
+
+    return (
+      await superagent
+        .post(token_url.href)
+        .set('Content-Type', 'application/x-www-form-urlencoded')
+        .timeout(1000)
+        .send()
+    ).body
   }
 
   /**
