@@ -1,5 +1,5 @@
 const superagent = require('superagent')
-
+const { CacheDictionary } = require('../webserver/collections')
 const {
   assert,
   assert_non_empty_string,
@@ -125,7 +125,21 @@ class StratisOAuth2Provider {
     this.scope = scope
     this.session_key = session_key
     this.state_generator = state_generator
-    this.recheck_interval = 1000
+    this.recheck_interval = recheck_interval
+
+    this._token_cache_bank = new CacheDictionary({
+      cleaning_interval: recheck_interval,
+      reset_cache_timestamp_on_get: true,
+      interval: recheck_interval * 2,
+    })
+  }
+
+  /**
+   * The cache token bank that allows the interface to preserve the cache
+   * refresh time for the token.
+   */
+  get token_cache_bank() {
+    return this._token_cache_bank
   }
 
   static create_uuid() {
@@ -170,16 +184,40 @@ class StratisOAuth2Provider {
    * @returns {OAuthSessionParams} The current session params
    */
   read_oauth_session_params(req) {
-    let session_value =
-      req.session == null ? null : req.session[this.session_key]
-    if (session_value == null) return null
-    if (typeof session_value == 'string')
-      try {
-        session_value = JSON.parse(session_value)
-      } catch (err) {
-        session_value = {}
+    if (req.session != null) {
+      let session_value =
+        req.session == null ? null : req.session[this.session_key]
+      if (session_value != null) {
+        try {
+          session_value =
+            typeof session_value == 'string'
+              ? JSON.parse(session_value)
+              : session_value
+        } catch (err) {
+          throw new Error('Could not parse oauth session value')
+        }
+        return session_value
       }
-    return session_value
+    }
+
+    if ('authorization' in req.headers) {
+      // checking token in headers.
+      let access_token = req.headers['authorization']
+      if (access_token.toLowerCase().startsWith('barer '))
+        access_token = access_token.substr('barer '.length)
+      else access_token = null
+
+      if (access_token == null) return null
+
+      return (
+        this.token_cache_bank.get(access_token) || /**
+         * @type {OAuthSessionParams}
+         */
+        {
+          access_token: access_token,
+        }
+      )
+    }
   }
 
   /**
@@ -189,6 +227,8 @@ class StratisOAuth2Provider {
    */
   write_oauth_session_params(req, res, session_params) {
     req.session[this.session_key] = session_params
+    if (session_params.access_token != null)
+      this.token_cache_bank.set(session_params.access_token, session_params)
     return session_params
   }
 
@@ -252,10 +292,13 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Implements the authentication check middleware. If called request
+   * must be authenticated against oauth2 to proceed. Use login_middleware
+   * to create a login page redirect.
    * @param {string} auth_redirect_path The authentication path to redirect to.
    * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
    */
-  filter_middleware(auth_redirect_path) {
+  auth_middleware(auth_redirect_path) {
     /**
      * @param {Request} req
      * @param {Response} res
@@ -263,29 +306,38 @@ class StratisOAuth2Provider {
      */
     const intercrept = async (req, res, next) => {
       if (req.path == auth_redirect_path) return next()
-      const params = this.read_oauth_session_params(req)
-      let is_valid = false
-      if (params != null) {
-        if (params.access_token != null) {
-          is_valid = true
-        }
-      }
 
-      if (!is_valid) {
+      const redirect_to_login = () => {
         const redirecturl = `${auth_redirect_path}?origin=${encodeURIComponent(
           req.originalUrl
         )}`
 
         return res.redirect(redirecturl)
-      } else next()
+      }
+
+      const params = this.read_oauth_session_params(req)
+      if (params == null) return redirect_to_login()
+
+      const elapsed_since_last_check =
+        params.timestamp == null ? Infinity : new Date() - params.timestamp
+
+      if (elapsed_since_last_check > this.recheck_interval) {
+        // need to validate checks or redirect to login, depends
+        // on the configuration.
+      }
+
+      return next()
     }
     return intercrept
   }
 
   /**
+   * A login page middleware, must have a specific path. The login middleware
+   * redirects to a specific login backed (e.g. google, amazon ... )
+   * using authentication schema.
    * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
    */
-  auth_middleware() {
+  login_middleware() {
     /**
      * @param {Request} req
      * @param {Response} res
@@ -357,7 +409,7 @@ class StratisOAuth2Provider {
               {},
               this.state_generator ? await this.state_generator() : {},
               {
-                timestamp: new Date().getTime(),
+                updated_at: new Date().getTime(),
                 uuid: StratisOAuth2Provider.create_uuid(),
                 origin,
               }
@@ -405,8 +457,8 @@ class StratisOAuth2Provider {
    * @param {string} path The oauth serve path (must start with /)
    */
   apply(app, path = '/oauth2') {
-    app.all(path, this.auth_middleware())
-    app.use(this.filter_middleware(path))
+    app.all(path, this.login_middleware())
+    app.use(this.auth_middleware(path))
   }
 }
 
