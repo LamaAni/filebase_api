@@ -8,6 +8,7 @@ const {
   is_valid_url,
   get_express_request_url,
   milliseconds_utc_since_epoc,
+  value_from_object_path,
 } = require('../common')
 
 /**
@@ -60,7 +61,7 @@ const {
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
  * @property {console|{}} logger The internal logger.
- * @property {[{token_info_path:string, regex:string}|(info:{})=>boolean}]} access_validators A list of valid access validators.
+ * @property {[{token_info_path:string, regexp:string}|(info:{})=>boolean}]} access_validators A list of valid access validators.
  * @property {string} response_type The authentication type. Currently supports only code.
  */
 
@@ -146,7 +147,24 @@ class StratisOAuth2Provider {
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.logger = logger
-    this.access_validators = access_validators
+    access_validators = access_validators || []
+    /**
+     * @type {[(token_info)=>boolean}]}
+     */
+    this.access_validators = access_validators.map((av) => {
+      if (typeof av == 'function') return av
+      assert(
+        typeof av.regexp == 'string' && typeof av.token_info_path == 'string',
+        'access validations must be either a function or an object {token_info_path:string, regex:string}'
+      )
+      const regex = new RegExp(av.regexp)
+      return (token_info) => {
+        let val = value_from_object_path(token_info, av.token_info_path)
+        if (val == null) return false
+        val = typeof val == 'object' ? JSON.stringify(val) : val + ''
+        return regex.test(val)
+      }
+    })
 
     this._token_cache_bank = new CacheDictionary({
       cleaning_interval: recheck_interval,
@@ -430,7 +448,7 @@ class StratisOAuth2Provider {
 
         if (
           elapsed_since_last_check > this.recheck_interval ||
-          params.is_access_granted
+          params.is_access_granted == null
         ) {
           // need to validate checks or redirect to login, depends
           // on the configuration.
@@ -439,14 +457,21 @@ class StratisOAuth2Provider {
             'access_token'
           )
 
-          if (token_info.active != true) params.access_token = null
+          // checking access
+          if (token_info.active != true) {
+            params.access_token = null
+            params.is_access_granted = false
+          } else
+            params.is_access_granted =
+              this.access_validators.length > 0
+                ? this.access_validators.every((av) => av(params.token_info))
+                : true
+
           // update timestamp and access token.
           this.write_oauth_session_params(req, res, params)
-
-          if (params.access_token == null) return redirect_to_login()
         }
 
-        if (params.is_access_granted === false) return redirect_to_login()
+        if (params.is_access_granted === false) return res.sendStatus(403)
       } catch (err) {
         return this.handle_errors(err, res)
       }

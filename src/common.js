@@ -106,6 +106,40 @@ function milliseconds_utc_since_epoc() {
   return Date.parse(new Date().toUTCString())
 }
 
+/**
+ * Returns the value from a . or [] seperated path.
+ * @param {{}} o The object
+ * @param {string|[string|number]} path
+ */
+function value_from_object_path(o, path) {
+  if (typeof path == 'string') {
+    path = path.replace(/([^.])\[/g, '$1.[')
+    path = path
+      .split('.')
+      .filter((pk) => pk.trim().length > 0)
+      .map((path_key) => {
+        if (path_key.startsWith('[')) {
+          path_key = path_key.substr(1, path_key.length - 2)
+          try {
+            path_key = parseInt(path_key)
+          } catch (err) {
+            path_key = -1
+          }
+        }
+        return path_key
+      })
+  }
+  assert(path.length > 0, 'Invalid or empty path')
+  try {
+    o = o[path[0]]
+  } catch (err) {
+    return null
+  }
+  path = path.slice(1)
+  if (path.length == 0) return o
+  return value_from_object_path(o, path)
+}
+
 module.exports = {
   /**
    * @param {boolean} condition
@@ -121,4 +155,18 @@ module.exports = {
   deep_merge_objects,
   get_express_request_url,
   milliseconds_utc_since_epoc,
+  value_from_object_path,
+}
+
+if (require.main == module) {
+  console.log(
+    value_from_object_path(
+      {
+        a: {
+          b: [{ c: 22 }],
+        },
+      },
+      'a.b[0].c'
+    )
+  )
 }
