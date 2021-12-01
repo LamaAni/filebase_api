@@ -31,7 +31,7 @@ new StratisOAuth2Provider({
   client_id: TEST_CLIENT_ID,
   client_secret: TEST_CLIENT_SECRET,
   recheck_interval: 1,
-  access_validators: [{ regexp: 'zav', token_info_path: 'username' }],
+  // access_validators: [{ regexp: 'zav', token_info_path: 'username' }],
   scope: ['okta.users.read.self'],
 }).apply(app)
 

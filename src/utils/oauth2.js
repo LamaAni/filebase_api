@@ -438,39 +438,39 @@ class StratisOAuth2Provider {
 
       try {
         const params = this.read_oauth_session_params(req)
-        if (params == null || params.access_token == null)
-          return redirect_to_login()
+        if (params != null && params.access_token != null) {
+          const elapsed_since_last_check =
+            params.timestamp == null
+              ? Infinity
+              : milliseconds_utc_since_epoc() - params.timestamp
 
-        const elapsed_since_last_check =
-          params.timestamp == null
-            ? Infinity
-            : milliseconds_utc_since_epoc() - params.timestamp
+          if (
+            elapsed_since_last_check > this.recheck_interval ||
+            params.is_access_granted == null
+          ) {
+            // need to validate checks or redirect to login, depends
+            // on the configuration.
+            let token_info = await this.get_token_info(
+              params.access_token,
+              'access_token'
+            )
 
-        if (
-          elapsed_since_last_check > this.recheck_interval ||
-          params.is_access_granted == null
-        ) {
-          // need to validate checks or redirect to login, depends
-          // on the configuration.
-          let token_info = await this.get_token_info(
-            params.access_token,
-            'access_token'
-          )
+            // checking access
+            if (token_info.active != true) {
+              params.access_token = null
+              params.is_access_granted = false
+            } else
+              params.is_access_granted =
+                this.access_validators.length > 0
+                  ? this.access_validators.every((av) => av(params.token_info))
+                  : true
 
-          // checking access
-          if (token_info.active != true) {
-            params.access_token = null
-            params.is_access_granted = false
-          } else
-            params.is_access_granted =
-              this.access_validators.length > 0
-                ? this.access_validators.every((av) => av(params.token_info))
-                : true
-
-          // update timestamp and access token.
-          this.write_oauth_session_params(req, res, params)
+            // update timestamp and access token.
+            this.write_oauth_session_params(req, res, params)
+          }
         }
 
+        if (params.access_token == null) return redirect_to_login()
         if (params.is_access_granted === false) return res.sendStatus(403)
       } catch (err) {
         return this.handle_errors(err, res)
