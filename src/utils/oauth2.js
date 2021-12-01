@@ -58,7 +58,7 @@ const {
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
  * @property {console|{}} logger The internal logger.
- * @property {[{token_info_path:string, regex:string}]} access_validators A list of valid access validators.
+ * @property {[{token_info_path:string, regex:string}|(info:{})=>boolean}]} access_validators A list of valid access validators.
  * @property {string} response_type The authentication type. Currently supports only code.
  */
 
