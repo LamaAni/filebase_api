@@ -58,6 +58,7 @@ const {
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
  * @property {console|{}} logger The internal logger.
+ * @property {[{token_info_path:string, regex:string}]} access_validators A list of valid access validators.
  * @property {string} response_type The authentication type. Currently supports only code.
  */
 
@@ -81,6 +82,7 @@ class StratisOAuth2Provider {
     recheck_interval = 1000 * 10,
     request_timeout = 1000,
     logger = console,
+    access_validators = [],
     state_generator = null,
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
@@ -93,10 +95,12 @@ class StratisOAuth2Provider {
       scope instanceof Array && scope.every((v) => is_non_empty_string(v)),
       'scope must be a non empty string'
     )
+
     assert_non_empty_string(
       body_format,
       'body_format must be a non empty string'
     )
+
     assert_non_empty_string(
       authorization_method,
       'authorization_method must be a non empty string'
@@ -140,6 +144,7 @@ class StratisOAuth2Provider {
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.logger = logger
+    this.access_validators = access_validators
 
     this._token_cache_bank = new CacheDictionary({
       cleaning_interval: recheck_interval,
