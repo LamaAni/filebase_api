@@ -32,6 +32,7 @@ const {
  * @property {string} scope
  * @property {string} refresh_token
  * @property {string} timestamp
+ * @property {{}} token_info
  */
 
 /**
@@ -216,8 +217,8 @@ class StratisOAuth2Provider {
     if ('authorization' in req.headers) {
       // checking token in headers.
       let access_token = req.headers['authorization']
-      if (access_token.toLowerCase().startsWith('barer '))
-        access_token = access_token.substr('barer '.length)
+      if (access_token.toLowerCase().startsWith('bearer '))
+        access_token = access_token.substr('bearer '.length)
       else access_token = null
 
       if (access_token == null) return null
@@ -324,6 +325,23 @@ class StratisOAuth2Provider {
     ).body
 
     return token_info
+  }
+
+  async get_user_info(token) {
+    if (this.user_info_url == null) {
+      return {}
+    }
+
+    const user_info_url = this.compose_url(this.user_info_url)
+
+    const user_info = (
+      await superagent
+        .get(user_info_url.href)
+        .set('Authorization', `Bearer ${token}`)
+        .timeout(this.request_timeout)
+        .send()
+    ).body
+    return user_info
   }
 
   async revoke(token, token_type = 'access_token') {
@@ -457,11 +475,15 @@ class StratisOAuth2Provider {
           )
 
           const token = await this.get_token(req.query.code, oauth_redirect_uri)
+          const token_info = await this.get_token_info(
+            token.access_token,
+            'access_token'
+          )
 
           this.write_oauth_session_params(
             req,
             res,
-            Object.assign({}, oauth_session_params, token)
+            Object.assign({}, oauth_session_params, { token_info }, token)
           )
 
           return res.redirect(oauth_session_params.state.origin)
