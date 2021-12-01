@@ -34,6 +34,7 @@ const {
  * @property {string} scope
  * @property {string} refresh_token
  * @property {string} timestamp
+ * @property {string} username
  * @property {boolean} is_access_granted
  * @property {{}} token_info
  */
@@ -61,6 +62,8 @@ const {
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
  * @property {console|{}} logger The internal logger.
+ * @property {string|[string]} username_from_token_info_path The path to the username to parse out of the user info.
+ * @property {string} request_user_object_key The req[key] to save the user information. defaults to user.
  * @property {[{token_info_path:string, regexp:string}|(info:{})=>boolean}]} access_validators A list of valid access validators.
  * @property {string} response_type The authentication type. Currently supports only code.
  */
@@ -86,6 +89,8 @@ class StratisOAuth2Provider {
     request_timeout = 1000 * 10,
     logger = console,
     access_validators = [],
+    request_user_object_key = 'user',
+    username_from_token_info_path = ['username', 'email', 'user', 'name'],
     state_generator = null,
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
@@ -147,6 +152,14 @@ class StratisOAuth2Provider {
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.logger = logger
+    this.request_user_object_key = request_user_object_key
+    /** @type {[string]} */
+    this.username_from_token_info_path = Array.isArray(
+      username_from_token_info_path
+    )
+      ? username_from_token_info_path
+      : [username_from_token_info_path]
+
     access_validators = access_validators || []
     /**
      * @type {[(token_info)=>boolean}]}
@@ -465,6 +478,10 @@ class StratisOAuth2Provider {
                   ? this.access_validators.every((av) => av(params.token_info))
                   : true
 
+            params.username = this.username_from_token_info_path
+              .map((p) => value_from_object_path(params.token_info, p))
+              .filter((v) => v != null)[0]
+
             // update timestamp and access token.
             this.write_oauth_session_params(req, res, params)
           }
@@ -472,6 +489,13 @@ class StratisOAuth2Provider {
 
         if (params.access_token == null) return redirect_to_login()
         if (params.is_access_granted === false) return res.sendStatus(403)
+
+        // setting the session params variable for the request
+        req[this.request_user_object_key] = {
+          id: params.token_info.sub,
+          username: params.username,
+          token_info: params.token_info,
+        }
       } catch (err) {
         return this.handle_errors(err, res)
       }
