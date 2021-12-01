@@ -40,6 +40,10 @@ const {
  * @property {string} authentication_host The hostname for the authentication. e.g. https://accounts.google.com/o/oauth2/v2/auth
  * @property {string|URL} token_url The token service url, e.g. https://accounts.google.com/o/oauth2/v2/auth
  * @property {string|URL} authorize_url The authorize service url, defaults to token_url
+ * @property {string|URL} token_info_url The token info url, returning the state of the token.
+ * @property {string|URL} user_info_url The user info url, returning the user information. If null, no user info added.
+ * @property {string|URL} revoke_url The revoke url, revoking the current token. If null operation not permitted.
+ * @property {string|URL} logout_url The logout url. If null operation not permitted.
  * @property {string} authorize_path The path for authorization, overrides authorize_url path
  * @property {string} revoke_path The path for revoke, overrides token_url path
  * @property {string} token_path The path for a token, overrides token_url path
@@ -61,6 +65,10 @@ class StratisOAuth2Provider {
     client_secret,
     token_url,
     authorize_url,
+    token_info_url,
+    user_info_url = null,
+    revoke_url = null,
+    logout_url = null,
     body_format = 'form',
     authorization_method = 'header',
     scope = [],
@@ -94,25 +102,43 @@ class StratisOAuth2Provider {
       'session_key must be a non empty string'
     )
 
-    assert(
-      is_valid_url(token_url),
-      'authorize_url must be a URL or a non empty string'
-    )
-    assert(
-      authorize_url == null || is_valid_url(authorize_url),
-      'authorize_url must be null, a URL or a non empty string'
-    )
-    assert(
-      redirect_url == null || is_valid_url(redirect_url),
-      'authorize_url must be null, a URL or a non empty string'
-    )
+    const validate_urls = (urls, can_be_null = true) => {
+      for (const k in Object.keys(urls))
+        assert(
+          (urls[k] == null && can_be_null) || is_valid_url(urls[k]),
+          `${k} must be a URL or a non empty string`
+        )
+    }
+
+    validate_urls({ token_url, authorize_url, token_info_url }, false)
+    validate_urls({ redirect_url, user_info_url, revoke_url, logout_url })
+
+    // assert(
+    //   validate_url(token_url, false),
+    //   'authorize_url must be a URL or a non empty string'
+    // )
+    // assert(
+    //   validate_url(authorize_url, false),
+    //   'authorize_url must be null, a URL or a non empty string'
+    // )
+    // assert(validate_url(this.redirect_url))
+    // assert(
+    //   redirect_url == null || is_valid_url(redirect_url),
+    //   'authorize_url must be null, a URL or a non empty string'
+    // )
 
     this.client_id = client_id
     this.client_secret = client_secret
     this.return_errors_to_client = return_errors_to_client == true
 
-    this.token_url = new URL(token_url)
+    this.token_url = token_url == null ? null : new URL(token_url)
     this.authorize_url = authorize_url == null ? null : new URL(authorize_url)
+    this.token_info_url =
+      token_info_url == null ? null : new URL(token_info_url)
+    this.user_info_url = user_info_url == null ? null : new URL(user_info_url)
+    this.revoke_url = revoke_url == null ? null : new URL(revoke_url)
+    this.logout_url = logout_url == null ? null : new URL(logout_url)
+
     this.body_format = body_format
     this.authorization_method = authorization_method
 
@@ -237,28 +263,20 @@ class StratisOAuth2Provider {
    * @param {string|URL} base_url The base url to compose from
    * @param {{}} query The query arguments to compose from
    */
-  compose_url(base_url, query) {
+  compose_url(base_url, query = {}) {
     const url = new URL(base_url)
-    for (const entry of Object.entries(query)) {
-      if (entry[1] == null) continue
-      url.searchParams.set(entry[0], entry[1])
-    }
+    Object.entries(query)
+      .filter((entry) => entry[1] != null)
+      .forEach((entry) => url.searchParams.set(entry[0], entry[1]))
+
     return url
   }
 
-  /**
-   * Composes the rep
-   * @param {string} redirect_uri The uri to redirect to.
-   * @param {{}} state The authorize state.
-   * @param {'code'|'token'|'id_token'} response_type Depends on the flow.
-   * https://developer.okta.com/docs/concepts/oauth-openid/#recommended-flow-by-application-type
-   * @returns {URL} the authorize url. Redirect to this url to authorize.
-   */
-  compose_authorize_url(redirect_uri, state = null, response_type = 'code') {
+  compose_authorize_url(redirect_uri, state = null) {
     return this.compose_url(this.authorize_url, {
-      redirect_uri,
+      redirect_uri: redirect_uri,
       client_id: this.client_id,
-      response_type: response_type,
+      response_type: this.response_type,
       scope:
         this.scope == null || this.scope.length == 0
           ? null
@@ -267,14 +285,8 @@ class StratisOAuth2Provider {
     })
   }
 
-  /**
-   * Return a token for the specified code. Token command should return a json.
-   * @param {string} redirect_uri The uri to redirect to.
-   * @param {string} code The code to return the token for.
-   * @returns {string|{}} The token.
-   */
-  async get_token(redirect_uri, code) {
-    const token_url = this.compose_url({
+  async get_token(code, redirect_uri) {
+    const token_url = this.compose_url(this.token_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       grant_type: this.grant_type || 'authorization_code',
@@ -289,6 +301,23 @@ class StratisOAuth2Provider {
         .timeout(1000)
         .send()
     ).body
+  }
+
+  async get_token_info(token, token_type = 'access_token') {
+    const token_info_url = this.compose_url(this.token_info_url, {
+      token,
+      token_type_hint: token_type,
+    })
+
+    return JSON.parse(
+      (
+        await superagent
+          .post(token_info_url.href)
+          .set('Content-Type', 'application/x-www-form-urlencoded')
+          .timeout(1000)
+          .send()
+      ).body
+    )
   }
 
   /**
@@ -366,6 +395,7 @@ class StratisOAuth2Provider {
         const oauth_session_params = this.read_oauth_session_params(req)
 
         if (is_authentication_response) {
+          // Case we already authenticated and we need to get the token.
           const auth_state = this.decode_state(req.query.state)
 
           assert(
@@ -374,25 +404,7 @@ class StratisOAuth2Provider {
             'Invalid token validation request, session state could not retrieve state validation key'
           )
 
-          const token_url = new URL(this.token_url)
-
-          Object.entries({
-            client_id: this.client_id,
-            client_secret: this.client_secret,
-            grant_type: this.grant_type || 'authorization_code',
-            code: req.query.code,
-            redirect_uri: redirect_uri,
-          })
-            .filter((e) => e[1] != null)
-            .forEach((entry) => token_url.searchParams.set(entry[0], entry[1]))
-
-          const token = (
-            await superagent
-              .post(token_url.href)
-              .set('Content-Type', 'application/x-www-form-urlencoded')
-              .timeout(1000)
-              .send()
-          ).body
+          const token = await this.get_token(req.query.code, redirect_uri)
 
           this.write_oauth_session_params(
             req,
@@ -402,6 +414,7 @@ class StratisOAuth2Provider {
 
           return res.redirect(oauth_session_params.state.origin)
         } else if (is_authentication_redirect) {
+          // we have not yet authenticated and need redirect.
           const origin = query.origin || '/'
 
           const session_params = this.write_oauth_session_params(req, res, {
@@ -416,22 +429,9 @@ class StratisOAuth2Provider {
             ),
           })
 
-          const authorize_url = new URL(this.authorize_url || this.token_url)
-          for (const entry of Object.entries({
-            redirect_uri: redirect_uri,
-            client_id: this.client_id,
-            response_type: this.response_type,
-            scope:
-              this.scope == null || this.scope.length == 0
-                ? null
-                : this.scope.join(''),
-            state: this.encode_state(session_params.state),
-          })) {
-            if (entry[1] == null) continue
-            authorize_url.searchParams.set(entry[0], entry[1])
-          }
-
-          return res.redirect(authorize_url.href)
+          return res.redirect(
+            this.compose_authorize_url(redirect_uri, session_params.state)
+          )
         } else {
           throw new Error('unknown auth request: ' + request_url.href)
         }
