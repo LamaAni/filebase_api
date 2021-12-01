@@ -10,9 +10,6 @@ const {
   milliseconds_utc_since_epoc,
 } = require('../common')
 
-process.env.HTTP_PROXY = process.env.HTTP_PROXY || process.env.http_proxy
-process.env.HTTPS_PROXY = process.env.HTTPS_PROXY || process.env.https_proxy
-
 /**
  * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
