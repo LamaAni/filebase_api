@@ -102,6 +102,10 @@ async function with_timeout(method, timeout, timeout_error) {
   })
 }
 
+function milliseconds_utc_since_epoc() {
+  return Date.parse(new Date().toUTCString())
+}
+
 module.exports = {
   /**
    * @param {boolean} condition
@@ -116,4 +120,5 @@ module.exports = {
   with_timeout,
   deep_merge_objects,
   get_express_request_url,
+  milliseconds_utc_since_epoc,
 }
