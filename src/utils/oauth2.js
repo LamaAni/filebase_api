@@ -345,7 +345,8 @@ class StratisOAuth2Provider {
       }
 
       const params = this.read_oauth_session_params(req)
-      if (params == null) return redirect_to_login()
+      if (params == null || params.access_token == null)
+        return redirect_to_login()
 
       const elapsed_since_last_check =
         params.timestamp == null ? Infinity : new Date() - params.timestamp
@@ -353,6 +354,17 @@ class StratisOAuth2Provider {
       if (elapsed_since_last_check > this.recheck_interval) {
         // need to validate checks or redirect to login, depends
         // on the configuration.
+        let token_info = await this.get_token_info(
+          params.access_token,
+          'access_token'
+        )
+
+        if (token_info.active != true) {
+          // clear the token and redirect.
+          params.access_token = null
+          this.write_oauth_session_params(req, res, params)
+          return redirect_to_login()
+        }
       }
 
       return next()
