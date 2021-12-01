@@ -85,7 +85,7 @@ class StratisOAuth2Provider {
     return_errors_to_client = true,
     response_type = 'code',
     recheck_interval = 1000 * 10,
-    request_timeout = 1000,
+    request_timeout = 1000 * 10,
     logger = console,
     access_validators = [],
     state_generator = null,
