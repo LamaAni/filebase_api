@@ -1,3 +1,4 @@
+const ProxyAgent = require('proxy-agent')
 const superagent = require('superagent')
 const { CacheDictionary } = require('../webserver/collections')
 const {
@@ -32,6 +33,7 @@ const {
  * @property {string} scope
  * @property {string} refresh_token
  * @property {string} timestamp
+ * @property {boolean} is_access_granted
  * @property {{}} token_info
  */
 
@@ -182,6 +184,27 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Configures the superagent request.
+   * @param {superagent.Request} request The superagent request
+   * @param {boolean} use_proxies
+   * @param {*} content_type
+   * @returns {superagent.Request}
+   */
+  configure_request(
+    request,
+    use_proxies = true,
+    content_type = 'application/x-www-form-urlencoded'
+  ) {
+    if (use_proxies) {
+      request = request.agent(new ProxyAgent())
+    }
+    request = request.timeout(this.request_timeout)
+    if (content_type != null)
+      request = request.set('Content-Type', 'application/x-www-form-urlencoded')
+    return request
+  }
+
+  /**
    * @param {OAuthAuthenticationState} state
    * @returns {string}
    */
@@ -305,11 +328,7 @@ class StratisOAuth2Provider {
     })
 
     return (
-      await superagent
-        .post(token_url.href)
-        .set('Content-Type', 'application/x-www-form-urlencoded')
-        .timeout(this.request_timeout)
-        .send()
+      await this.configure_request(superagent.post(token_url.href)).send()
     ).body
   }
 
@@ -322,11 +341,7 @@ class StratisOAuth2Provider {
     })
 
     const token_info = (
-      await superagent
-        .post(token_info_url.href)
-        .set('Content-Type', 'application/x-www-form-urlencoded')
-        .timeout(this.request_timeout)
-        .send()
+      await this.configure_request(superagent.post(token_info_url.href)).send()
     ).body
 
     return token_info
@@ -340,13 +355,26 @@ class StratisOAuth2Provider {
     const user_info_url = this.compose_url(this.user_info_url)
 
     const user_info = (
-      await superagent
-        .get(user_info_url.href)
+      await this.configure_request(superagent.get(user_info_url.href))
         .set('Authorization', `Bearer ${token}`)
-        .timeout(this.request_timeout)
         .send()
     ).body
     return user_info
+  }
+
+  /**
+   * Internal. Call to update the token info and access validation.
+   * @param {OAuthSessionParams} params
+   */
+  async _update_auth_info(params) {
+    // need to validate checks or redirect to login, depends
+    // on the configuration.
+    try {
+      const token_info = await this.get_token_info(
+        params.access_token,
+        'access_token'
+      )
+    } catch (err) {}
   }
 
   async revoke(token, token_type = 'access_token') {
@@ -358,11 +386,9 @@ class StratisOAuth2Provider {
     })
 
     const rsp = (
-      await superagent
-        .post(token_revoke_url.href)
-        .set('Content-Type', 'application/x-www-form-urlencoded')
-        .timeout(this.request_timeout)
-        .send()
+      await this.configure_request(
+        superagent.post(token_revoke_url.href)
+      ).send()
     ).body
 
     return rsp
@@ -402,7 +428,10 @@ class StratisOAuth2Provider {
             ? Infinity
             : milliseconds_utc_since_epoc() - params.timestamp
 
-        if (elapsed_since_last_check > this.recheck_interval) {
+        if (
+          elapsed_since_last_check > this.recheck_interval ||
+          params.is_access_granted
+        ) {
           // need to validate checks or redirect to login, depends
           // on the configuration.
           let token_info = await this.get_token_info(
@@ -416,6 +445,8 @@ class StratisOAuth2Provider {
 
           if (params.access_token == null) return redirect_to_login()
         }
+
+        if (params.is_access_granted === false) return redirect_to_login()
       } catch (err) {
         return this.handle_errors(err, res)
       }
