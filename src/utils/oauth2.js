@@ -61,7 +61,7 @@ const {
  * @property {(req:Request)=>{}} state_generator The oauth state generator.
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
- * @property {console|{}} logger The internal logger.
+ * @property {console} logger The internal logger.
  * @property {string|[string]} username_from_token_info_path The path to the username to parse out of the user info.
  * @property {string} request_user_object_key The req[key] to save the user information. defaults to user.
  * @property {[{token_info_path:string, regexp:string}|(info:{})=>boolean}]} access_validators A list of valid access validators.
