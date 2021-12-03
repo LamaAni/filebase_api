@@ -39,6 +39,7 @@ const {
  * @property {number} authenticated The timestamp of creation (ms since epoc, utc)
  * @property {string} username
  * @property {boolean} is_access_granted
+ * @property {boolean} is_barer_token If true, the token origin is a barer token.
  * @property {{}} token_info
  */
 
@@ -206,7 +207,10 @@ class StratisOAuth2Provider {
     this._token_cache_bank = new CacheDictionary({
       cleaning_interval: recheck_interval,
       reset_cache_timestamp_on_get: true,
-      interval: recheck_interval * 2,
+      interval:
+        expires_in != null && expires_in > recheck_interval
+          ? expires_in
+          : recheck_interval * 2,
     })
   }
 
@@ -306,14 +310,14 @@ class StratisOAuth2Provider {
 
       if (access_token == null) return null
 
-      return (
-        this.token_cache_bank.get(access_token) || /**
-         * @type {OAuthSessionParams}
-         */
-        {
-          access_token: access_token,
-        }
-      )
+      const params = this.token_cache_bank.get(access_token) || /**
+       * @type {OAuthSessionParams}
+       */
+      {
+        access_token: access_token,
+      }
+
+      return params
     }
   }
 
@@ -482,9 +486,6 @@ class StratisOAuth2Provider {
             this.expires_in != null &&
             elapsed_since_authenticated > this.expires_in
           ) {
-            this.logger.info(
-              `Session expired for user ${params.username}. Revoking token. (TID: ${params.token_ident})`
-            )
             return res.redirect(
               `${auth_redirect_path}?revoke=true&&redirect_to=${encodeURIComponent(
                 req.originalUrl
@@ -602,11 +603,6 @@ class StratisOAuth2Provider {
         const is_authentication_response = query.code != null
 
         if (is_revoke) {
-          this.logger.info(
-            `Session expired for user ${
-              session_params.username
-            } (Token ending:${session_params.access_token | ''})`
-          )
           if (session_params.access_token != null)
             await this.revoke(session_params.access_token, 'access_token')
 
