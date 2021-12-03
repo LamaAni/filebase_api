@@ -130,7 +130,7 @@ class StratisCli {
     /** @type {CliArgument} */
     this.__$session_options = {
       type: 'named',
-      environmentVariable: 'IFR_SESSION_OPTIONS',
+      environmentVariable: 'STRATIS_SESSION_OPTIONS',
       default: this.session_options,
       description:
         'The session options (https://www.npmjs.com/package/cookie-session) as json.',
@@ -352,7 +352,7 @@ class StratisCli {
     /** @type {CliArgument} */
     this.__$oauth2_config = {
       type: 'named',
-      environmentVariable: 'IFR_OAUTH2_CONFIG',
+      environmentVariable: 'STRATIS_OAUTH2_CONFIG',
       default: this.oauth2_config,
       description: 'Configuration (json) for oauth2. See README for more.',
     }
@@ -362,7 +362,7 @@ class StratisCli {
     /** @type {CliArgument} */
     this.__$oauth2_config_path = {
       type: 'named',
-      environmentVariable: 'IFR_OAUTH2_CONFIG_PATH',
+      environmentVariable: 'STRATIS_OAUTH2_CONFIG_PATH',
       default: this.oauth2_config_path,
       description:
         'Configuration file path (json) for oauth2. See README for more.',
