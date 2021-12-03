@@ -10,11 +10,13 @@ const cookie_session = require('cookie-session')
 const { Request, Response, NextFunction } = require('express/index')
 const { Cli, CliArgument } = require('@lamaani/infer')
 
+const { StratisOAuth2Provider } = require('./utils/oauth2')
 const { Stratis } = require('./webserver/stratis.js')
 const { assert, get_express_request_url } = require('./common')
 
 /**
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
+ * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
  */
 
 /**
@@ -340,6 +342,27 @@ class StratisCli {
       description: 'If true, denies localhost connections to use http.',
     }
 
+    /** Configuration (json) for oauth2. See configuration. See README for more. */
+    this.oauth2_config = null
+    /** @type {CliArgument} */
+    this.__$oauth2_config = {
+      type: 'named',
+      environmentVariable: 'IFR_OAUTH2_CONFIG',
+      default: this.oauth2_config,
+      description: 'Configuration (json) for oauth2. See README for more.',
+    }
+
+    /** Configuration file path (json) for oauth2. See README for more. */
+    this.oauth2_config_path = null
+    /** @type {CliArgument} */
+    this.__$oauth2_config_path = {
+      type: 'named',
+      environmentVariable: 'IFR_OAUTH2_CONFIG_PATH',
+      default: this.oauth2_config_path,
+      description:
+        'Configuration file path (json) for oauth2. See README for more.',
+    }
+
     this._api = null
     this._app = express()
   }
@@ -448,6 +471,36 @@ class StratisCli {
 
       init_stratis(this.api, this.app, cli)
     }
+  }
+
+  async _get_oauth2_provider() {
+    const has_oauth2 =
+      this.oauth2_config != null || this.oauth2_config_path != null
+
+    if (!has_oauth2) return null
+
+    let oauth2_merge_config = []
+    try {
+      if (this.oauth2_config_path != null) {
+        assert(
+          fs.existsSync(this.oauth2_config_path),
+          'OAuth2 config file not found @ ' + this.oauth2_config_path
+        )
+
+        oauth2_merge_config.push(
+          JSON.parse(await fs.readFile(this.oauth2_config_path, 'utf-8'))
+        )
+      }
+
+      if (this.oauth2_config != null)
+        oauth2_merge_config.push(JSON.parse(this.oauth2_config))
+    } catch (err) {
+      throw new Error('Could not parse oauth2_config', err)
+    }
+
+    /** @type {StratisOAuth2ProviderOptions} */
+    const options = Object.assign({}, ...oauth2_merge_config)
+    return new StratisOAuth2Provider(options)
   }
 
   /**
@@ -565,6 +618,21 @@ class StratisCli {
             cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
             next()
           })
+
+        if (options.security_filter == null) {
+          const security_provider = await this._get_oauth2_provider()
+          if (security_provider != null) {
+            // set the login path
+            this.app.use(
+              security_provider.basepath,
+              security_provider.login_middleware()
+            )
+
+            options.security_filter = security_provider.auth_middleware(
+              security_provider.basepath
+            )
+          }
+        }
 
         this.api.__server_internal_command(
           Object.assign(

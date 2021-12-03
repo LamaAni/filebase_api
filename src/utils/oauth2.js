@@ -49,6 +49,7 @@ const {
  * @property {string|URL} token_info_url The token info url, returning the state of the token.
  * @property {string|URL} user_info_url The user info url, returning the user information. If null, no user info added.
  * @property {string|URL} revoke_url The revoke url, revoking the current token. If null operation not permitted.
+ * @property {stirng} basepath The path to use for the apply command (serves the oauth2 login and redirect)
  * @property {string} authorize_path The path for authorization, overrides authorize_url path
  * @property {string} revoke_path The path for revoke, overrides token_url path
  * @property {string} token_path The path for a token, overrides token_url path
@@ -79,6 +80,7 @@ class StratisOAuth2Provider {
     user_info_url = null,
     revoke_url = null,
     redirect_url = null,
+    basepath = '/oauth2',
     body_format = 'form',
     authorization_method = 'header',
     scope = [],
@@ -142,6 +144,7 @@ class StratisOAuth2Provider {
     this.revoke_url = revoke_url == null ? null : new URL(revoke_url)
     this.redirect_url = redirect_url == null ? null : new URL(redirect_url)
 
+    this.basepath = basepath
     this.body_format = body_format
     this.authorization_method = authorization_method
     this.response_type = response_type
@@ -432,7 +435,9 @@ class StratisOAuth2Provider {
    * @param {string} auth_redirect_path The authentication path to redirect to.
    * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
    */
-  auth_middleware(auth_redirect_path) {
+  auth_middleware(auth_redirect_path = null) {
+    auth_redirect_path = auth_redirect_path || this.basepath
+
     /**
      * @param {Request} req
      * @param {Response} res
@@ -608,9 +613,10 @@ class StratisOAuth2Provider {
   /**
    * Apply the security authenticator to the express app.
    * @param {import('express').Express} app
-   * @param {string} path The oauth serve path (must start with /)
+   * @param {string} path The oauth serve path (must start with /), defaults to this.basepath
    */
-  apply(app, path = '/oauth2') {
+  apply(app, path = null) {
+    path = path || this.basepath
     app.all(path, this.login_middleware())
     app.use(this.auth_middleware(path))
   }
@@ -618,4 +624,6 @@ class StratisOAuth2Provider {
 
 module.exports = {
   StratisOAuth2Provider,
+  /** @type {StratisOAuth2ProviderOptions} */
+  StratisOAuth2ProviderOptions: {},
 }
