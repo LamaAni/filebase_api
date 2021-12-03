@@ -11,6 +11,10 @@
     <div>
       <%- JSON.stringify(a_value) %><br />
       <%- await print_something() %>
+      <br />
+      <a href="/oauth2?revoke=true&&redirect_to=/"
+        >Revoke oauth2 token (internal oauth test)</a
+      >
     </div>
   </body>
 </html>
