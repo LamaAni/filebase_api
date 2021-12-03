@@ -77,7 +77,7 @@ class StratisOAuth2Provider {
     client_secret,
     token_url,
     authorize_url,
-    token_info_url,
+    token_info_url = null,
     user_info_url = null,
     revoke_url = null,
     redirect_url = null,
@@ -129,19 +129,20 @@ class StratisOAuth2Provider {
         )
     }
 
-    validate_urls({ token_url, authorize_url, token_info_url }, false)
-    validate_urls({ redirect_url, user_info_url, revoke_url })
+    validate_urls({ token_url, authorize_url }, false)
+    validate_urls({ redirect_url, user_info_url, revoke_url, token_info_url })
+
+    let as_url = (v) => (v == null ? null : new URL(v))
 
     this.client_id = client_id
     this.client_secret = client_secret
 
-    this.token_url = token_url == null ? null : new URL(token_url)
-    this.authorize_url = authorize_url == null ? null : new URL(authorize_url)
-    this.token_info_url =
-      token_info_url == null ? null : new URL(token_info_url)
-    this.user_info_url = user_info_url == null ? null : new URL(user_info_url)
-    this.revoke_url = revoke_url == null ? null : new URL(revoke_url)
-    this.redirect_url = redirect_url == null ? null : new URL(redirect_url)
+    this.token_url = as_url(token_url)
+    this.authorize_url = as_url(authorize_url)
+    this.token_info_url = as_url(token_info_url)
+    this.user_info_url = as_url(user_info_url)
+    this.revoke_url = as_url(revoke_url)
+    this.redirect_url = as_url(redirect_url)
 
     this.basepath = basepath
     this.body_format = body_format
@@ -166,20 +167,27 @@ class StratisOAuth2Provider {
     /**
      * @type {[(token_info)=>boolean}]}
      */
-    this.access_validators = access_validators.map((av) => {
-      if (typeof av == 'function') return av
-      assert(
-        typeof av.regexp == 'string' && typeof av.token_info_path == 'string',
-        'access validations must be either a function or an object {token_info_path:string, regex:string}'
-      )
-      const regex = new RegExp(av.regexp)
-      return (token_info) => {
-        let val = value_from_object_path(token_info, av.token_info_path)
-        if (val == null) return false
-        val = typeof val == 'object' ? JSON.stringify(val) : val + ''
-        return regex.test(val)
-      }
-    })
+    this.access_validators = access_validators
+      .map((av) => {
+        if (typeof av == 'function') return av
+        assert(
+          typeof av.regexp == 'string' && typeof av.token_info_path == 'string',
+          'access validations must be either a function or an object {token_info_path:string, regex:string}'
+        )
+        const regex = new RegExp(av.regexp)
+        return (token_info) => {
+          let val = value_from_object_path(token_info, av.token_info_path)
+          if (val == null) return false
+          val = typeof val == 'object' ? JSON.stringify(val) : val + ''
+          return regex.test(val)
+        }
+      })
+      .filter((av) => av != null)
+
+    assert(
+      this.access_validators.length == 0 || this.token_info_url != null,
+      'If access validators are provided you must provide a token info url.'
+    )
 
     this._token_cache_bank = new CacheDictionary({
       cleaning_interval: recheck_interval,
@@ -446,30 +454,41 @@ class StratisOAuth2Provider {
               : milliseconds_utc_since_epoc() - params.timestamp
 
           if (
-            params.token_info == null ||
+            (params.token_info == null && this.token_info_url != null) ||
             elapsed_since_last_check > this.recheck_interval ||
             params.is_access_granted == null
           ) {
-            // need to validate checks or redirect to login, depends
-            // on the configuration.
-            params.token_info = await this.get_token_info(
-              params.access_token,
-              'access_token'
-            )
+            if (this.token_info_url != null) {
+              // need to validate checks or redirect to login, depends
+              // on the configuration.
+              params.token_info = await this.get_token_info(
+                params.access_token,
+                'access_token'
+              )
 
-            // checking access
-            if (params.token_info.active != true) {
-              params.access_token = null
-              params.is_access_granted = false
-            } else
-              params.is_access_granted =
-                this.access_validators.length > 0
-                  ? this.access_validators.every((av) => av(params.token_info))
-                  : true
+              // checking access
+              if (params.token_info.active != true) {
+                params.access_token = null
+                params.is_access_granted = false
+              } else
+                params.is_access_granted =
+                  this.access_validators.length > 0
+                    ? this.access_validators.every((av) =>
+                        av(params.token_info)
+                      )
+                    : true
 
-            params.username = this.username_from_token_info_path
-              .map((p) => value_from_object_path(params.token_info, p))
-              .filter((v) => v != null)[0]
+              params.username = this.username_from_token_info_path
+                .map((p) => value_from_object_path(params.token_info, p))
+                .filter((v) => v != null)[0]
+            } else {
+              assert(
+                this.access_validators.length == 0,
+                'Access validators were provided but token_info_url (introspect) is null'
+              )
+              params.username = 'Anon'
+              params.is_access_granted = true
+            }
 
             // update timestamp and access token.
             this.write_oauth_session_params(req, res, params)
@@ -490,7 +509,6 @@ class StratisOAuth2Provider {
 
         // setting the session params variable for the request
         req[this.request_user_object_key] = {
-          id: params.token_info.sub,
           username: params.username,
           token_info: params.token_info,
         }
