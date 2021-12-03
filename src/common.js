@@ -1,5 +1,12 @@
 const fs = require('fs')
 
+async function sleep(ms) {
+  assert(typeof ms == 'number')
+  await new Promise((resolve) => {
+    setTimeout(() => resolve(), Math.round(ms))
+  })
+}
+
 function assert(condition, ...data) {
   if (condition != true)
     throw data.length == 1 && data[0] instanceof Error
@@ -146,6 +153,7 @@ module.exports = {
    * @param  {...any} data The data or errors to throw.
    */
   assert,
+  sleep,
   assert_non_empty_string,
   is_non_empty_string,
   is_valid_url,

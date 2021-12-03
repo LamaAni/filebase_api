@@ -56,9 +56,6 @@ const {
  * filepath request is private.
  * @property {boolean} next_on_not_found Call the next express handler if the current
  * filepath request is not found.
- * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
- * NOTE! To be used for debug, may expose sensitive information.
- * @property {boolean} log_errors If true, prints the application errors to the logger.
  * @property {boolean} ignore_empty_path If true, next handler on empty path.
  */
 
@@ -74,6 +71,9 @@ const {
  * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
  * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
  * @property {integer} timeout The client side request timeout [ms]
+ * @property {boolean} log_errors If true, prints the application errors to the logger.
+ * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
+ * NOTE! To be used for debug, may expose sensitive information.
  * @property {StratisClientSideApiOptions} client_api_options client api options.
  * @property {StratisPageCallContext} page_call_context_constructor A page call context constructor
  */
@@ -102,6 +102,8 @@ class Stratis extends events.EventEmitter {
     template_bank_options = {},
     client_api_options = STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
     ejs_options = STRATIS_DEFAULT_EJS_OPTIONS,
+    log_errors = true,
+    return_errors_to_client = false,
     codefile_extension = '.code.js',
     logger = console,
     timeout = 1000 * 60,
@@ -121,6 +123,8 @@ class Stratis extends events.EventEmitter {
     this.page_file_ext = page_file_ext
     this.common_api = common_api
     this.logger = logger || console
+    this.log_errors = log_errors
+    this.return_errors_to_client = return_errors_to_client
     this.ejs_options = Object.assign(
       {},
       STRATIS_DEFAULT_EJS_OPTIONS,
@@ -318,6 +322,39 @@ class Stratis extends events.EventEmitter {
   }
 
   /**
+   * Handle errors with stratis.
+   * @param {Error} err The error
+   * @param {Request} req The express request
+   * @param {Response} res The express response
+   * @param {NextFunction} next The express next function
+   * @param {StratisRequest} stratis_request If internal.
+   */
+  async handle_errors(err, req, res, next, stratis_request = null) {
+    stratis_request = stratis_request || {}
+
+    // returning the application error
+    this.emit('error', err, req, stratis_request)
+    res.status(
+      err instanceof StratisError ? err.http_response_code || 500 : 500
+    )
+
+    if (
+      stratis_request.log_errors == null
+        ? this.log_errors
+        : stratis_request.log_errors
+    )
+      this.logger.error(err.stack || `${err}`)
+
+    if (
+      stratis_request.return_errors_to_client == null
+        ? this.return_errors_to_client
+        : stratis_request.return_errors_to_client
+    )
+      res.end(`${err}`)
+    else next(err)
+  }
+
+  /**
    * Creates an express middleware that serves requests.
    * @param {StratisMiddlewareOptions} options
    */
@@ -327,8 +364,6 @@ class Stratis extends events.EventEmitter {
     security_filter = null,
     next_on_private = false,
     next_on_not_found = true,
-    return_errors_to_client = true,
-    log_errors = true,
     ignore_empty_path = true,
   } = {}) {
     assert(serve_path != null, 'Serve path must be defined!')
@@ -364,8 +399,8 @@ class Stratis extends events.EventEmitter {
         stratis: this,
         request: req,
         access_mode: default_access_mode,
-        return_errors_to_client: return_errors_to_client,
-        log_errors: log_errors,
+        return_errors_to_client: this.return_errors_to_client,
+        log_errors: this.log_errors,
       })
 
       // check filtering.
@@ -401,12 +436,31 @@ class Stratis extends events.EventEmitter {
           security_filter != null &&
           stratis_request.access_mode == 'secure'
         ) {
-          if (!security_filter(req, res, next)) {
+          // security filter runs internally so next would mean continue
+          let sf_next_error = null
+          const sf_next = (...args) => {
+            if (args[0] instanceof Error) sf_next_error = args[0]
+          }
+
+          const security_filter_result = await security_filter(
+            req,
+            res,
+            sf_next
+          )
+
+          // checking for errors.
+          if (sf_next_error != null) throw sf_next_error
+
+          // checking result.
+          if (security_filter_result === false) {
             throw new StratisNotAuthorizedError(
               `Cannot access or find ${stratis_request.query_path}`
             )
           }
         }
+
+        // res has ended. No need to continue.
+        if (res.writableEnded) return
 
         if (!stratis_request.is_page)
           // file download.
@@ -423,12 +477,7 @@ class Stratis extends events.EventEmitter {
           new StratisTimeOutError('timed out processing request')
         )
       } catch (err) {
-        // returning the application error
-        this.emit('error', err, stratis_request)
-        res.status(err instanceof StratisError ? err.http_response_code : 500)
-
-        if (stratis_request.return_errors_to_client) res.end(`${err}`)
-        else next(err)
+        await this.handle_errors(err, req, res, next, stratis_request)
       } finally {
         delete req.stratis_request
         delete req.stratis

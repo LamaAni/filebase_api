@@ -1,6 +1,7 @@
 const ProxyAgent = require('proxy-agent')
 const superagent = require('superagent')
 const { CacheDictionary } = require('../webserver/collections')
+const { StratisNotAuthorizedError } = require('../webserver/errors')
 const {
   assert,
   assert_non_empty_string,
@@ -9,6 +10,7 @@ const {
   get_express_request_url,
   milliseconds_utc_since_epoc,
   value_from_object_path,
+  sleep,
 } = require('../common')
 
 /**
@@ -58,7 +60,6 @@ const {
  * @property {"header" | "body"} authorization_method
  * @property {[string]} scope the scope to use.
  * @property {string} session_key The session key to use when recording the oauth token
- * @property {boolean} return_errors_to_client If true, write the error value to the client response.
  * @property {(req:Request)=>{}} state_generator The oauth state generator.
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
@@ -85,9 +86,8 @@ class StratisOAuth2Provider {
     authorization_method = 'header',
     scope = [],
     session_key = 'stratis:oauth2:token',
-    return_errors_to_client = true,
     response_type = 'code',
-    recheck_interval = 1000 * 10,
+    recheck_interval = 1000 * 60,
     request_timeout = 1000 * 10,
     logger = console,
     access_validators = [],
@@ -134,7 +134,6 @@ class StratisOAuth2Provider {
 
     this.client_id = client_id
     this.client_secret = client_secret
-    this.return_errors_to_client = return_errors_to_client == true
 
     this.token_url = token_url == null ? null : new URL(token_url)
     this.authorize_url = authorize_url == null ? null : new URL(authorize_url)
@@ -336,22 +335,6 @@ class StratisOAuth2Provider {
     })
   }
 
-  /**
-   * @param {Error} err The error
-   * @param {Response} res The express response
-   */
-  handle_errors(err, res) {
-    res.status(500)
-    this.logger.error(err)
-    return res.end(
-      this.return_errors_to_client
-        ? `${err.stack || err}${
-            err.response == null ? '' : '\n' + err.response.text
-          }`
-        : null
-    )
-  }
-
   async get_token(code, redirect_uri) {
     const token_url = this.compose_url(this.token_url, {
       client_id: this.client_id,
@@ -463,18 +446,19 @@ class StratisOAuth2Provider {
               : milliseconds_utc_since_epoc() - params.timestamp
 
           if (
+            params.token_info == null ||
             elapsed_since_last_check > this.recheck_interval ||
             params.is_access_granted == null
           ) {
             // need to validate checks or redirect to login, depends
             // on the configuration.
-            let token_info = await this.get_token_info(
+            params.token_info = await this.get_token_info(
               params.access_token,
               'access_token'
             )
 
             // checking access
-            if (token_info.active != true) {
+            if (params.token_info.active != true) {
               params.access_token = null
               params.is_access_granted = false
             } else
@@ -489,11 +473,20 @@ class StratisOAuth2Provider {
 
             // update timestamp and access token.
             this.write_oauth_session_params(req, res, params)
+
+            this.logger.info(
+              `Authentication info updated for ${params.username}. (Access ${
+                params.is_access_granted ? 'GRANTED' : 'DENIED'
+              })`
+            )
           }
         }
 
-        if (params.access_token == null) return redirect_to_login()
-        if (params.is_access_granted === false) return res.sendStatus(403)
+        if (params == null || params.access_token == null)
+          return redirect_to_login()
+
+        if (params.is_access_granted === false)
+          throw new StratisNotAuthorizedError()
 
         // setting the session params variable for the request
         req[this.request_user_object_key] = {
@@ -502,7 +495,7 @@ class StratisOAuth2Provider {
           token_info: params.token_info,
         }
       } catch (err) {
-        return this.handle_errors(err, res)
+        return next(err)
       }
 
       return next()
@@ -565,15 +558,11 @@ class StratisOAuth2Provider {
           )
 
           const token = await this.get_token(req.query.code, oauth_redirect_uri)
-          const token_info = await this.get_token_info(
-            token.access_token,
-            'access_token'
-          )
 
           this.write_oauth_session_params(
             req,
             res,
-            Object.assign({}, oauth_session_params, { token_info }, token)
+            Object.assign({}, oauth_session_params, token)
           )
 
           return res.redirect(oauth_session_params.state.origin)
@@ -598,12 +587,14 @@ class StratisOAuth2Provider {
             session_params.state
           )
 
+          this.logger.debug(`Auth redirect when requesting origin: ${origin}`)
+
           return res.redirect(authorize_url)
         } else {
           throw new Error('unknown auth request: ' + request_url.href)
         }
       } catch (err) {
-        return this.handle_errors(err, res)
+        return next(err)
       }
     }
 

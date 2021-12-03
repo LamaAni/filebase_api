@@ -39,6 +39,11 @@ app.use((req, res, next) => {
   res.sendFile(path.join(__dirname, 'oauth2.test.html'))
 })
 
+app.use((err, req, res, next) => {
+  console.error(err)
+  res.status(500).send(JSON.stringify(err))
+})
+
 app.listen(8080, () => {
   console.log('listening on port 8080')
 })

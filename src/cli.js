@@ -110,7 +110,8 @@ class StratisCli {
     }
 
     /** The stratis session encryption key. Defaults to the  If not provided then the session will not be encrypted. */
-    this.session_key = null
+    this.session_key =
+      'STRATIS_RANDOM_SESSION_KEY:' + Math.floor(Math.random() * 100000)
     /** @type {CliArgument} */
     this.__$session_key = {
       type: 'named',
@@ -118,6 +119,10 @@ class StratisCli {
       default: this.session_key,
       description:
         'The stratis session encryption key. If not provided then the session will not be encrypted.',
+      parse: (val) => {
+        if (val.trim().length == 0) return null
+        return val
+      },
     }
 
     /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
@@ -473,7 +478,7 @@ class StratisCli {
     }
   }
 
-  async _get_oauth2_provider() {
+  async _get_oauth2_provider(logger) {
     const has_oauth2 =
       this.oauth2_config != null || this.oauth2_config_path != null
 
@@ -493,13 +498,21 @@ class StratisCli {
       }
 
       if (this.oauth2_config != null)
-        oauth2_merge_config.push(JSON.parse(this.oauth2_config))
+        oauth2_merge_config.push(
+          typeof this.oauth2_config == 'string'
+            ? JSON.parse(this.oauth2_config)
+            : this.oauth2_config
+        )
     } catch (err) {
       throw new Error('Could not parse oauth2_config', err)
     }
 
     /** @type {StratisOAuth2ProviderOptions} */
     const options = Object.assign({}, ...oauth2_merge_config)
+    options.logger =
+      typeof options.logger == 'object' && options.logger.info != null
+        ? options.logger
+        : logger || console
     return new StratisOAuth2Provider(options)
   }
 
@@ -565,7 +578,7 @@ class StratisCli {
       let run_session_options = {
         secure: this.enable_https,
         signed: this.session_key != null,
-        keys: this.session_key,
+        keys: this.session_key == null ? null : [this.session_key],
       }
 
       run_session_options = Object.assign(
@@ -600,7 +613,11 @@ class StratisCli {
     }
 
     let stratis_init_called = false
+    this.api.return_errors_to_client = this.show_app_errors
+    this.api.logger = cli.logger
     this.api.__server_internal_command = this.api.server
+
+    const security_provider = await this._get_oauth2_provider(cli.logger)
 
     this.api.server =
       /**
@@ -619,26 +636,22 @@ class StratisCli {
             next()
           })
 
-        if (options.security_filter == null) {
-          const security_provider = await this._get_oauth2_provider()
-          if (security_provider != null) {
-            // set the login path
-            this.app.use(
-              security_provider.basepath,
-              security_provider.login_middleware()
-            )
+        if (options.security_filter == null && security_provider != null) {
+          // set the login path
+          this.app.use(
+            security_provider.basepath,
+            security_provider.login_middleware()
+          )
 
-            options.security_filter = security_provider.auth_middleware(
-              security_provider.basepath
-            )
-          }
+          options.security_filter = security_provider.auth_middleware(
+            security_provider.basepath
+          )
         }
 
         this.api.__server_internal_command(
           Object.assign(
             {
               serve_path: this.serve_path,
-              return_errors_to_client: this.show_app_errors,
               log_errors: true,
               next_on_private: false,
               next_on_not_found: true,
@@ -657,6 +670,13 @@ class StratisCli {
             } to ${this.default_redirect}`
           )
         }
+
+        this.app.use((err, req, res, next) =>
+          this.api.handle_errors(err, req, res, (err) => {
+            // error ignored. since we are at the end of the service.
+            next()
+          })
+        )
 
         cli.logger.info('Initialized stratis service middleware and routes')
       }
