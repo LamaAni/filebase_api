@@ -691,15 +691,15 @@ class StratisCli {
   }
 }
 
-function create_cli() {
-  const api_cli = new StratisCli()
+function create_statis_cli() {
+  const stratis_cli_config = new StratisCli()
   const cli = new Cli({ name: 'stratis' })
 
   cli.default(
     async (args) => {
-      await api_cli.run(cli)
+      await stratis_cli_config.run(cli)
     },
-    api_cli,
+    stratis_cli_config,
     {
       description:
         "A simple web template engine for fast api's and websites. " +
@@ -708,24 +708,27 @@ function create_cli() {
     }
   )
 
-  return cli
+  return {
+    cli,
+    stratis_cli_config,
+  }
 }
 
 module.exports = {
-  create_cli,
+  create_statis_cli,
   StratisCli,
 }
 
 if (require.main == module) {
-  create_cli()
-    .parse()
-    .catch((err) => {
-      try {
-        console.error(err)
-        cli.logger.error(err.message)
-      } catch (err) {
-      } finally {
-        process.exit(1)
-      }
-    })
+  const { cli } = create_statis_cli()
+
+  cli.parse().catch((err) => {
+    try {
+      console.error(err)
+      cli.logger.error(err.message)
+    } catch (err) {
+    } finally {
+      process.exit(1)
+    }
+  })
 }

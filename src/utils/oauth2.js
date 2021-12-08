@@ -552,11 +552,16 @@ class StratisOAuth2Provider {
         if (params.is_access_granted === false)
           throw new StratisNotAuthorizedError()
 
-        // setting the session params variable for the request
-        req[this.request_user_object_key] = {
-          username: params.username,
+        // updating the user object.
+        let user_object = req[this.request_user_object_key] || {}
+        if (typeof user_object != 'object') user_object = {}
+        user_object = Object.assign(user_object, {
+          username: user_object.username || params.username,
+          access_token: params.access_token,
           token_info: params.token_info,
-        }
+        })
+
+        req[this.request_user_object_key] = user_object
       } catch (err) {
         return next(err)
       }
