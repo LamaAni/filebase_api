@@ -301,7 +301,8 @@ class StratisOAuth2Provider {
       }
     }
 
-    if ('authorization' in req.headers) {
+    if ('authorization' in req.headers && this.token_introspect_url != null) {
+      // barer tokens are not allowed when not having introspect urls.
       // checking token in headers.
       let access_token = req.headers['authorization']
       if (access_token.toLowerCase().startsWith('bearer '))
