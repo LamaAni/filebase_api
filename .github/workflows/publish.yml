@@ -5,7 +5,7 @@ name: Build and Run
 on:
   push:
     branches:
-      - '*'
+      - "*"
   release:
     types:
       - prereleased
@@ -24,6 +24,10 @@ jobs:
       - name: "checkout the code"
         uses: actions/checkout@v2
 
+      - name: "Read commit args"
+        id: args
+        uses: LamaAni/parse-commit-args-action@master
+
       - name: "setup nodejs"
         uses: actions/setup-node@v2
         with:
@@ -32,6 +36,7 @@ jobs:
           scope: "@lamaani"
 
       - name: "Publish version to github"
+        if: ${{ steps.args.outputs.is_release=='true' }}
         run: |
           echo "Publishing version ${{steps.args.outputs.version}}" &&
           git config --global user.email "actions@no-a-server.com" &&
