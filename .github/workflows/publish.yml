@@ -15,19 +15,19 @@ jobs:
     name: "(RE) Publish to github as npm package"
     runs-on: ubuntu-latest
     steps:
-      - name: "Read commit args"
-        id: args
-        uses: LamaAni/parse-commit-args-action@master
-
-      - name: "checkout the code"
-        uses: actions/checkout@v2
-
       - name: "setup nodejs"
         uses: actions/setup-node@v2
         with:
           node-version: "16.x"
           registry-url: "https://npm.pkg.github.com"
           scope: "@lamaani"
+
+      - name: "checkout the code"
+        uses: actions/checkout@v2
+
+      - name: "Read commit args"
+        id: args
+        uses: LamaAni/parse-commit-args-action@master
 
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' }}
