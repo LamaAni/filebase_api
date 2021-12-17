@@ -26,11 +26,15 @@
     "kubernetes"
   ],
   "pkg": {
-    "scripts": "src/cli.js",
+    "assets": [
+      "node_modules/vm2/**/*",
+      "src/**/*",
+      "src/webserver/**/*"
+    ],
     "targets": [
-      "latest-linux",
-      "latest-darwin",
-      "latest-win"
+      "node16-linux",
+      "node16-macos",
+      "node16-win"
     ],
     "outputPath": ".local/bin"
   },
