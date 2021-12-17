@@ -64,13 +64,14 @@ jobs:
         id: args
         uses: LamaAni/parse-commit-args-action@master
 
-      - name: Install pkg
+      - name: Install required packages
         run: |
-          npm install -g pkg
+          npm install pkg
+          npm install
 
       - name: Compile binaries
         run: |
-          pkg .
+          node_modules/.bin/pkg .
 
       - name: "Release: upload binary files"
         if: ${{ steps.args.outputs.is_release=='true' }}
