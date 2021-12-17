@@ -3,9 +3,9 @@
 
 name: Build and Run
 on:
-  # push:
-  #   branches:
-  #     - '*'
+  push:
+    branches:
+      - '*'
   release:
     types:
       - prereleased
