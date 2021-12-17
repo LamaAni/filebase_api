@@ -48,6 +48,10 @@ function get_express_request_url(req) {
 
 async function path_stat(path) {
   try {
+    if (path.startsWith('/snapshot') || path.startsWith('c:\\snapshot'))
+      // when using snapshot drive, the promise fails..
+      return fs.statSync(path)
+
     return await fs.promises.stat(path)
   } catch (err) {
     return null

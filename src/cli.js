@@ -14,8 +14,6 @@ const { StratisOAuth2Provider } = require('./utils/oauth2')
 const { Stratis } = require('./webserver/stratis.js')
 const { assert, get_express_request_url } = require('./common')
 
-require('./list.js')
-
 /**
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
  * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions

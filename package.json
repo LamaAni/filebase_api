@@ -33,6 +33,8 @@
     ],
     "targets": [
       "node16-linux",
+      "node16-alpine",
+      "node16-linuxstatic",
       "node16-macos",
       "node16-win"
     ],
@@ -54,5 +56,8 @@
   "bugs": {
     "url": "https://github.com/LamaAni/stratis/issues"
   },
-  "homepage": "https://github.com/LamaAni/stratis#readme"
+  "homepage": "https://github.com/LamaAni/stratis#readme",
+  "devDependencies": {
+    "@types/node": "^17.0.0"
+  }
 }

@@ -212,7 +212,7 @@ class StratisEJSTemplate {
     assert(
       stats != null,
       new StratisNotFoundError(
-        `Template file ${this.template_filepath} not found.`
+        `Template file ${this.template_filepath} not found`
       )
     )
 
