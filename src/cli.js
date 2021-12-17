@@ -4,12 +4,45 @@ const path = require('path')
 const http = require('http')
 const https = require('https')
 const express = require('express')
+const cookie_parser = require('cookie-parser')
+const cookie_session = require('cookie-session')
 
 const { Request, Response, NextFunction } = require('express/index')
 const { Cli, CliArgument } = require('@lamaani/infer')
 
+const { StratisOAuth2Provider } = require('./utils/oauth2')
 const { Stratis } = require('./webserver/stratis.js')
-const { assert } = require('./common')
+const { assert, get_express_request_url } = require('./common')
+
+/**
+ * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
+ * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
+ */
+
+/**
+ * @typedef {Object} StratisSessionOptions
+ * /**
+ * Create a new cookie session middleware.
+ * @typedef {object} CookieSessionOptions
+ * @property {string} name The session cookie name
+ * @property {[string]} keys The signature keys.
+ * @property {number} maxAge number representing the milliseconds from Date.now() for expiry
+ * @property {Date} expires Date indicating the cookie's expiration date (expires at the end of session by default).
+ * @property {string} path string indicating the path of the cookie (/ by default).
+ * @property {string} domain string indicating the domain of the cookie (no default).
+ * @property {boolean} secure boolean indicating whether the cookie is only to be sent over HTTPS (false by default for HTTP, true by default for HTTPS).
+ * @property {boolean} secureProxy boolean indicating whether the cookie is only to be sent over HTTPS (use this if you handle SSL not in your node process).
+ * @property {boolean} httpOnly boolean indicating whether the cookie is only to be sent over HTTP(S), and not made available to client JavaScript (true by default).
+ * @property {boolean} signed boolean indicating whether the cookie is to be signed (true by default).
+ * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
+ */
+
+/** @type {CookieSessionOptions} */
+const DEFAULT_COOKIE_SESSION_OPTIONS = {
+  name: 'stratis:session',
+  maxAge: 1000 * 60 * 60 * 12,
+  overwrite: true,
+}
 
 class StratisCli {
   /**
@@ -42,6 +75,71 @@ class StratisCli {
         let resolved = path.resolve(p)
         if (resolved == null) return p
         return resolved
+      },
+    }
+
+    /** If true, disables the internal cookie parser */
+    this.cookies_disable = false
+    /** @type {CliArgument} */
+    this.__$cookies_disable = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_COOKIES_DISABLE',
+      default: this.cookies_disable,
+      description: 'If true, disables the internal cookie parser',
+    }
+
+    /** The cookies encryption key to use. If not provided then the cookies are not encrypted. */
+    this.cookies_key = null
+    /** @type {CliArgument} */
+    this.__$cookies_key = {
+      type: 'named',
+      environmentVariable: 'STRATIS_COOKIES_KEY',
+      default: this.cookies_key,
+      description:
+        'The cookies encryption key to use. If not provided then the cookies are not encrypted.',
+    }
+
+    /** If exists, disables the stratis user session (cookies). */
+    this.session_disabled = false
+    /** @type {CliArgument} */
+    this.__$session_disabled = {
+      type: 'flag',
+      environmentVariable: 'STRATIS_SESSION_DISABLED',
+      default: this.session_disabled,
+      description: 'If exists, disables the stratis user session (cookies).',
+    }
+
+    /** The stratis session encryption key. Defaults to the  If not provided then the session will not be encrypted. */
+    this.session_key =
+      'STRATIS_RANDOM_SESSION_KEY:' + Math.floor(Math.random() * 100000)
+    /** @type {CliArgument} */
+    this.__$session_key = {
+      type: 'named',
+      environmentVariable: 'STRATIS_SESSION_KEY',
+      default: this.session_key,
+      description:
+        'The stratis session encryption key. If not provided then the session will not be encrypted.',
+      parse: (val) => {
+        if (val.trim().length == 0) return null
+        return val
+      },
+    }
+
+    /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
+    this.session_options = DEFAULT_COOKIE_SESSION_OPTIONS
+    /** @type {CliArgument} */
+    this.__$session_options = {
+      type: 'named',
+      environmentVariable: 'STRATIS_SESSION_OPTIONS',
+      default: this.session_options,
+      description:
+        'The session options (https://www.npmjs.com/package/cookie-session) as json.',
+      parse: (val) => {
+        return Object.assign(
+          {},
+          DEFAULT_COOKIE_SESSION_OPTIONS,
+          val == null ? {} : JSON.parse(val)
+        )
       },
     }
 
@@ -158,17 +256,6 @@ class StratisCli {
       description: 'The log level, DEBUG will show all requests',
     }
 
-    /** Enable cache for requests*/
-    this.cache = false
-
-    /** @type {CliArgument} Enable cache for requests*/
-    this.__$cache = {
-      type: 'flag',
-      default: this.cache,
-      environmentVariable: 'STRATIS_CACHE',
-      description: 'Enable cache for requests',
-    }
-
     /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.
      * Calling stratis.init_service() will register the stratis middleware */
     this.init_script_path = null
@@ -260,6 +347,27 @@ class StratisCli {
       description: 'If true, denies localhost connections to use http.',
     }
 
+    /** Configuration (json) for oauth2. See configuration. See README for more. */
+    this.oauth2_config = null
+    /** @type {CliArgument} */
+    this.__$oauth2_config = {
+      type: 'named',
+      environmentVariable: 'STRATIS_OAUTH2_CONFIG',
+      default: this.oauth2_config,
+      description: 'Configuration (json) for oauth2. See README for more.',
+    }
+
+    /** Configuration file path (json) for oauth2. See README for more. */
+    this.oauth2_config_path = null
+    /** @type {CliArgument} */
+    this.__$oauth2_config_path = {
+      type: 'named',
+      environmentVariable: 'STRATIS_OAUTH2_CONFIG_PATH',
+      default: this.oauth2_config_path,
+      description:
+        'Configuration file path (json) for oauth2. See README for more.',
+    }
+
     this._api = null
     this._app = express()
   }
@@ -340,12 +448,12 @@ class StratisCli {
    */
   async redirect_to_https(req, res, next) {
     // In case a port was provided. Otherwise we should get an https request.
-    const full_hostname = req
-      .get('host')
-      .replace(/[:][0-9]+$/, ':' + this.https_port)
+    const redirect_to = get_express_request_url(req)
+    redirect_to.protocol = 'https'
+    redirect_to.port = `${this.https_port}`
 
     // not https. redirect.
-    res.redirect('https://' + full_hostname + req.originalUrl)
+    return res.redirect(redirect_to.href)
   }
 
   /**
@@ -368,6 +476,44 @@ class StratisCli {
 
       init_stratis(this.api, this.app, cli)
     }
+  }
+
+  async _get_oauth2_provider(logger) {
+    const has_oauth2 =
+      this.oauth2_config != null || this.oauth2_config_path != null
+
+    if (!has_oauth2) return null
+
+    let oauth2_merge_config = []
+    try {
+      if (this.oauth2_config_path != null) {
+        assert(
+          fs.existsSync(this.oauth2_config_path),
+          'OAuth2 config file not found @ ' + this.oauth2_config_path
+        )
+
+        oauth2_merge_config.push(
+          JSON.parse(await fs.readFile(this.oauth2_config_path, 'utf-8'))
+        )
+      }
+
+      if (this.oauth2_config != null)
+        oauth2_merge_config.push(
+          typeof this.oauth2_config == 'string'
+            ? JSON.parse(this.oauth2_config)
+            : this.oauth2_config
+        )
+    } catch (err) {
+      throw new Error('Could not parse oauth2_config', err)
+    }
+
+    /** @type {StratisOAuth2ProviderOptions} */
+    const options = Object.assign({}, ...oauth2_merge_config)
+    options.logger =
+      typeof options.logger == 'object' && options.logger.info != null
+        ? options.logger
+        : logger || console
+    return new StratisOAuth2Provider(options)
   }
 
   /**
@@ -419,43 +565,125 @@ class StratisCli {
       })
     }
 
-    this.default_redirect =
-      this.default_redirect ||
-      fs.existsSync(path.join(this.serve_path, 'public'))
-        ? '/public/index.html'
-        : '/index.html'
+    if (!this.cookies_disable) {
+      this.app.use(
+        cookie_parser(this.cookies_key, {
+          decode: this.cookies_key != null,
+        })
+      )
+    }
+
+    if (!this.session_disabled) {
+      /** @type {CookieSessionOptions} */
+      let run_session_options = {
+        secure: this.enable_https,
+        signed: this.session_key != null,
+        keys: this.session_key == null ? null : [this.session_key],
+      }
+
+      run_session_options = Object.assign(
+        {},
+        run_session_options,
+        this.session_options
+      )
+
+      this.app.use(cookie_session(run_session_options))
+
+      if (this.session_key == null) {
+        cli.logger.warn(
+          'Session enabled but no session_key (encryption) was provided. Session state cookie is insecure!'
+        )
+      }
+    }
+
+    if (typeof this.default_redirect != 'string') {
+      const redirect_basepath = fs.existsSync(
+        path.join(this.serve_path, 'public')
+      )
+        ? 'public'
+        : ''
+      for (const fname of ['index.html', 'index.htm', 'api']) {
+        if (fs.existsSync(path.join(this.serve_path, redirect_basepath, fname)))
+          this.default_redirect = path.join(redirect_basepath, fname)
+      }
+    }
 
     const redirect = (req, res, next) => {
-      res.redirect(this.default_redirect)
+      return res.redirect(this.default_redirect)
     }
 
     let stratis_init_called = false
+    this.api.return_errors_to_client = this.show_app_errors
+    this.api.logger = cli.logger
+    this.api.__server_internal_command = this.api.server
 
-    this.api.init_service = () => {
-      stratis_init_called = true
+    const security_provider = await this._get_oauth2_provider(cli.logger)
 
-      if (this.ejs_add_require && this.api)
-        this.app.use((req, res, next) => {
-          cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
-          next()
-        })
+    this.api.server =
+      /**
+       * Override server command to allow cli intervention
+       * @param {StratisMiddlewareOptions} options
+       * @param {express.Express} app The express app to use, if null create one.
+       * @returns {express.Express} The express app to use. You can do express.listen
+       * to start the app.
+       */
+      (options = {}, app = null) => {
+        stratis_init_called = true
 
-      this.api.server(this.serve_path, this.app, {
-        return_errors_to_client: this.show_app_errors,
-        log_errors: true,
-        next_on_private: false,
-        next_on_not_found: true,
-      })
+        if (this.ejs_add_require && this.api)
+          this.app.use((req, res, next) => {
+            cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
+            next()
+          })
 
-      if (this.redirect_all_unknown) this.app.use(redirect)
-      else this.app.all('/', redirect)
+        if (options.security_filter == null && security_provider != null) {
+          // set the login path
+          this.app.use(
+            security_provider.basepath,
+            security_provider.login_middleware()
+          )
 
-      cli.logger.info('Initialized stratis service middleware and routes')
-    }
+          options.security_filter = security_provider.auth_middleware(
+            security_provider.basepath
+          )
+        }
 
-    await this.invoke_initialization_scripts(cli)
+        this.api.__server_internal_command(
+          Object.assign(
+            {
+              serve_path: this.serve_path,
+              log_errors: true,
+              next_on_private: false,
+              next_on_not_found: true,
+            },
+            options
+          ),
+          app || this.app
+        )
 
-    if (!stratis_init_called) this.api.init_service()
+        if (this.default_redirect != null) {
+          if (this.redirect_all_unknown) this.app.use(redirect)
+          else this.app.all('/', redirect)
+          cli.logger.info(
+            `Redirecting ${
+              this.redirect_all_unknown ? 'all missing paths (not found)' : '/'
+            } to ${this.default_redirect}`
+          )
+        }
+
+        this.app.use((err, req, res, next) =>
+          this.api.handle_errors(err, req, res, (err) => {
+            // error ignored. since we are at the end of the service.
+            next()
+          })
+        )
+
+        cli.logger.info('Initialized stratis service middleware and routes')
+      }
+
+    await this.invoke_initialization_scripts(cli.logger || console)
+
+    if (!stratis_init_called) this.api.server()
 
     this.api.init_service = null
 
@@ -463,24 +691,36 @@ class StratisCli {
   }
 }
 
-module.exports = {
-  StratisCli,
-}
-
-if (require.main == module) {
-  const api_cli = new StratisCli()
+function create_statis_cli() {
+  const stratis_cli_config = new StratisCli()
   const cli = new Cli({ name: 'stratis' })
 
   cli.default(
     async (args) => {
-      await api_cli.run(cli)
+      await stratis_cli_config.run(cli)
     },
-    api_cli,
+    stratis_cli_config,
     {
       description:
-        "A simple web template engine for fast api's and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
+        "A simple web template engine for fast api's and websites. " +
+        'Very low memory and cpu print that fits docker and kubernetes pods, ' +
+        'or can run parallel to your application.',
     }
   )
+
+  return {
+    cli,
+    stratis_cli_config,
+  }
+}
+
+module.exports = {
+  create_statis_cli,
+  StratisCli,
+}
+
+if (require.main == module) {
+  const { cli } = create_statis_cli()
 
   cli.parse().catch((err) => {
     try {

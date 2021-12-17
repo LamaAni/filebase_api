@@ -1,5 +1,13 @@
+/**
+ * @typedef {import('../../../src/index').StratisApiObject} StratisApiObject
+ */
 module.exports = {
-  async print_something({}, context) {
-    return `api called @ ${new Date()}`
+  /** @type {StratisApiObject} */
+  print_something: async (args, context) => {
+    return 'api call for something secure'
+  },
+  /** @type {StratisApiObject} */
+  a_value: {
+    some: 'secure api values',
   },
 }

@@ -8,9 +8,11 @@
     <title>Test website for stratis</title>
   </head>
   <body>
+    <div>Loaded at: <%- context.session['loaded'] || 'first load' %></div>
     <div>
       <%- JSON.stringify(a_value) %><br />
       <%- await print_something() %>
     </div>
   </body>
 </html>
+<% context.session['loaded']=new Date()+'' %>

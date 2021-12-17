@@ -2,7 +2,7 @@ const stream = require('stream')
 const path = require('path')
 const { StratisNotFoundError } = require('./errors.js')
 const { assert } = require('../common')
-const { split_stream_once, stream_to_buffer } = require('../streams.js')
+const { split_stream_once, stream_to_buffer } = require('../utils/streams.js')
 const { StratisEJSTemplateRenderContext } = require('./templates')
 
 /**
@@ -82,6 +82,22 @@ class StratisPageCallContext {
     return this.req.session
   }
 
+  set session(val) {
+    this.req.session = val
+  }
+
+  /** @type {Object<string,any>} */
+  get cookies() {
+    return this.req.cookies
+  }
+
+  /**
+   * @type {Object<string,any>}
+   */
+  set cookies(val) {
+    this.req.cookies = val
+  }
+
   get next() {
     return this._next
   }
@@ -128,7 +144,8 @@ class StratisPageCallContext {
    * Template method. Renders the file api script tag.
    */
   render_stratis_script_tag() {
-    return `<script lang="javascript" src='${this.stratis_request.query_path}/render_stratis_browser_api_script'></script>`
+    const request_filename = path.basename(this.stratis_request.query_path)
+    return `<script lang="javascript" src='${request_filename}/render_stratis_browser_api_script'></script>`
   }
 
   /**
@@ -137,7 +154,7 @@ class StratisPageCallContext {
   async render_stratis_browser_api_script() {
     /** @type {StratisRequestEnvironment} */
     return await this.stratis_request.stratis.template_bank.render(
-      this.stratis.client_api.api_code_path,
+      this.stratis.client_api_options.api_code_path,
       {
         code_module: await this.get_code_module_objects(),
         request: this.stratis_request,

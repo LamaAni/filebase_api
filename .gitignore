@@ -1,4 +1,5 @@
 # Env
+.env
 .local/
 .vscode/
 Pipefile.lock

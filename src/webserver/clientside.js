@@ -2,7 +2,7 @@ class StratisClient extends EventTarget {
   constructor() {
     super()
     this.protocol = window.location.protocol == 'https:' ? 'wss:' : 'ws:'
-    this.timeout = parseInt('<%- stratis.client_api.timeout %>') || 1000 * 60
+    this.timeout = parseInt('<%- stratis.client_api_options.timeout %>') || 1000 * 60
 
     /** @type {WebSocket} */
     this.websocket = null

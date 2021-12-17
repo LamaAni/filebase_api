@@ -1,11 +1,12 @@
 const { throws } = require('assert')
 const path = require('path')
 const { assert, path_stat, path_exists } = require('../common.js')
-const is_websocket_request = require('../websocket.js').is_websocket_request
+const is_websocket_request =
+  require('../utils/websocket.js').is_websocket_request
 
 /**
  * @typedef {import('fs').Stats} Stats
- * @typedef {import('./stratis.js').Stratis} Stratis
+ * @typedef {import('./stratis').Stratis} Stratis
  * @typedef {import('express/index').Request} Request
  */
 

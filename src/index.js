@@ -1,26 +1,31 @@
 const express = require('express')
-const {
-  Stratis,
-  StratisOptions,
-  StratisRequestInfo,
-  StratisCodeObject,
-  StratisRequestHandler,
-  as_stratis_method,
-  as_stratis_template_arg,
-} = require('./webserver/stratis')
+const { Stratis } = require('./webserver/stratis')
+const { JsonCompatible, StratisApiObject } = require('./webserver/interfaces')
+const { StratisPageCallContext } = require('./webserver/pages')
+const { StratisCli, create_statis_cli } = require('./cli')
+const websocket = require('./utils/websocket')
 
-const { StratisCli } = require('./cli')
+/**
+ * @typedef {import('@lamaani/infer').Cli} Cli
+ * @typedef {import('@lamaani/infer').Logger} CliLogger
+ */
 
-const websocket = require('./websocket')
+/**
+ * @typedef {import('./webserver/stratis').StratisOptions} StratisOptions
+ * @typedef {import('./webserver/stratis').StratisEJSOptions} StratisEJSOptions
+ * @typedef {import('./webserver/stratis').StratisMiddlewareOptions} StratisMiddlewareOptions
+ * @typedef {import('./webserver/stratis').StratisClientSideApiOptions} StratisClientSideApiOptions
+ * @typedef {import('./webserver/stratis').StratisCodeModuleBankOptions} StratisCodeModuleBankOptions
+ * @typedef {import('./webserver/stratis').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
+ * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
+ */
 
 module.exports = {
+  create_statis_cli,
   websocket,
+  JsonCompatible,
+  StratisApiObject,
   Stratis,
   StratisCli,
-  StratisOptions,
-  StratisRequestInfo,
-  StratisCodeObject,
-  StratisRequestHandler,
-  as_stratis_template_arg,
-  as_stratis_method,
+  StratisPageCallContext,
 }
