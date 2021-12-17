@@ -18,20 +18,14 @@ jobs:
       - name: "Read commit args"
         id: args
         uses: LamaAni/parse-commit-args-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "checkout the code"
         uses: actions/checkout@v2
 
-      - name: "Read commit args"
-        id: args
-        uses: LamaAni/parse-commit-args-action@master
-
       - name: "setup nodejs"
         uses: actions/setup-node@v2
         with:
-          node-version: "12.x"
+          node-version: "16.x"
           registry-url: "https://npm.pkg.github.com"
           scope: "@lamaani"
 
@@ -56,8 +50,12 @@ jobs:
     needs:
       - publish-to-github-as-npm
     steps:
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v2.1.5
+      - name: "setup nodejs"
+        uses: actions/setup-node@v2
+        with:
+          node-version: "16.x"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@lamaani"
 
       - name: Checkout
         uses: actions/checkout@v2
