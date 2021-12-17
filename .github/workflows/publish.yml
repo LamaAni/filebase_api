@@ -30,7 +30,7 @@ jobs:
         uses: LamaAni/parse-commit-args-action@master
 
       - name: "Publish version to github"
-        if: ${{ steps.args.outputs.is_release=='true' }}
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
           echo "Publishing version ${{steps.args.outputs.version}}" &&
           git config --global user.email "actions@no-a-server.com" &&
@@ -74,7 +74,7 @@ jobs:
           node_modules/.bin/pkg .
 
       - name: "Release: upload binary files"
-        if: ${{ steps.args.outputs.is_release=='true' }}
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         uses: AButler/upload-release-assets@v2.0
         with:
           files: ".local/bin/*"
