@@ -110,9 +110,11 @@ class StratisEJSTemplateRenderContext {
    * @param {string} pkg The package to require
    */
   template_require(pkg) {
-    if (pkg.startsWith('.') || pkg.startsWith('/'))
-      return require(this.resolve_template_relative_path(pkg))
-    else return require(pkg)
+    const pkg_path =
+      pkg.startsWith('.') || pkg.startsWith('/')
+        ? this.resolve_template_relative_path(pkg)
+        : pkg
+    return require(pkg_path)
   }
 
   /**
