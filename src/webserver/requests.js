@@ -169,10 +169,10 @@ class StratisRequest {
       this._access_mode = 'private'
       return
     } else {
-      const modifires_matches = [
+      const modifiers_matches = [
         ...this.query_path.matchAll(this.access_modifiers_match_regex),
       ]
-      const modifiers = new Set(modifires_matches.map((m) => m[2]))
+      const modifiers = new Set(modifiers_matches.map((m) => m[2]))
 
       if (modifiers.has('private')) this._access_mode = 'private'
       else if (modifiers.has('secure')) this._access_mode = 'secure'

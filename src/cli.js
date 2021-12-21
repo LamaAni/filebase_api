@@ -256,15 +256,15 @@ class StratisCli {
       description: 'The log level, DEBUG will show all requests',
     }
 
-    /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.
-     * Calling stratis.init_service() will register the stratis middleware */
+    /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.*/
     this.init_script_path = null
+
     /** @type {CliArgument} */
     this.__$init_script_path = {
       type: 'named',
       environmentVariable: 'STRATIS_INIT_SCRIPT_PATH',
       default: this.init_script_path,
-      description: `The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}. Calling stratis.init_service() will register the stratis middleware.`,
+      description: `The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}`,
       parse: (p) =>
         p == null || p.trim().length == 0 ? null : path.resolve(p),
     }
@@ -376,7 +376,7 @@ class StratisCli {
     if (this._api == null) {
       this._api = new Stratis({
         ejs_options: {
-          require: this.ejs_add_require,
+          add_require: this.ejs_add_require,
         },
       })
     }
@@ -612,80 +612,69 @@ class StratisCli {
       return res.redirect(this.default_redirect)
     }
 
-    let stratis_init_called = false
     this.api.return_errors_to_client = this.show_app_errors
     this.api.logger = cli.logger
-    this.api.__server_internal_command = this.api.server
+
+    // composing the default middleware options.
+    this.api.middleware_options = {
+      serve_path: this.serve_path,
+      log_errors: true,
+      next_on_private: false,
+      next_on_not_found: true,
+    }
 
     const security_provider = await this._get_oauth2_provider(cli.logger)
 
-    this.api.server =
-      /**
-       * Override server command to allow cli intervention
-       * @param {StratisMiddlewareOptions} options
-       * @param {express.Express} app The express app to use, if null create one.
-       * @returns {express.Express} The express app to use. You can do express.listen
-       * to start the app.
-       */
-      (options = {}, app = null) => {
-        stratis_init_called = true
+    if (security_provider != null) {
+      this.api.middleware_options.security_filter =
+        security_provider.auth_middleware(security_provider.basepath)
 
-        if (this.ejs_add_require && this.api)
-          this.app.use((req, res, next) => {
-            cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
-            next()
-          })
+      // set the login path
+      this.app.use(
+        security_provider.basepath,
+        security_provider.login_middleware()
+      )
+    }
 
-        if (options.security_filter == null && security_provider != null) {
-          // set the login path
-          this.app.use(
-            security_provider.basepath,
-            security_provider.login_middleware()
-          )
+    // overriding the server command.
+    let stratis_init_called = false
+    this.api.__server_internal_command = this.api.server
+    this.api.server = (options, app) => {
+      stratis_init_called = true
+      return this.api.__server_internal_command(options, app || this.app)
+    }
 
-          options.security_filter = security_provider.auth_middleware(
-            security_provider.basepath
-          )
-        }
-
-        this.api.__server_internal_command(
-          Object.assign(
-            {
-              serve_path: this.serve_path,
-              log_errors: true,
-              next_on_private: false,
-              next_on_not_found: true,
-            },
-            options
-          ),
-          app || this.app
-        )
-
-        if (this.default_redirect != null) {
-          if (this.redirect_all_unknown) this.app.use(redirect)
-          else this.app.all('/', redirect)
-          cli.logger.info(
-            `Redirecting ${
-              this.redirect_all_unknown ? 'all missing paths (not found)' : '/'
-            } to ${this.default_redirect}`
-          )
-        }
-
-        this.app.use((err, req, res, next) =>
-          this.api.handle_errors(err, req, res, (err) => {
-            // error ignored. since we are at the end of the service.
-            next()
-          })
-        )
-
-        cli.logger.info('Initialized stratis service middleware and routes')
-      }
+    this.app.use((req, res, next) => {
+      // stratis debug request urls.
+      cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
+      next()
+    })
 
     await this.invoke_initialization_scripts(cli.logger || console)
 
+    // check call the server command (i.e. was initialized)
     if (!stratis_init_called) this.api.server()
 
-    this.api.init_service = null
+    // check call redirect if needed.
+    if (this.default_redirect != null) {
+      if (this.redirect_all_unknown) this.app.use(redirect)
+      else this.app.all('/', redirect)
+      cli.logger.info(
+        `Redirecting ${
+          this.redirect_all_unknown ? 'all missing paths (not found)' : '/'
+        } to ${this.default_redirect}`
+      )
+    }
+
+    // handle errors.
+    this.app.use((err, req, res, next) =>
+      this.api.handle_errors(err, req, res, (err) => {
+        // error ignored. since we are at the end of the service.
+        next()
+      })
+    )
+
+    cli.logger.info('Initialized stratis service middleware and routes')
 
     if (this.use_stratis_listeners) await this._listen(cli, listen_sync)
   }

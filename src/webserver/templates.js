@@ -15,7 +15,7 @@ require('./templates.strings.js')
 
 /**
  * @typedef {Object} StratisEJSOptionsExtension
- * @property {bool} require If true, add stratis (special) require to the ejs rendering
+ * @property {bool} add_require If true, add stratis (special) require to the ejs rendering
  * @property {{}} environment A dictionary of key/value pairs to add to the ejs environment.
  * Will overwrite any api_method!
  *
@@ -26,7 +26,7 @@ require('./templates.strings.js')
  * @type {StratisEJSOptions}
  */
 const STRATIS_EJS_DEFAULT_OPTIONS = {
-  require: true,
+  add_require: true,
   environment: {},
   cache: false,
 }
@@ -148,7 +148,7 @@ class StratisEJSTemplateRenderContext {
       this.overridable_data || {},
       {
         include,
-        require: this.stratis.ejs_options.require ? template_require : null,
+        require: this.stratis.ejs_options.add_require ? template_require : null,
         __dirname: path.dirname(this.template.template_filepath),
         __filename: this.template.template_filepath,
       },

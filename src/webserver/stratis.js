@@ -77,6 +77,7 @@ const {
  * @property {integer} timeout The client side request timeout [ms]
  * @property {boolean} log_errors If true, prints the application errors to the logger.
  * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
+ * @property {StratisMiddlewareOptions} middleware_options A collection of default middleware options.
  * NOTE! To be used for debug, may expose sensitive information.
  * @property {StratisClientSideApiOptions} client_api_options client api options.
  * @property {StratisPageCallContext} page_call_context_constructor A page call context constructor
@@ -90,7 +91,7 @@ const STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS = {
  * @type {StratisEJSOptions}
  */
 const STRATIS_DEFAULT_EJS_OPTIONS = {
-  require: true,
+  add_require: true,
 }
 
 class Stratis extends events.EventEmitter {
@@ -110,6 +111,7 @@ class Stratis extends events.EventEmitter {
     return_errors_to_client = false,
     codefile_extension = '.code.js',
     logger = console,
+    middleware_options = {},
     timeout = 1000 * 60,
 
     page_call_context_constructor = StratisPageCallContext,
@@ -129,6 +131,7 @@ class Stratis extends events.EventEmitter {
     this.logger = logger || console
     this.log_errors = log_errors
     this.return_errors_to_client = return_errors_to_client
+    this.middleware_options = middleware_options
     this.ejs_options = Object.assign(
       {},
       STRATIS_DEFAULT_EJS_OPTIONS,
@@ -388,14 +391,23 @@ class Stratis extends events.EventEmitter {
    * Creates an express middleware that serves requests.
    * @param {StratisMiddlewareOptions} options
    */
-  middleware({
+  middleware(options = {}) {
+    return this._middleware(
+      Object.assign({}, this.middleware_options || {}, options || {})
+    )
+  }
+
+  /**
+   * @param {StratisMiddlewareOptions} options
+   */
+  _middleware({
     serve_path,
     filter = null,
     security_filter = null,
     next_on_private = false,
     next_on_not_found = true,
     ignore_empty_path = true,
-  } = {}) {
+  }) {
     assert(serve_path != null, 'Serve path must be defined!')
 
     if (!fs.existsSync(serve_path))
