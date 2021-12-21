@@ -595,7 +595,9 @@ class StratisOAuth2Provider {
       )
 
       try {
-        if (query.error != null) throw new Error(`${JSON.stringify(query)}`)
+        if (query.error != null) {
+          throw new Error(`${JSON.stringify(query)}`)
+        }
 
         let oauth_redirect_uri =
           this.redirect_url ||
@@ -623,11 +625,16 @@ class StratisOAuth2Provider {
         } else if (is_authentication_response) {
           // Case we already authenticated and we need to get the token.
           const auth_state = this.decode_state(req.query.state)
+          /** @type {OAuthAuthenticationState} */
+          const session_params_state = (session_params || {}).state || {}
 
           assert(
-            session_params != null &&
-              (session_params.state || {}).uuid == auth_state.uuid,
+            session_params != null,
             'Invalid token validation request, session state could not retrieve state validation key'
+          )
+          assert(
+            session_params_state.uuid == auth_state.uuid,
+            `Invalid token validation request. UUID mismatch (${session_params_state.uuid}!=${auth_state.uuid})`
           )
 
           const token = await this.get_token(req.query.code, oauth_redirect_uri)

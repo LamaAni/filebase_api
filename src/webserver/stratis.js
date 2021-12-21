@@ -185,10 +185,23 @@ class Stratis extends events.EventEmitter {
 
   /**
    * @param {Error} err
-   * @param {StratisRequest} stratis_request
+   * @param {StratisExpressRequest} stratis_request
    */
-  _internal_on_emit_error(err, stratis_request) {
-    if (stratis_request.log_errors) this.logger.error(err)
+  _internal_on_emit_error(err, req) {
+    let request_log_errors =
+      req.stratis_request != null && req.stratis_request.log_errors === true
+
+    if (request_log_errors || this.log_errors)
+      this.logger.error(err.stack || `${err}`)
+  }
+
+  /**
+   * Emits a stratis error.
+   * @param {Error} err The error
+   * @param {StratisExpressRequest} req The request
+   */
+  emit_error(err, req = null) {
+    this.emit('error', err, req)
   }
 
   /**
@@ -241,7 +254,7 @@ class Stratis extends events.EventEmitter {
             })
           )
         } catch (err) {
-          this.emit('error', err, stratis_request)
+          this.emit_error(err, req)
           try {
             ws.send(
               JSON.stringify({
@@ -252,14 +265,14 @@ class Stratis extends events.EventEmitter {
               })
             )
           } catch (err) {
-            this.emit('error', err, stratis_request)
+            this.emit_error(err, req)
           }
         }
       })
 
       ws.on('open', () => this.emit('websocket_open', ws))
       ws.on('close', () => this.emit('websocket_close', ws))
-      ws.on('error', (err) => this.emit('error', err, stratis_request))
+      ws.on('error', (err) => this.emit_error(err, req))
     })(stratis_request.request, res, next)
   }
 
@@ -334,31 +347,25 @@ class Stratis extends events.EventEmitter {
    * @param {StratisExpressRequest} req The express request
    * @param {StratisExpressResponse} res The express response
    * @param {NextFunction} next The express next function
-   * @param {StratisRequest} stratis_request If internal.
    */
-  async handle_errors(err, req, res, next, stratis_request = null) {
-    stratis_request = stratis_request || {}
+  async handle_errors(err, req, res, next) {
+    const stratis_request = req.stratis_request || {}
 
     // returning the application error
-    this.emit('error', err, req, stratis_request)
+    this.emit_error(err, req)
     res.status(
       err instanceof StratisError ? err.http_response_code || 500 : 500
     )
-
-    if (
-      stratis_request.log_errors == null
-        ? this.log_errors
-        : stratis_request.log_errors
-    )
-      this.logger.error(err.stack || `${err}`)
 
     if (
       stratis_request.return_errors_to_client == null
         ? this.return_errors_to_client
         : stratis_request.return_errors_to_client
     )
-      res.end(`${err}`)
-    else next(err)
+      res.end(`${err.stack || err}`)
+    else {
+      next(err)
+    }
   }
 
   /**
@@ -494,7 +501,9 @@ class Stratis extends events.EventEmitter {
           )
 
           // checking for errors.
-          if (sf_next_error != null) throw sf_next_error
+          if (sf_next_error != null) {
+            throw sf_next_error
+          }
 
           // checking result.
           if (security_filter_result === false) {
@@ -522,7 +531,7 @@ class Stratis extends events.EventEmitter {
           new StratisTimeOutError('timed out processing request')
         )
       } catch (err) {
-        await this.handle_errors(err, req, res, next, stratis_request)
+        await this.handle_errors(err, req, res, next)
       } finally {
         this._clean_stratis_request_elements(req, res)
       }
@@ -537,7 +546,8 @@ class Stratis extends events.EventEmitter {
    * @param {express.Express} app The express app to use, Will auto create or default to cli app.
    * @returns {express.Express} The express app to use. Will auto create or default to cli app.
    */
-  server(options = {}, app = null) {
+  async server(options = {}, app = null) {
+    // This method must be async since some derived classes override it.
     app = app || express()
     app.use(this.middleware(options))
     return app

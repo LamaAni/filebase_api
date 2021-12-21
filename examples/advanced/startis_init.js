@@ -9,8 +9,8 @@
  * @param {import('express').Express} app
  * @param {import('../../src/index').CliLogger} logger
  */
-module.exports = (stratis, app, logger) => {
+module.exports = async (stratis, app, logger) => {
   logger.info('Before stratis initialization (middleware)')
-  stratis.server()
+  await stratis.server()
   logger.info('After stratis initialization (middleware)')
 }
