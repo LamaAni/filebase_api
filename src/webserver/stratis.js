@@ -29,14 +29,18 @@ const {
 
 /**
  * @typedef {import('./interfaces').StratisEventListenRegister} StratisEventListenRegister
+ * @typedef {import('./interfaces').Request} Request
+ * @typedef {import('./interfaces').Response} Response
+ * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
+ * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
- * @typedef {import('./requests').StratisFileAccessMode} StratisFileAccessMode
  * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
- * @typedef {import('./templates').StratisEJSOptions} StratisEJSOptions
  * @typedef {import('./interfaces').StratisApiWebSocketRequestArgs} StratisApiWebSocketRequestArgs
+ * @typedef {import('./requests').StratisFileAccessMode} StratisFileAccessMode
+ * @typedef {import('./templates').StratisEJSOptions} StratisEJSOptions
+ * @typedef {import('./templates').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
  * @typedef {import('./code').StratisCodeModule} StratisCodeModule
  * @typedef {import('./code').StratisCodeModuleBankOptions} StratisCodeModuleBankOptions
- * @typedef {import('./templates').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
  */
 
 /**
@@ -48,9 +52,9 @@ const {
 /**
  * @typedef {Object} StratisMiddlewareOptions
  * @property {string} serve_path The path to serve.
- * @property {(req:Request,res:Response,next:NextFunction)=>{}} filter Path filter, if next
- * function was called then do not process in the middleware.
- * @property {(req:Request,res:Response,next:NextFunction)=>{}} security_filter Secure resources validation filter.
+ * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} filter Path filter, if next
+ * function is called then skips the middleware.
+ * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} security_filter Secure resources validation filter.
  * return false or throw error when not accesable. Defaults to allow all.
  * @property {boolean} next_on_private Call the next express handler if the current
  * filepath request is private.
@@ -324,8 +328,8 @@ class Stratis extends events.EventEmitter {
   /**
    * Handle errors with stratis.
    * @param {Error} err The error
-   * @param {Request} req The express request
-   * @param {Response} res The express response
+   * @param {StratisExpressRequest} req The express request
+   * @param {StratisExpressResponse} res The express response
    * @param {NextFunction} next The express next function
    * @param {StratisRequest} stratis_request If internal.
    */
@@ -352,6 +356,32 @@ class Stratis extends events.EventEmitter {
     )
       res.end(`${err}`)
     else next(err)
+  }
+
+  /**
+   * @param {StratisRequest} stratis_request
+   * @param {Request} req
+   * @param {Response} res
+   * @returns {{req:StratisExpressRequest, res: StratisExpressResponse}}
+   */
+  async _bind_stratis_request_elements(stratis_request, req, res) {
+    req.stratis = this
+    res.stratis = this
+    req.stratis_request = stratis_request
+    res.stratis_request = stratis_request
+
+    return { req, res }
+  }
+
+  /**
+   * @param {StratisExpressRequest} req
+   * @param {StratisExpressResponse} res
+   */
+  _clean_stratis_request_elements(req, res) {
+    delete req.stratis
+    delete res.stratis
+    delete req.stratis_request
+    delete res.stratis_request
   }
 
   /**
@@ -403,11 +433,14 @@ class Stratis extends events.EventEmitter {
         log_errors: this.log_errors,
       })
 
+      var { req, res } = await this._bind_stratis_request_elements(
+        stratis_request,
+        req,
+        res
+      )
+
       // check filtering.
       try {
-        req.stratis_request = stratis_request
-        req.stratis = this
-
         if (filter != null) {
           let filter_called_next = false
           let filter_rslt = filter(req, res, (...args) => {
@@ -479,8 +512,7 @@ class Stratis extends events.EventEmitter {
       } catch (err) {
         await this.handle_errors(err, req, res, next, stratis_request)
       } finally {
-        delete req.stratis_request
-        delete req.stratis
+        this._clean_stratis_request_elements(req, res)
       }
     }
 

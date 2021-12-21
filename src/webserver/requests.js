@@ -7,7 +7,7 @@ const is_websocket_request =
 /**
  * @typedef {import('fs').Stats} Stats
  * @typedef {import('./stratis').Stratis} Stratis
- * @typedef {import('express/index').Request} Request
+ * @typedef {import('./interfaces').Request} Request
  */
 
 /**

@@ -1,4 +1,3 @@
-const { Request, Response, NextFunction } = require('express/index')
 const { assert, path_stat } = require('../common')
 const { CacheDictionary } = require('./collections')
 

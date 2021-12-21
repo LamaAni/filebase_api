@@ -4,6 +4,7 @@
  * @typedef {import('express/index').NextFunction} NextFunction
  * @typedef {import('./stratis.js').Stratis} Stratis
  * @typedef {import('ws')} WebSocket
+ * @typedef {import('./requests').StratisRequest} StratisRequest
  * @typedef {import('./pages').StratisPageCallContext} StratisPageCallContext
  */
 
@@ -34,6 +35,30 @@
  * @property {Object} args The api method arguments.
  */
 
+/**
+ * @typedef {Object} StratisExpressRequestEnhancements
+ * @property {StratisRequest} stratis_request
+ * @property {Stratis} stratis
+ */
+
+/**
+ * @typedef {StratisExpressRequestEnhancements & Request} StratisExpressRequest
+ */
+
+/**
+ * @typedef {Object} StratisExpressResponseEnhancements
+ * @property {StratisRequest} stratis_request
+ * @property {Stratis} stratis
+ */
+
+/**
+ * @typedef {StratisExpressResponseEnhancements & Response} StratisExpressResponse
+ */
+
+/**
+ * @typedef {(request: Request, )=>{}} StratisPermissionsFilter
+ */
+
 module.exports = {
   /** @type {StratisEventEmitter} */
   StratisEventEmitter: () => {},
@@ -43,4 +68,8 @@ module.exports = {
   StratisApiObject: () => {},
   /** @type {JsonCompatible} */
   JsonCompatible: {},
+  /** @type {StratisExpressRequest} **/
+  StratisExpressRequest: {},
+  /** @type {StratisExpressResponse} **/
+  StratisExpressResponse: {},
 }

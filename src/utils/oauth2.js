@@ -359,7 +359,7 @@ class StratisOAuth2Provider {
       scope:
         this.scope == null || this.scope.length == 0
           ? null
-          : this.scope.join(''),
+          : this.scope.join(' '),
       state: this.encode_state(state),
     })
   }
@@ -569,6 +569,7 @@ class StratisOAuth2Provider {
 
       return next()
     }
+
     return intercrept
   }
 

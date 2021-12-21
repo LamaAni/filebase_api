@@ -11,7 +11,6 @@ const { StratisEJSTemplateRenderContext } = require('./templates')
 
 /**
  * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
- * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
  * @typedef {import('express/index').NextFunction} NextFunction
  * @typedef {import('./stratis.js').Stratis} Stratis
