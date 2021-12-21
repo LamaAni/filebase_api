@@ -546,7 +546,7 @@ class Stratis extends events.EventEmitter {
    * @param {express.Express} app The express app to use, Will auto create or default to cli app.
    * @returns {express.Express} The express app to use. Will auto create or default to cli app.
    */
-  async server(options = {}, app = null) {
+  server(options = {}, app = null) {
     // This method must be async since some derived classes override it.
     app = app || express()
     app.use(this.middleware(options))

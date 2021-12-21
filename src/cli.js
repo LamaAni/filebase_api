@@ -264,7 +264,7 @@ class StratisCli {
       type: 'named',
       environmentVariable: 'STRATIS_INIT_SCRIPT_PATH',
       default: this.init_script_path,
-      description: `The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}`,
+      description: `The path to a stratis initialization js file. Must return method (StratisCli)=>{}`,
       parse: (p) =>
         p == null || p.trim().length == 0 ? null : path.resolve(p),
     }
@@ -370,6 +370,15 @@ class StratisCli {
 
     this._api = null
     this._app = express()
+
+    this._initialized = false
+  }
+
+  /**
+   * If true, the api has been initialized.
+   */
+  get initialized() {
+    return this._initialized
   }
 
   get logger() {
@@ -478,7 +487,7 @@ class StratisCli {
         `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
       )
 
-      await init_stratis(this.api, this.app, cli)
+      await init_stratis(this)
     }
   }
 
@@ -612,7 +621,12 @@ class StratisCli {
     this.logger.info('Enabled OAuth2 security provider')
   }
 
-  async _initialize_api() {
+  /**
+   * Initialize the stratis api (configure the service)
+   * @param {StratisMiddlewareOptions} options
+   */
+  async initialize(options = {}) {
+    this._initialized = true
     this.api.return_errors_to_client = this.show_app_errors
 
     if (typeof this.default_redirect != 'string') {
@@ -654,7 +668,10 @@ class StratisCli {
     if (this.enable_https) this._enable_https_redirect()
     if (!this.cookies_disabled) this._enable_cookies_parser()
     if (!this.session_disabled) this._enable_sessions()
+
     await this._enable_security_provider()
+
+    this.api.server(options, this.app)
   }
 
   /**
@@ -665,23 +682,12 @@ class StratisCli {
   async run(cli = null, listen_sync = false) {
     cli = cli || new Cli({ name: 'stratis' })
     cli.logger.level = this.log_level
-
-    // updating configuration.
     this.api.logger = cli.logger
-
-    // overriding the server command.
-    let stratis_init_called = false
-    this.api.__server_internal_command = this.api.server
-    this.api.server = async (options, app) => {
-      stratis_init_called = true
-      await this._initialize_api()
-      return await this.api.__server_internal_command(options, app || this.app)
-    }
 
     await this.invoke_initialization_scripts(this.logger || console)
 
     // check call the server command (i.e. was initialized)
-    if (!stratis_init_called) await this.api.server()
+    if (!this.initialized) await this.initialize()
 
     // handle errors.
     this.app.use(
