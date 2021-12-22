@@ -387,11 +387,15 @@ class StratisOAuth2Provider {
       token_type_hint: token_type,
     })
 
-    const token_info = (
-      await this.configure_request(
-        superagent.post(token_introspect_url.href)
-      ).send()
-    ).body
+    try {
+      const token_info = (
+        await this.configure_request(
+          superagent.post(token_introspect_url.href)
+        ).send()
+      ).body
+    } catch (err) {
+      throw new Error('Error retrieving token info.', err)
+    }
 
     return token_info
   }

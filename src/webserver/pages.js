@@ -103,6 +103,14 @@ class StratisPageCallContext {
   }
 
   /**
+   * Returns the user info
+   * @returns {{}}
+   */
+  async get_user_info() {
+    return await this.stratis_request.get_user_info()
+  }
+
+  /**
    * Check if the current security is permitted.
    * @param  {...any} args User parameters to check
    * @returns
