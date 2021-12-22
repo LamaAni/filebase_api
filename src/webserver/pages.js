@@ -1,9 +1,14 @@
 const stream = require('stream')
 const path = require('path')
-const { StratisNotFoundError } = require('./errors.js')
+const {
+  StratisNotFoundError,
+  StratisNotAuthorizedError,
+} = require('./errors.js')
 const { assert } = require('../common')
 const { split_stream_once, stream_to_buffer } = require('../utils/streams.js')
 const { StratisEJSTemplateRenderContext } = require('./templates')
+const { Request, Response } = require('express')
+const WebSocket = require('ws')
 
 /**
  * @typedef {import('./requests.js').StratisRequest} StratisRequest
@@ -11,17 +16,19 @@ const { StratisEJSTemplateRenderContext } = require('./templates')
 
 /**
  * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
+ * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
+ * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
+ * @typedef {import('./requests').StratisRequest} StratisRequest
  * @typedef {import('express/index').Response} Response
  * @typedef {import('express/index').NextFunction} NextFunction
  * @typedef {import('./stratis.js').Stratis} Stratis
- * @typedef {import('ws')} WebSocket
  * @typedef {import('./interfaces').JsonCompatible} JsonCompatible
  */
 
 /**
  * @typedef {Object} StratisPageCallContextOptions
  * @property {StratisRequest} stratis_request The stratis collected request
- * @property {Response} res The express http response object
+ * @property {StratisExpressResponse} res The express http response object
  * @property {NextFunction} next the express http next function.
  * @property {WebSocket} ws The WebSocket connection if applicable.
  */
@@ -37,7 +44,12 @@ class StratisPageCallContext {
    * @param {StratisPageCallContextOptions} param0
    */
   constructor({ stratis_request, res = null, next = null, ws = null } = {}) {
-    assert(stratis_request != null, 'Stratis request cannot be null')
+    assert(stratis_request != null, 'The stratis request must be defined')
+    assert(
+      ws instanceof WebSocket || res != null,
+      'Response must defined Response or WebSocket must be defined'
+    )
+
     this._stratis_request = stratis_request
     this._res = res
     this._ws = ws
@@ -47,14 +59,6 @@ class StratisPageCallContext {
      * @type {{}} The code module dictionary for the request.
      */
     this._code_module = null
-  }
-
-  get is_websocket_request() {
-    return this.ws != null
-  }
-
-  get stratis_request() {
-    return this._stratis_request
   }
 
   get res() {
@@ -69,6 +73,14 @@ class StratisPageCallContext {
     return this._ws
   }
 
+  get stratis_request() {
+    return this._stratis_request
+  }
+
+  get is_websocket_request() {
+    return this.ws != null
+  }
+
   get websocket() {
     return this.ws
   }
@@ -77,28 +89,35 @@ class StratisPageCallContext {
     return this.stratis_request.stratis
   }
 
-  get session() {
-    return this.req.session
-  }
-
-  set session(val) {
-    this.req.session = val
-  }
-
   /** @type {Object<string,any>} */
   get cookies() {
     return this.req.cookies
   }
 
-  /**
-   * @type {Object<string,any>}
-   */
-  set cookies(val) {
-    this.req.cookies = val
+  get session() {
+    return this.req.session
   }
 
   get next() {
     return this._next
+  }
+
+  /**
+   * Check if the current security is permitted.
+   * @param  {...any} args User parameters to check
+   * @returns
+   */
+  async is_permitted(...args) {
+    return await this.stratis_request.is_permitted(...args)
+  }
+
+  /**
+   * Deny access to this resource
+   * @param {boolean} message
+   * @param {boolean} is_denied If true then the access is denied.
+   */
+  assert_permitted(condition, message = 'Permission denied') {
+    if (!condition) throw new StratisNotAuthorizedError(message)
   }
 
   get_api_objects() {

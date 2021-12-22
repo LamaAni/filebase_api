@@ -610,7 +610,7 @@ class StratisCli {
 
     if (security_provider == null) return
 
-    this.api.middleware_options.security_filter =
+    this.api.middleware_options.authenticate =
       security_provider.auth_middleware(security_provider.basepath)
 
     // set the login path
@@ -618,6 +618,9 @@ class StratisCli {
       security_provider.basepath,
       security_provider.login_middleware()
     )
+
+    security_provider.bind_stratis_api(this.api)
+
     this.logger.info('Enabled OAuth2 security provider')
   }
 

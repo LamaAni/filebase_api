@@ -1,2 +1,9 @@
 process.env['TEST_USE_OAUTH2'] = 'true'
-require('./stratis.cli.test.js')
+const stratis = require('./stratis.cli.test.js')
+
+if (require.main == module) {
+  stratis.run().catch((err) => {
+    console.error(err)
+    process.exit(err.code || 1)
+  })
+}

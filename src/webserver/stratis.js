@@ -36,6 +36,7 @@ const {
  * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
  * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
  * @typedef {import('./interfaces').StratisApiWebSocketRequestArgs} StratisApiWebSocketRequestArgs
+ * @typedef {import('./pages').StratisPageCallContext} StratisPageCallContext
  * @typedef {import('./requests').StratisFileAccessMode} StratisFileAccessMode
  * @typedef {import('./templates').StratisEJSOptions} StratisEJSOptions
  * @typedef {import('./templates').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
@@ -54,13 +55,24 @@ const {
  * @property {string} serve_path The path to serve.
  * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} filter Path filter, if next
  * function is called then skips the middleware.
- * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} security_filter Secure resources validation filter.
+ * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} authenticate Secure resources validation filter.
  * return false or throw error when not accesable. Defaults to allow all.
  * @property {boolean} next_on_private Call the next express handler if the current
  * filepath request is private.
  * @property {boolean} next_on_not_found Call the next express handler if the current
  * filepath request is not found.
  * @property {boolean} ignore_empty_path If true, next handler on empty path.
+ * @property {string} request_user_object_key The request object key for retrieving user info.
+ */
+
+/**
+ * @typedef {Object} StratisUserAndPermissionOptions
+ * @property {(context:StratisRequest)=>{}} get_user_info Stratis assumes that the user
+ * info is attached to the express request. Either provide method or request string key.
+ * @property {(context:StratisRequest,...permit_args)=>boolean} is_permitted A method to check if the
+ * current permission set is allowed.
+ * @property {(context:StratisRequest)=>boolean} is_secure_permitted Check if by default
+ * the user is permitted.
  */
 
 /**
@@ -79,6 +91,8 @@ const {
  * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
  * @property {StratisMiddlewareOptions} middleware_options A collection of default middleware options.
  * NOTE! To be used for debug, may expose sensitive information.
+ * @property {StratisUserAndPermissionOptions} user_and_permission_options A collection of security
+ * options for stratis.
  * @property {StratisClientSideApiOptions} client_api_options client api options.
  * @property {StratisPageCallContext} page_call_context_constructor A page call context constructor
  */
@@ -112,8 +126,8 @@ class Stratis extends events.EventEmitter {
     codefile_extension = '.code.js',
     logger = console,
     middleware_options = {},
+    user_and_permission_options = {},
     timeout = 1000 * 60,
-
     page_call_context_constructor = StratisPageCallContext,
   } = {}) {
     super()
@@ -132,6 +146,7 @@ class Stratis extends events.EventEmitter {
     this.log_errors = log_errors
     this.return_errors_to_client = return_errors_to_client
     this.middleware_options = middleware_options
+    this.user_and_permission_options = user_and_permission_options
     this.ejs_options = Object.assign(
       {},
       STRATIS_DEFAULT_EJS_OPTIONS,
@@ -199,14 +214,21 @@ class Stratis extends events.EventEmitter {
    * Emits a stratis error.
    * @param {Error} err The error
    * @param {StratisExpressRequest} req The request
+   * @param {[integer]} codes The http codes for which to emit an error.
+   * If null then all.
    */
-  emit_error(err, req = null) {
-    this.emit('error', err, req)
+  emit_error(err, req = null, codes = [500]) {
+    const http_response_code =
+      err instanceof StratisError ? err.http_response_code || 500 : 500
+
+    if (codes == null || http_response_code in codes)
+      // application error.
+      this.emit('error', err, req)
   }
 
   /**
    * @param {StratisRequest} stratis_request
-   * @param {Response} res
+   * @param {StratisExpressResponse} res
    * @param {NextFunction} next
    */
   async handle_websocket_request(stratis_request, res, next) {
@@ -234,10 +256,10 @@ class Stratis extends events.EventEmitter {
 
           const context = new this.page_call_context_constructor({
             stratis_request,
-            next,
-            res: null,
             ws,
           })
+
+          stratis_request._context = context
 
           const rsp_data = await with_timeout(
             async () => {
@@ -254,7 +276,7 @@ class Stratis extends events.EventEmitter {
             })
           )
         } catch (err) {
-          this.emit_error(err, req)
+          this.emit_error(err, stratis_request.request)
           try {
             ws.send(
               JSON.stringify({
@@ -265,20 +287,20 @@ class Stratis extends events.EventEmitter {
               })
             )
           } catch (err) {
-            this.emit_error(err, req)
+            this.emit_error(err, stratis_request.request)
           }
         }
       })
 
       ws.on('open', () => this.emit('websocket_open', ws))
       ws.on('close', () => this.emit('websocket_close', ws))
-      ws.on('error', (err) => this.emit_error(err, req))
+      ws.on('error', (err) => this.emit_error(err, stratis_request.request))
     })(stratis_request.request, res, next)
   }
 
   /**
    * @param {StratisRequest} stratis_request
-   * @param {Response} res
+   * @param {StratisExpressResponse} res
    * @param {NextFunction} next
    */
   async handle_page_api_call(stratis_request, res, next) {
@@ -299,10 +321,11 @@ class Stratis extends events.EventEmitter {
 
     const context = new this.page_call_context_constructor({
       stratis_request,
-      next,
       res,
-      ws: null,
+      next,
     })
+
+    stratis_request._context = context
 
     const rslt = await call.invoke(context)
     if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
@@ -312,17 +335,19 @@ class Stratis extends events.EventEmitter {
 
   /**
    * @param {StratisRequest} stratis_request
-   * @param {Response} res
+   * @param {StratisExpressResponse} res
    * @param {NextFunction} next
    */
   async handle_page_render_request(stratis_request, res, next) {
     const call = new StratisPageRenderRequest(stratis_request)
     const context = new this.page_call_context_constructor({
       stratis_request,
-      next,
       res,
-      ws: null,
+      next,
     })
+
+    stratis_request._context = context
+
     return res.end(await call.render(context))
   }
 
@@ -351,12 +376,16 @@ class Stratis extends events.EventEmitter {
   async handle_errors(err, req, res, next) {
     const stratis_request = req.stratis_request || {}
 
-    // returning the application error
-    this.emit_error(err, req)
+    const http_response_code =
+      err instanceof StratisError ? err.http_response_code || 500 : 500
+
+    if (http_response_code == 500)
+      // application error.
+      this.emit_error(err, req)
+
     res.status(
       err instanceof StratisError ? err.http_response_code || 500 : 500
     )
-
     if (
       stratis_request.return_errors_to_client == null
         ? this.return_errors_to_client
@@ -410,10 +439,11 @@ class Stratis extends events.EventEmitter {
   _middleware({
     serve_path,
     filter = null,
-    security_filter = null,
+    authenticate = null,
     next_on_private = false,
     next_on_not_found = true,
     ignore_empty_path = true,
+    request_user_object_key = 'user',
   }) {
     assert(serve_path != null, 'Serve path must be defined!')
 
@@ -450,6 +480,7 @@ class Stratis extends events.EventEmitter {
         access_mode: default_access_mode,
         return_errors_to_client: this.return_errors_to_client,
         log_errors: this.log_errors,
+        request_user_object_key,
       })
 
       var { req, res } = await this._bind_stratis_request_elements(
@@ -484,37 +515,37 @@ class Stratis extends events.EventEmitter {
           return res.sendStatus(403)
         }
 
-        if (
-          security_filter != null &&
-          stratis_request.access_mode == 'secure'
-        ) {
-          // security filter runs internally so next would mean continue
+        if (authenticate != null && stratis_request.access_mode == 'secure') {
+          // authentication runs internally so next would mean continue
           let sf_next_error = null
           const sf_next = (...args) => {
             if (args[0] instanceof Error) sf_next_error = args[0]
           }
 
-          const security_filter_result = await security_filter(
-            req,
-            res,
-            sf_next
-          )
+          const auth_result = await authenticate(req, res, sf_next)
 
           // checking for errors.
           if (sf_next_error != null) {
             throw sf_next_error
           }
 
+          // res has ended. Either redirect or other error.
+          // no need to continue.
+          if (res.writableEnded) return
+
           // checking result.
-          if (security_filter_result === false) {
+          if (auth_result === false)
             throw new StratisNotAuthorizedError(
               `Cannot access or find ${stratis_request.query_path}`
             )
-          }
-        }
 
+          if (!(await stratis_request.is_secure_permitted()))
+            throw new StratisNotAuthorizedError(
+              `Cannot access secure resources. Permission for ${stratis_request.query_path} denied.`
+            )
+        }
         // res has ended. No need to continue.
-        if (res.writableEnded) return
+        else if (res.writableEnded) return
 
         if (!stratis_request.is_page)
           // file download.

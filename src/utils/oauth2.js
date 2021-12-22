@@ -14,6 +14,7 @@ const {
 } = require('../common')
 
 /**
+ * @typedef {import('../index').Stratis} Stratis
  * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
  * @typedef {import('express/index').NextFunction} NextFunction
@@ -395,21 +396,6 @@ class StratisOAuth2Provider {
     return token_info
   }
 
-  async get_user_info(token) {
-    if (this.user_info_url == null) {
-      return {}
-    }
-
-    const user_info_url = this.compose_url(this.user_info_url)
-
-    const user_info = (
-      await this.configure_request(superagent.get(user_info_url.href))
-        .set('Authorization', `Bearer ${token}`)
-        .send()
-    ).body
-    return user_info
-  }
-
   /**
    * Internal. Call to update the token info and access validation.
    * @param {OAuthSessionParams} params
@@ -692,6 +678,17 @@ class StratisOAuth2Provider {
     path = path || this.basepath
     app.all(path, this.login_middleware())
     app.use(this.auth_middleware(path))
+  }
+
+  /**
+   * Bind the current auth2 security provider to
+   * the stratis api.
+   * @param {Stratis} stratis
+   */
+  bind_stratis_api(stratis) {
+    stratis.user_and_permission_options.get_user_info = (stratis_request) => {
+      return stratis_request.request[this.request_user_object_key]
+    }
   }
 }
 
