@@ -79,12 +79,12 @@ class StratisCli {
     }
 
     /** If true, disables the internal cookie parser */
-    this.cookies_disable = false
+    this.cookies_disabled = false
     /** @type {CliArgument} */
-    this.__$cookies_disable = {
+    this.__$cookies_disabled = {
       type: 'flag',
       environmentVariable: 'STRATIS_COOKIES_DISABLE',
-      default: this.cookies_disable,
+      default: this.cookies_disabled,
       description: 'If true, disables the internal cookie parser',
     }
 
@@ -256,15 +256,15 @@ class StratisCli {
       description: 'The log level, DEBUG will show all requests',
     }
 
-    /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.
-     * Calling stratis.init_service() will register the stratis middleware */
+    /** The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}.*/
     this.init_script_path = null
+
     /** @type {CliArgument} */
     this.__$init_script_path = {
       type: 'named',
       environmentVariable: 'STRATIS_INIT_SCRIPT_PATH',
       default: this.init_script_path,
-      description: `The path to a stratis initialization js file. Must return method (stratis, express_app, stratis_cli)=>{}. Calling stratis.init_service() will register the stratis middleware.`,
+      description: `The path to a stratis initialization js file. Must return method (StratisCli)=>{}`,
       parse: (p) =>
         p == null || p.trim().length == 0 ? null : path.resolve(p),
     }
@@ -370,13 +370,26 @@ class StratisCli {
 
     this._api = null
     this._app = express()
+
+    this._initialized = false
+  }
+
+  /**
+   * If true, the api has been initialized.
+   */
+  get initialized() {
+    return this._initialized
+  }
+
+  get logger() {
+    return this.api.logger || console
   }
 
   get api() {
     if (this._api == null) {
       this._api = new Stratis({
         ejs_options: {
-          require: this.ejs_add_require,
+          add_require: this.ejs_add_require,
         },
       })
     }
@@ -474,7 +487,7 @@ class StratisCli {
         `Stratis init script must return a function, e.g. (stratis, express_app, stratis_cli)=>{}  @ ${this.init_script_path}`
       )
 
-      init_stratis(this.api, this.app, cli)
+      await init_stratis(this)
     }
   }
 
@@ -516,85 +529,108 @@ class StratisCli {
     return new StratisOAuth2Provider(options)
   }
 
-  /**
-   * Call to run the stratis cli.
-   * @param {Cli} cli The command line interface.
-   * @param {bool} listen_sync If true, await listen to the port.
-   */
-  async run(cli = null, listen_sync = false) {
-    let stat = null
-    cli = cli || new Cli({ name: 'stratis' })
-    cli.logger.level = this.log_level
-    try {
-      stat = await fs.promises.stat(this.serve_path)
-    } catch (err) {}
-
-    assert(
-      this.serve_path != null && stat != null && stat.isDirectory(),
-      `The path ${this.serve_path} could not be found or is not a directory.`
+  _enable_https_redirect() {
+    this.logger.info(
+      `Auto redirecting all traffic ${this.port}(http) -> ${this.https_port} (https) `
     )
 
-    if (this.enable_https) {
-      cli.logger.info(
-        `Auto redirecting all traffic ${this.port}(http) -> ${this.https_port} (https) `
+    this.app.use((req, res, next) => {
+      if (req.protocol != 'http') return next()
+      if (
+        !this.no_localhost_http &&
+        (req.hostname == 'localhost' || req.hostname.endsWith('.localhost'))
+      ) {
+        return next()
+      }
+
+      const check_url = this.full_url_in_http_allow
+        ? req.protocol + '://' + req.get('host') + req.path
+        : req.path
+
+      if (this.allow_http_for.some((re) => re.test(check_url))) {
+        return next()
+      }
+
+      this.logger.debug(
+        `Redirect ${req.protocol} to https ` + req.originalUrl,
+        '~>'.cyan
       )
 
-      this.app.use((req, res, next) => {
-        if (req.protocol != 'http') return next()
-        if (
-          !this.no_localhost_http &&
-          (req.hostname == 'localhost' || req.hostname.endsWith('.localhost'))
-        ) {
-          return next()
-        }
+      this.redirect_to_https(req, res, next)
+    })
 
-        const check_url = this.full_url_in_http_allow
-          ? req.protocol + '://' + req.get('host') + req.path
-          : req.path
+    this.logger.info('Enabled http/https redirection')
+  }
 
-        if (this.allow_http_for.some((re) => re.test(check_url))) {
-          return next()
-        }
-
-        cli.logger.debug(
-          `Redirect ${req.protocol} to https ` + req.originalUrl,
-          '~>'.cyan
-        )
-
-        this.redirect_to_https(req, res, next)
+  _enable_cookies_parser() {
+    this.app.use(
+      cookie_parser(this.cookies_key, {
+        decode: this.cookies_key != null,
       })
+    )
+    this.logger.info('Enabled cookie parser')
+  }
+
+  _enable_sessions() {
+    assert(
+      this.cookies_disabled != true,
+      'Cannot enable cookie sessions without enabling cookies'
+    )
+
+    /** @type {CookieSessionOptions} */
+    let run_session_options = {
+      secure: this.enable_https,
+      signed: this.session_key != null,
+      keys: this.session_key == null ? null : [this.session_key],
     }
 
-    if (!this.cookies_disable) {
-      this.app.use(
-        cookie_parser(this.cookies_key, {
-          decode: this.cookies_key != null,
-        })
+    run_session_options = Object.assign(
+      {},
+      this.session_options,
+      run_session_options
+    )
+
+    const session_generator = cookie_session(run_session_options)
+
+    this.app.use(async (req, res, next) => {
+      return session_generator(req, res, next)
+    })
+
+    if (this.session_key == null) {
+      this.logger.warn(
+        'Session enabled but no session_key (encryption) was provided. Session state cookie is insecure!'
       )
+    } else {
+      this.logger.info('Enabled cookie session state')
     }
+  }
 
-    if (!this.session_disabled) {
-      /** @type {CookieSessionOptions} */
-      let run_session_options = {
-        secure: this.enable_https,
-        signed: this.session_key != null,
-        keys: this.session_key == null ? null : [this.session_key],
-      }
+  async _enable_security_provider() {
+    const security_provider = await this._get_oauth2_provider(this.logger)
 
-      run_session_options = Object.assign(
-        {},
-        run_session_options,
-        this.session_options
-      )
+    if (security_provider == null) return
 
-      this.app.use(cookie_session(run_session_options))
+    this.api.middleware_options.authenticate =
+      security_provider.auth_middleware()
 
-      if (this.session_key == null) {
-        cli.logger.warn(
-          'Session enabled but no session_key (encryption) was provided. Session state cookie is insecure!'
-        )
-      }
-    }
+    // set the login path
+    this.app.use(
+      security_provider.basepath,
+      security_provider.login_middleware()
+    )
+
+    security_provider.bind_stratis_api(this.api)
+
+    this.logger.info('Enabled OAuth2 security provider')
+  }
+
+  /**
+   * Initialize the stratis api (configure the service)
+   * @param {StratisMiddlewareOptions} options
+   */
+  async initialize(options = {}) {
+    this._initialized = true
+    this.api.return_errors_to_client = this.show_app_errors
 
     if (typeof this.default_redirect != 'string') {
       const redirect_basepath = fs.existsSync(
@@ -608,84 +644,76 @@ class StratisCli {
       }
     }
 
-    const redirect = (req, res, next) => {
-      return res.redirect(this.default_redirect)
+    // composing the default middleware options.
+    this.api.middleware_options = {
+      serve_path: this.serve_path,
+      log_errors: true,
+      next_on_private: false,
+      next_on_not_found: true,
     }
 
-    let stratis_init_called = false
-    this.api.return_errors_to_client = this.show_app_errors
+    let stat = null
+    try {
+      stat = await fs.promises.stat(this.serve_path)
+    } catch (err) {}
+
+    assert(
+      this.serve_path != null && stat != null && stat.isDirectory(),
+      `The path ${this.serve_path} could not be found or is not a directory.`
+    )
+
+    // Default logging
+    this.app.use((req, res, next) => {
+      this.logger.debug(`${req.originalUrl}`, '->'.cyan)
+      next()
+    })
+
+    if (this.enable_https) this._enable_https_redirect()
+    if (!this.cookies_disabled) this._enable_cookies_parser()
+    if (!this.session_disabled) this._enable_sessions()
+
+    await this._enable_security_provider()
+
+    this.api.server(options, this.app)
+  }
+
+  /**
+   * Call to run the stratis cli.
+   * @param {Cli} cli The command line interface.
+   * @param {bool} listen_sync If true, await listen to the port.
+   */
+  async run(cli = null, listen_sync = false) {
+    cli = cli || new Cli({ name: 'stratis' })
+    cli.logger.level = this.log_level
     this.api.logger = cli.logger
-    this.api.__server_internal_command = this.api.server
 
-    const security_provider = await this._get_oauth2_provider(cli.logger)
+    await this.invoke_initialization_scripts(this.logger || console)
 
-    this.api.server =
-      /**
-       * Override server command to allow cli intervention
-       * @param {StratisMiddlewareOptions} options
-       * @param {express.Express} app The express app to use, if null create one.
-       * @returns {express.Express} The express app to use. You can do express.listen
-       * to start the app.
-       */
-      (options = {}, app = null) => {
-        stratis_init_called = true
+    // check call the server command (i.e. was initialized)
+    if (!this.initialized) await this.initialize()
 
-        if (this.ejs_add_require && this.api)
-          this.app.use((req, res, next) => {
-            cli.logger.debug(`${req.originalUrl}`, '->'.cyan)
-            next()
-          })
+    // handle errors.
+    this.app.use(
+      async (err, req, res, next) =>
+        await this.api.handle_errors(err, req, res, next)
+    )
 
-        if (options.security_filter == null && security_provider != null) {
-          // set the login path
-          this.app.use(
-            security_provider.basepath,
-            security_provider.login_middleware()
-          )
-
-          options.security_filter = security_provider.auth_middleware(
-            security_provider.basepath
-          )
-        }
-
-        this.api.__server_internal_command(
-          Object.assign(
-            {
-              serve_path: this.serve_path,
-              log_errors: true,
-              next_on_private: false,
-              next_on_not_found: true,
-            },
-            options
-          ),
-          app || this.app
-        )
-
-        if (this.default_redirect != null) {
-          if (this.redirect_all_unknown) this.app.use(redirect)
-          else this.app.all('/', redirect)
-          cli.logger.info(
-            `Redirecting ${
-              this.redirect_all_unknown ? 'all missing paths (not found)' : '/'
-            } to ${this.default_redirect}`
-          )
-        }
-
-        this.app.use((err, req, res, next) =>
-          this.api.handle_errors(err, req, res, (err) => {
-            // error ignored. since we are at the end of the service.
-            next()
-          })
-        )
-
-        cli.logger.info('Initialized stratis service middleware and routes')
+    if (this.default_redirect != null) {
+      // check call redirect if needed.
+      const redirect = (req, res, next) => {
+        return res.redirect(this.default_redirect)
       }
 
-    await this.invoke_initialization_scripts(cli.logger || console)
+      if (this.redirect_all_unknown) this.app.use(redirect)
+      else this.app.all('/', redirect)
+      this.logger.info(
+        `Redirecting ${
+          this.redirect_all_unknown ? 'all missing paths (not found)' : '/'
+        } to ${this.default_redirect}`
+      )
+    }
 
-    if (!stratis_init_called) this.api.server()
-
-    this.api.init_service = null
+    this.logger.info('Initialized stratis service middleware and routes')
 
     if (this.use_stratis_listeners) await this._listen(cli, listen_sync)
   }

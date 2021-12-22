@@ -134,6 +134,10 @@ class StratisClient extends EventTarget {
     } catch (err) {
       console.error(err)
     }
+    // check if to reload.
+    if (data.reload == true)
+      window.location.reload()
+    
   }
 
   async invoke_event(rid, response, error) {

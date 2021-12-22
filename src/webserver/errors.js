@@ -3,8 +3,16 @@
  **/
 
 class StratisError extends Error {
+  constructor(...args) {
+    super(...args)
+  }
+
   get http_response_code() {
     return 500
+  }
+
+  get requires_reload() {
+    return false
   }
 }
 
@@ -20,6 +28,16 @@ class StratisNotAuthorizedError extends StratisError {
   }
 }
 
+class StratisNotAuthorizedReloadError extends StratisNotAuthorizedError {
+  get http_response_code() {
+    return 403
+  }
+
+  get requires_reload() {
+    return true
+  }
+}
+
 class StratisTimeOutError extends StratisError {
   get http_response_code() {
     return 408
@@ -31,4 +49,5 @@ module.exports = {
   StratisNotFoundError,
   StratisTimeOutError,
   StratisNotAuthorizedError,
+  StratisNotAuthorizedReloadError,
 }

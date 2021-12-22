@@ -3,8 +3,8 @@
  */
 module.exports = {
   /** @type {StratisApiObject} */
-  print_something: async (args, context) => {
-    return 'something'
+  print_something: async ({ to_print = '[undefined]' }, context) => {
+    return `something ${to_print}`
   },
   /** @type {StratisApiObject} */
   a_value: {

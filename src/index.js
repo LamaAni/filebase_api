@@ -1,5 +1,6 @@
 const express = require('express')
 const { Stratis } = require('./webserver/stratis')
+const { StratisRequest } = require('./webserver/requests')
 const { JsonCompatible, StratisApiObject } = require('./webserver/interfaces')
 const { StratisPageCallContext } = require('./webserver/pages')
 const { StratisCli, create_statis_cli } = require('./cli')
@@ -27,5 +28,6 @@ module.exports = {
   StratisApiObject,
   Stratis,
   StratisCli,
+  StratisRequest,
   StratisPageCallContext,
 }

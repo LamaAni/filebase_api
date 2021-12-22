@@ -8,7 +8,7 @@ A file based web template engine for fast APIs and websites. This repo favors ve
 1. Built-in REST API.
 1. Build-in WebSocket API.
 1. Live update (triggered by file changes).
-1. Built in security filter (for requests).
+1. Built in authentication and user permissions (for requests).
 1. Templating.
 1. Client side (browser) javascript api.
 
