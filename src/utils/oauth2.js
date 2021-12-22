@@ -387,8 +387,10 @@ class StratisOAuth2Provider {
       token_type_hint: token_type,
     })
 
+    let token_info = {}
+
     try {
-      const token_info = (
+      token_info = (
         await this.configure_request(
           superagent.post(token_introspect_url.href)
         ).send()
@@ -498,7 +500,7 @@ class StratisOAuth2Provider {
           ? '[short]'
           : params.token_ident.substr(params.token_ident.length - 6)
 
-      this.logger.info(
+      this.logger.debug(
         `Authentication info updated for ${params.username}. (TID: ${
           params.token_ident
         }, Access ${params.is_access_granted ? 'GRANTED' : 'DENIED'})`
