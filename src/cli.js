@@ -611,7 +611,7 @@ class StratisCli {
     if (security_provider == null) return
 
     this.api.middleware_options.authenticate =
-      security_provider.auth_middleware(security_provider.basepath)
+      security_provider.auth_middleware()
 
     // set the login path
     this.app.use(

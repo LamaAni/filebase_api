@@ -430,10 +430,10 @@ class StratisOAuth2Provider {
   /**
    *
    * @param {OAuthSessionParams} params
-   * @returns {'updated'|'valid'|'invalid'}
+   * @returns {'missing'|'updated'|'valid'|'invalid'}
    */
   async update_token_info(params) {
-    if (params == null || params.access_token == null) return 'invalid'
+    if (params == null || params.access_token == null) return 'missing'
 
     const elapsed_since_last_check =
       params.updated == null
@@ -518,38 +518,44 @@ class StratisOAuth2Provider {
 
     req[this.request_user_object_key] = user_object
   }
+
+  redirect_to_login(req, res) {
+    const redirecturl = `${this.basepath}?origin=${encodeURIComponent(
+      req.originalUrl
+    )}`
+
+    return res.redirect(redirecturl)
+  }
+
+  redirect_to_revoke(req, res) {
+    const redirecturl = `${this.basepath}?origin=${encodeURIComponent(
+      req.originalUrl
+    )}`
+
+    return res.redirect(redirecturl)
+  }
+
   /**
    * Implements the authentication check middleware. If called request
    * must be authenticated against oauth2 to proceed. Use login_middleware
    * to create a login page redirect.
-   * @param {string} auth_redirect_path The authentication path to redirect to.
    * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
    */
-  auth_middleware(auth_redirect_path = null) {
-    auth_redirect_path = auth_redirect_path || this.basepath
-
+  auth_middleware() {
     /**
      * @param {Request} req
      * @param {Response} res
      * @param {NextFunction} next
      */
     const intercrept = async (req, res, next) => {
-      if (req.path == auth_redirect_path) return next()
+      if (req.path == this.basepath) return next()
 
       try {
         const params = this.read_oauth_session_params(req)
         const token_state = await this.update_token_info(params)
 
-        const redirect_to_login = () => {
-          const redirecturl = `${auth_redirect_path}?origin=${encodeURIComponent(
-            req.originalUrl
-          )}`
-
-          return res.redirect(redirecturl)
-        }
-
         if (token_state == 'invalid') {
-          return redirect_to_login()
+          return this.redirect_to_login(req, res)
         }
 
         if (token_state == 'updated')
