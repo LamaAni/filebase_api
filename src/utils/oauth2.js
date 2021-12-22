@@ -500,7 +500,7 @@ class StratisOAuth2Provider {
           ? '[short]'
           : params.token_ident.substr(params.token_ident.length - 6)
 
-      this.logger.info(
+      this.logger.debug(
         `Authentication info updated for ${params.username}. (TID: ${
           params.token_ident
         }, Access ${params.is_access_granted ? 'GRANTED' : 'DENIED'})`
