@@ -387,8 +387,10 @@ class StratisOAuth2Provider {
       token_type_hint: token_type,
     })
 
+    let token_info = {}
+
     try {
-      const token_info = (
+      token_info = (
         await this.configure_request(
           superagent.post(token_introspect_url.href)
         ).send()
