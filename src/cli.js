@@ -81,7 +81,7 @@ class StratisCli {
     /** If true, disables the internal cookie parser */
     this.cookies_disabled = false
     /** @type {CliArgument} */
-    this.__$cookies_disable = {
+    this.__$cookies_disabled = {
       type: 'flag',
       environmentVariable: 'STRATIS_COOKIES_DISABLE',
       default: this.cookies_disabled,
