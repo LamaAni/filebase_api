@@ -172,6 +172,8 @@ class Stratis extends events.EventEmitter {
     this.once
     /** @type {StratisEventEmitter} */
     this.emit
+    /** @type {StratisEventEmitter} */
+    this.emit_async
 
     this.on('error', (...args) => this._internal_on_emit_error(...args))
 
@@ -181,6 +183,49 @@ class Stratis extends events.EventEmitter {
       code_module_bank_options
     )
     this.template_bank = new StratisEJSTemplateBank(this, template_bank_options)
+  }
+
+  /** @type {StratisEventEmitter} */
+  async emit_async(event, ...args) {
+    assert(
+      typeof event == 'string' || typeof event == 'symbol',
+      'Event type must be a string or a symbol'
+    )
+    if (typeof event !== 'string' && typeof event !== 'symbol') {
+      throw new TypeError('type is not type of string or symbol!')
+    }
+
+    const listeners = this.listeners(event)
+    if (listeners.length == 0) return false
+    for (let listener of listeners) {
+      await listener.apply(this, args)
+    }
+
+    return true
+  }
+
+  /**
+   * Emits a stratis error.
+   * @param {Error} err The error
+   * @param {StratisExpressRequest} req The request
+   * @param {[integer]} codes The http codes for which to emit an error.
+   * If null then all.
+   */
+  emit_error(err, req = null, codes = [500]) {
+    const http_response_code =
+      err instanceof StratisError ? err.http_response_code || 500 : 500
+
+    if (codes == null || http_response_code in codes)
+      // application error.
+      this.emit('error', err, req)
+  }
+
+  /**
+   * Emits the startis request event.
+   * @param {StratisRequest} stratis_request The request
+   */
+  async emit_stratis_request(stratis_request) {
+    await this.emit_async('stratis_request', stratis_request)
   }
 
   /**
@@ -208,30 +253,6 @@ class Stratis extends events.EventEmitter {
 
     if (request_log_errors || this.log_errors)
       this.logger.error(err.stack || `${err}`)
-  }
-
-  /**
-   * Emits a stratis error.
-   * @param {Error} err The error
-   * @param {StratisExpressRequest} req The request
-   * @param {[integer]} codes The http codes for which to emit an error.
-   * If null then all.
-   */
-  emit_error(err, req = null, codes = [500]) {
-    const http_response_code =
-      err instanceof StratisError ? err.http_response_code || 500 : 500
-
-    if (codes == null || http_response_code in codes)
-      // application error.
-      this.emit('error', err, req)
-  }
-
-  /**
-   * Emits the startis request event.
-   * @param {StratisRequest} stratis_request The request
-   */
-  emit_stratis_request(stratis_request) {
-    this.emit('stratis_request', stratis_request)
   }
 
   /**
@@ -270,7 +291,7 @@ class Stratis extends events.EventEmitter {
           stratis_request._context = context
 
           // invoking the event.
-          this.emit_stratis_request(stratis_request)
+          await this.emit_stratis_request(stratis_request)
 
           const rsp_data = await with_timeout(
             async () => {
@@ -292,6 +313,7 @@ class Stratis extends events.EventEmitter {
             ws.send(
               JSON.stringify({
                 rid: ws_request_args.rid,
+                reload: (err.http_response_code || 500) != 500,
                 error: this.return_errors_to_client
                   ? `${err}`
                   : 'Error while serving request',
@@ -373,7 +395,7 @@ class Stratis extends events.EventEmitter {
     // page api request.
 
     // invoking the event.
-    this.emit_stratis_request(stratis_request)
+    await this.emit_stratis_request(stratis_request)
 
     if (stratis_request.api_path != null)
       return await this.handle_page_api_call(stratis_request, res, next)

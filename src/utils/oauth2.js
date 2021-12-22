@@ -428,6 +428,97 @@ class StratisOAuth2Provider {
   }
 
   /**
+   *
+   * @param {OAuthSessionParams} params
+   * @returns {'updated'|'valid'|'invalid'}
+   */
+  async update_token_info(params) {
+    if (params == null || params.access_token == null) return 'invalid'
+
+    const elapsed_since_last_check =
+      params.updated == null
+        ? Infinity
+        : milliseconds_utc_since_epoc() - params.updated
+
+    const elapsed_since_authenticated =
+      params.authenticated == null
+        ? Infinity
+        : milliseconds_utc_since_epoc() - params.authenticated
+
+    if (
+      params.access_token != null &&
+      this.expires_in != null &&
+      elapsed_since_authenticated > this.expires_in
+    ) {
+      return 'invalid'
+    } else if (
+      (params.token_info == null && this.token_introspect_url != null) ||
+      elapsed_since_last_check > this.recheck_interval ||
+      params.is_access_granted == null
+    ) {
+      if (this.token_introspect_url != null) {
+        // need to validate checks or redirect to login, depends
+        // on the configuration.
+        params.token_info = await this.get_token_info(
+          params.access_token,
+          'access_token'
+        )
+
+        // checking access
+        if (params.token_info.active != true) {
+          params.access_token = null
+          params.is_access_granted = false
+        } else
+          params.is_access_granted =
+            this.access_validators.length > 0
+              ? this.access_validators.every((av) => av(params.token_info))
+              : true
+
+        params.username = this.username_from_token_info_path
+          .map((p) => value_from_object_path(params.token_info, p))
+          .filter((v) => v != null)[0]
+      } else {
+        assert(
+          this.access_validators.length == 0,
+          'Access validators were provided but token_introspect_url is null'
+        )
+        params.username = 'Anonymous'
+        params.is_access_granted = true
+      }
+
+      params.token_ident =
+        params.access_token == null ? '??????' : params.access_token
+      params.token_ident =
+        params.token_ident.length < 6
+          ? '[short]'
+          : params.token_ident.substr(params.token_ident.length - 6)
+
+      this.logger.info(
+        `Authentication info updated for ${params.username}. (TID: ${
+          params.token_ident
+        }, Access ${params.is_access_granted ? 'GRANTED' : 'DENIED'})`
+      )
+      return 'updated'
+    } else return 'valid'
+  }
+
+  /**
+   * Update the request user object.
+   * @param {Request} req
+   * @param {OAuthSessionParams} params
+   */
+  update_request_user_object(req, params) {
+    let user_object = req[this.request_user_object_key] || {}
+    if (typeof user_object != 'object') user_object = {}
+    user_object = Object.assign(user_object, {
+      username: user_object.username || params.username,
+      access_token: params.access_token,
+      token_info: params.token_info,
+    })
+
+    req[this.request_user_object_key] = user_object
+  }
+  /**
    * Implements the authentication check middleware. If called request
    * must be authenticated against oauth2 to proceed. Use login_middleware
    * to create a login page redirect.
@@ -447,111 +538,27 @@ class StratisOAuth2Provider {
 
       try {
         const params = this.read_oauth_session_params(req)
+        const token_state = await this.update_token_info(params)
 
-        const redirect_to_login = () => {
-          const redirecturl = `${auth_redirect_path}?origin=${encodeURIComponent(
-            req.originalUrl
-          )}`
-
-          return res.redirect(redirecturl)
+        if (token_state == 'invalid') {
+          return res.redirect(
+            `${auth_redirect_path}?revoke=true&&redirect_to=${encodeURIComponent(
+              req.originalUrl
+            )}`
+          )
         }
 
-        if (params != null && params.access_token != null) {
-          const elapsed_since_last_check =
-            params.updated == null
-              ? Infinity
-              : milliseconds_utc_since_epoc() - params.updated
-
-          const elapsed_since_authenticated =
-            params.authenticated == null
-              ? Infinity
-              : milliseconds_utc_since_epoc() - params.authenticated
-
-          if (
-            params.access_token != null &&
-            this.expires_in != null &&
-            elapsed_since_authenticated > this.expires_in
-          ) {
-            return res.redirect(
-              `${auth_redirect_path}?revoke=true&&redirect_to=${encodeURIComponent(
-                req.originalUrl
-              )}`
-            )
-          } else if (
-            (params.token_info == null && this.token_introspect_url != null) ||
-            elapsed_since_last_check > this.recheck_interval ||
-            params.is_access_granted == null
-          ) {
-            if (this.token_introspect_url != null) {
-              // need to validate checks or redirect to login, depends
-              // on the configuration.
-              params.token_info = await this.get_token_info(
-                params.access_token,
-                'access_token'
-              )
-
-              // checking access
-              if (params.token_info.active != true) {
-                params.access_token = null
-                params.is_access_granted = false
-              } else
-                params.is_access_granted =
-                  this.access_validators.length > 0
-                    ? this.access_validators.every((av) =>
-                        av(params.token_info)
-                      )
-                    : true
-
-              params.username = this.username_from_token_info_path
-                .map((p) => value_from_object_path(params.token_info, p))
-                .filter((v) => v != null)[0]
-            } else {
-              assert(
-                this.access_validators.length == 0,
-                'Access validators were provided but token_introspect_url is null'
-              )
-              params.username = 'Anonymous'
-              params.is_access_granted = true
-            }
-
-            params.token_ident =
-              params.access_token == null ? '??????' : params.access_token
-            params.token_ident =
-              params.token_ident.length < 6
-                ? '[short]'
-                : params.token_ident.substr(params.token_ident.length - 6)
-
-            // update timestamp and access token.
-            this.write_oauth_session_params(req, params)
-
-            this.logger.info(
-              `Authentication info updated for ${params.username}. (TID: ${
-                params.token_ident
-              }, Access ${params.is_access_granted ? 'GRANTED' : 'DENIED'})`
-            )
-          }
-        }
-
-        if (params == null || params.access_token == null)
-          return redirect_to_login()
+        if (token_state == 'updated')
+          this.write_oauth_session_params(req, params)
 
         if (params.is_access_granted === false)
           throw new StratisNotAuthorizedError()
 
         // updating the user object.
-        let user_object = req[this.request_user_object_key] || {}
-        if (typeof user_object != 'object') user_object = {}
-        user_object = Object.assign(user_object, {
-          username: user_object.username || params.username,
-          access_token: params.access_token,
-          token_info: params.token_info,
-        })
-
-        req[this.request_user_object_key] = user_object
+        this.update_request_user_object(req, params)
       } catch (err) {
         return next(err)
       }
-
       return next()
     }
 
@@ -687,9 +694,19 @@ class StratisOAuth2Provider {
     stratis.user_and_permission_options.get_user_info = async (
       stratis_request
     ) => {
-
       return stratis_request.request[this.request_user_object_key]
     }
+
+    stratis.on('stratis_request', async (stratis_request) => {
+      if (stratis_request.access_mode != 'secure') return
+      const params = this.read_oauth_session_params(stratis_request.request)
+      const token_state = await this.update_token_info(params)
+      if (token_state == 'invalid') {
+        throw new StratisNotAuthorizedError(
+          'User session unauthorized or expired'
+        )
+      }
+    })
   }
 }
 
