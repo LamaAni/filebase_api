@@ -325,10 +325,9 @@ class StratisOAuth2Provider {
 
   /**
    * @param {Request} req
-   * @param {Response} res
    * @param {OAuthSessionParams} session_params
    */
-  write_oauth_session_params(req, res, session_params) {
+  write_oauth_session_params(req, session_params) {
     session_params.authenticated =
       session_params.authenticated || milliseconds_utc_since_epoc()
     session_params.updated = milliseconds_utc_since_epoc()
@@ -523,7 +522,7 @@ class StratisOAuth2Provider {
                 : params.token_ident.substr(params.token_ident.length - 6)
 
             // update timestamp and access token.
-            this.write_oauth_session_params(req, res, params)
+            this.write_oauth_session_params(req, params)
 
             this.logger.info(
               `Authentication info updated for ${params.username}. (TID: ${
@@ -602,7 +601,7 @@ class StratisOAuth2Provider {
             await this.revoke(session_params.access_token, 'access_token')
 
           session_params.access_token = null
-          this.write_oauth_session_params(req, res, session_params)
+          this.write_oauth_session_params(req, session_params)
 
           return res.redirect(
             req.query.redirect_to ||
@@ -629,7 +628,6 @@ class StratisOAuth2Provider {
 
           this.write_oauth_session_params(
             req,
-            res,
             Object.assign({}, session_params, token)
           )
 
@@ -638,7 +636,7 @@ class StratisOAuth2Provider {
           // we have not yet authenticated and need redirect.
           const origin = query.origin || '/'
 
-          const session_params = this.write_oauth_session_params(req, res, {
+          const session_params = this.write_oauth_session_params(req, {
             state: Object.assign(
               {},
               this.state_generator ? await this.state_generator() : {},
@@ -686,7 +684,10 @@ class StratisOAuth2Provider {
    * @param {Stratis} stratis
    */
   bind_stratis_api(stratis) {
-    stratis.user_and_permission_options.get_user_info = (stratis_request) => {
+    stratis.user_and_permission_options.get_user_info = async (
+      stratis_request
+    ) => {
+
       return stratis_request.request[this.request_user_object_key]
     }
   }

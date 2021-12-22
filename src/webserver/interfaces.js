@@ -11,13 +11,16 @@
 /**
  * @typedef {(event: 'error', listener: (error: Error) => void) => this} StratisEventListenError
  * @typedef {(event: 'log', listener: (level:string, ...args) => void) => this} StratisEventListenLog
- * @typedef {StratisEventListenError & StratisEventListenLog} StratisEventListenRegister
+ * @typedef {(event: 'stratis_request', listener: (stratis_request:StratisRequest) => void) => this} StratisEventListenStratisRequest
+ * @typedef {StratisEventListenStratisRequest & StratisEventListenError & StratisEventListenLog} StratisEventListenRegister
  */
 
 /**
  * @typedef {(event: 'error', error:Error) => this} StratisEventEmitError
  * @typedef {(event: 'log', level:'DEBUG'|'INFO'|'WARN'|'ERROR', ...args) => this} StratisEventEmitLog
- * @typedef {StratisEventEmitError & StratisEventEmitLog} StratisEventEmitter
+ * @typedef {(event: 'stratis_request', stratis_request:StratisRequest) => this} StratisEventEmitStratisRequest
+ * @typedef {StratisEventEmitStratisRequest & StratisEventEmitError & StratisEventEmitLog} StratisEventEmitter
+
  */
 
 /**

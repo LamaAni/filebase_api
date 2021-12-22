@@ -227,6 +227,14 @@ class Stratis extends events.EventEmitter {
   }
 
   /**
+   * Emits the startis request event.
+   * @param {StratisRequest} stratis_request The request
+   */
+  emit_stratis_request(stratis_request) {
+    this.emit('stratis_request', stratis_request)
+  }
+
+  /**
    * @param {StratisRequest} stratis_request
    * @param {StratisExpressResponse} res
    * @param {NextFunction} next
@@ -260,6 +268,9 @@ class Stratis extends events.EventEmitter {
           })
 
           stratis_request._context = context
+
+          // invoking the event.
+          this.emit_stratis_request(stratis_request)
 
           const rsp_data = await with_timeout(
             async () => {
@@ -360,6 +371,10 @@ class Stratis extends events.EventEmitter {
     // a page request can be either:
     // page render request
     // page api request.
+
+    // invoking the event.
+    this.emit_stratis_request(stratis_request)
+
     if (stratis_request.api_path != null)
       return await this.handle_page_api_call(stratis_request, res, next)
     else
