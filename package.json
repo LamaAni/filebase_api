@@ -1,6 +1,6 @@
 {
   "name": "@lamaani/stratis",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A simple web template engine for fast apis and websites. Very low memory and cpu print that fits docker and kubernetes pods, or can run parallel to your application.",
   "main": "src/index.js",
   "bin": {
