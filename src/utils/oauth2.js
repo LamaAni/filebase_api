@@ -540,12 +540,16 @@ class StratisOAuth2Provider {
         const params = this.read_oauth_session_params(req)
         const token_state = await this.update_token_info(params)
 
+        const redirect_to_login = () => {
+          const redirecturl = `${auth_redirect_path}?origin=${encodeURIComponent(
+            req.originalUrl
+          )}`
+
+          return res.redirect(redirecturl)
+        }
+
         if (token_state == 'invalid') {
-          return res.redirect(
-            `${auth_redirect_path}?revoke=true&&redirect_to=${encodeURIComponent(
-              req.originalUrl
-            )}`
-          )
+          return redirect_to_login()
         }
 
         if (token_state == 'updated')
