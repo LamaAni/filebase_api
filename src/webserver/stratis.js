@@ -172,8 +172,6 @@ class Stratis extends events.EventEmitter {
     this.once
     /** @type {StratisEventEmitter} */
     this.emit
-    /** @type {StratisEventEmitter} */
-    this.emit_async
 
     this.on('error', (...args) => this._internal_on_emit_error(...args))
 
@@ -212,10 +210,9 @@ class Stratis extends events.EventEmitter {
    * If null then all.
    */
   emit_error(err, req = null, codes = [500]) {
-    const http_response_code =
-      err instanceof StratisError ? err.http_response_code || 500 : 500
+    const http_response_code = err.http_response_code || 500
 
-    if (codes == null || http_response_code in codes)
+    if (codes == null || codes.includes(http_response_code))
       // application error.
       this.emit('error', err, req)
   }
@@ -313,7 +310,7 @@ class Stratis extends events.EventEmitter {
             ws.send(
               JSON.stringify({
                 rid: ws_request_args.rid,
-                reload: (err.http_response_code || 500) != 500,
+                reload: err.requires_reload === true,
                 error: this.return_errors_to_client
                   ? `${err}`
                   : 'Error while serving request',

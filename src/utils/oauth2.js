@@ -1,7 +1,7 @@
 const ProxyAgent = require('proxy-agent')
 const superagent = require('superagent')
 const { CacheDictionary } = require('../webserver/collections')
-const { StratisNotAuthorizedError } = require('../webserver/errors')
+const { StratisNotAuthorizedReloadError } = require('../webserver/errors')
 const {
   assert,
   assert_non_empty_string,
@@ -14,6 +14,7 @@ const {
 } = require('../common')
 
 /**
+ * @typedef {import('express').Express} Express
  * @typedef {import('../index').Stratis} Stratis
  * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
@@ -528,9 +529,9 @@ class StratisOAuth2Provider {
   }
 
   redirect_to_revoke(req, res) {
-    const redirecturl = `${this.basepath}?origin=${encodeURIComponent(
-      req.originalUrl
-    )}`
+    const redirecturl = `${
+      this.basepath
+    }?revoke=true&&redirect_to=${encodeURIComponent(req.originalUrl)}`
 
     return res.redirect(redirecturl)
   }
@@ -554,15 +555,18 @@ class StratisOAuth2Provider {
         const params = this.read_oauth_session_params(req)
         const token_state = await this.update_token_info(params)
 
-        if (token_state == 'invalid') {
-          return this.redirect_to_login(req, res)
+        switch (token_state) {
+          case 'missing':
+            return this.redirect_to_login(req, res)
+          case 'invalid':
+            return this.redirect_to_revoke(req, res)
+          case 'updated':
+            this.write_oauth_session_params(req, params)
+            break
         }
 
-        if (token_state == 'updated')
-          this.write_oauth_session_params(req, params)
-
         if (params.is_access_granted === false)
-          throw new StratisNotAuthorizedError()
+          throw new StratisNotAuthorizedReloadError()
 
         // updating the user object.
         this.update_request_user_object(req, params)
@@ -696,6 +700,15 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Bins the oauth controller to a (non stratis) express app.
+   * @param {Express} app
+   */
+  bind(app) {
+    app.use(this.auth_middleware())
+    app.use(this.basepath, this.login_middleware())
+  }
+
+  /**
    * Bind the current auth2 security provider to
    * the stratis api.
    * @param {Stratis} stratis
@@ -709,13 +722,17 @@ class StratisOAuth2Provider {
 
     stratis.on('stratis_request', async (stratis_request) => {
       if (stratis_request.access_mode != 'secure') return
+
       const params = this.read_oauth_session_params(stratis_request.request)
       const token_state = await this.update_token_info(params)
-      if (token_state == 'invalid') {
-        throw new StratisNotAuthorizedError(
+
+      if (token_state == 'invalid')
+        throw new StratisNotAuthorizedReloadError(
           'User session unauthorized or expired'
         )
-      }
+
+      if (token_state == 'updated')
+        this.write_oauth_session_params(stratis_request.request, params)
     })
   }
 }

@@ -16,5 +16,11 @@ module.exports = {
       await context.is_permitted(group),
       'Test permission denied'
     )
+    return true
+  },
+  /** @type {StratisApiObject} */
+  async get_user_access_token({}, context) {
+    const user_info = await context.stratis_request.get_user_info()
+    return user_info.access_token
   },
 }
