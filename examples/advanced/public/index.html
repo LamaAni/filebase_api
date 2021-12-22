@@ -6,13 +6,26 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Test website for stratis</title>
+    <script>
+      // Api method to call on client side
+      async function update_print_at_client() {
+        document.getElementById('print_at_client_on_load').innerHTML =
+          await stratis.print_something({ to_print: 'at client' })
+      }
+
+      // Call api method on client side after 1 second.
+      setTimeout(update_print_at_client, 1000)
+    </script>
   </head>
   <body>
     <div>Loaded at: <%- context.session['loaded'] || 'first load' %></div>
     <div>
+      <!-- Printing at server side -->
       <%- JSON.stringify(a_value) %><br />
-      <%- await print_something() %>
+      <%- await print_something({to_print: "at server"}) %>
     </div>
+    <!-- Completed on client side -->
+    <div id="print_at_client_on_load"></div>
   </body>
 </html>
 <% context.session['loaded']=new Date()+'' %>

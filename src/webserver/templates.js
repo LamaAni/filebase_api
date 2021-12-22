@@ -314,7 +314,7 @@ class StratisEJSTemplateBank {
   }
 
   /**
-   *
+   * Render the stratis template from the template objects.
    * @param {string} template_filepath The path to the template to render.
    * @param {ejs.Data | StratisEJSTemplateRenderContext} context Render context. If null then created.
    * @returns

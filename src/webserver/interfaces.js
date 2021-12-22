@@ -21,11 +21,12 @@
  */
 
 /**
+ * An object that can ben stringified as json
  * @typedef {string | number | {}} JsonCompatible
  */
 
 /**
- * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible|string|number|{}} StratisApiObject
+ * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible|string|number|Object} StratisApiObject
  */
 
 /**
@@ -37,8 +38,8 @@
 
 /**
  * @typedef {Object} StratisExpressRequestEnhancements
- * @property {StratisRequest} stratis_request
  * @property {Stratis} stratis
+ * @property {StratisRequest} stratis_request
  */
 
 /**
@@ -47,8 +48,8 @@
 
 /**
  * @typedef {Object} StratisExpressResponseEnhancements
- * @property {StratisRequest} stratis_request
  * @property {Stratis} stratis
+ * @property {StratisRequest} stratis_request
  */
 
 /**
