@@ -29,6 +29,11 @@ jobs:
         id: args
         uses: LamaAni/parse-commit-args-action@master
 
+      - name: Apply current version
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
+        run: |
+          npm version '${{steps.args.outputs.version}}' &&
+
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
@@ -64,6 +69,11 @@ jobs:
         id: args
         uses: LamaAni/parse-commit-args-action@master
 
+      - name: Apply current version
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
+        run: |
+          npm version '${{steps.args.outputs.version}}' &&
+
       - name: Install required packages
         run: |
           npm install pkg
@@ -94,6 +104,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@v2
+
+      - name: Apply current version
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
+        run: |
+          npm version '${{steps.args.outputs.version}}' &&
 
       - name: "build & push"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
