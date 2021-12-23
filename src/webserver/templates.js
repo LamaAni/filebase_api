@@ -35,13 +35,14 @@ class StratisEJSTemplateRenderContext {
   /**
    * Holds the the render context data and methods.
    * @param {ejs.Data} data The template data (as dictionary)
-   * @param {ejs.Data} overridable_data A data object to serve as a base for the
-   * merge of all data. Will be override by any method or data value.
+   * @param {StratisEJSTemplate} template The rendering template.
+   * @param {StratisEJSTemplateRenderContext} page_render_context The parent template of the original call
+   * (In a page this would be the page template even for nested views)
    */
-  constructor(data = {}, overridable_data = {}) {
-    this._template = null
+  constructor(data = {}, template = null, page_render_context = null) {
+    this._template = template
+    this._page_render_context = page_render_context
     this._data = data
-    this._overridable_data = overridable_data
   }
 
   /**
@@ -53,14 +54,33 @@ class StratisEJSTemplateRenderContext {
   }
 
   /**
+   * The page template.
+   * @type {StratisEJSTemplate}
+   */
+  get page_template() {
+    return this._page_render_context || this.template
+  }
+
+  /**
+   * The page template.
+   * @type {StratisEJSTemplate}
+   */
+  get page_context() {
+    return this._page_render_context || this
+  }
+
+  /**
+   * This is the main page (entry) template.
+   */
+  get is_page() {
+    return this.page_context == this
+  }
+
+  /**
    * The added template data.
    */
   get data() {
     return this._data
-  }
-
-  get overridable_data() {
-    return this._overridable_data
   }
 
   /**
@@ -95,14 +115,30 @@ class StratisEJSTemplateRenderContext {
   /**
    * Includes another template for the current template filepath.
    * @param {string} fpath The path to include
+   * @param {{}} data The template data to add.
    */
-  async include(fpath) {
+  async include(fpath, data = null) {
+    assert(
+      data == null || typeof data == 'object',
+      'Template render data must be an object dictionary {}'
+    )
     assert(typeof fpath == 'string', 'Include filepath must be a string')
+
     fpath = this.resolve_template_relative_path(fpath)
 
-    const calling_template = this.template
-    const include_result = await this.template_bank.render(fpath, this)
-    this.assign_template(calling_template)
+    const template = this.template_bank.load(fpath)
+    const context = new StratisEJSTemplateRenderContext(
+      Object.assign({}, this.data, data || {}),
+      template,
+      this.page_template || this
+    )
+
+    // render in the current context.
+    const include_result = await template.render(
+      await context.get_ejs_render_data()
+    )
+
+    // // reassign the calling template.
     return include_result
   }
 
@@ -118,11 +154,36 @@ class StratisEJSTemplateRenderContext {
   }
 
   /**
-   * Assign the current executing template.
-   * @param {StratisEJSTemplate} template The template to prepare.
+   * Template method. Renders the file api script tag.
+   * @param {string} api_name The name of the api to use. Defaults
+   * to name of the file.
    */
-  assign_template(template) {
-    this._template = template
+  render_stratis_script_tag(api_name = null) {
+    const url_path = this.is_page
+      ? path.basename(this.template.template_filepath)
+      : path.relative(
+          path.dirname(this.page_template.template_filepath),
+          this.template.template_filepath
+        )
+
+    api_name =
+      api_name || this.is_page
+        ? 'stratis'
+        : path
+            .basename(this.template.template_filepath)
+            .replace(/\.[^/.]+$/, '') // remove extension
+            .replace(/[^\w]/g, '_') // replace api name
+
+    const api_path = `${url_path}/render_stratis_browser_api_script`
+
+    const api_query = Object.entries({
+      api_name,
+      websocket_path: url_path,
+    })
+      .map((e) => `${e[0]}=${encodeURIComponent(e[1])}`)
+      .join('&')
+
+    return `<script lang="javascript" src='${api_path}?${api_query}'></script>`
   }
 
   /**
@@ -140,20 +201,20 @@ class StratisEJSTemplateRenderContext {
         )
       ).as_render_objects()
 
-    const include = async (...args) => await this.include(...args)
     const template_require = (...args) => this.template_require(...args)
 
     return Object.assign(
       {},
-      this.overridable_data || {},
+      this.data || {},
       {
-        include,
+        include: async (...args) => await this.include(...args),
         require: this.stratis.ejs_options.add_require ? template_require : null,
         __dirname: path.dirname(this.template.template_filepath),
         __filename: this.template.template_filepath,
+        render_stratis_script_tag: (...args) =>
+          this.render_stratis_script_tag(...args),
       },
-      code_modules,
-      this.data || {}
+      code_modules
     )
   }
 }
@@ -229,22 +290,12 @@ class StratisEJSTemplate {
 
   /**
    * Renders the template. Will compile the template if needed.
-   * @param {ejs.Data | StratisEJSTemplateRenderContext} context The active render context.
-   * and recompile if needed.
+   * @param {ejs.Data} context The active render context.
    * @returns
    */
-  async render(context = null) {
+  async render(data) {
     await this.compile()
-
-    context =
-      context instanceof StratisEJSTemplateRenderContext
-        ? context
-        : new StratisEJSTemplateRenderContext(context)
-
-    context.assign_template(this)
-
-    const render_data = await context.get_ejs_render_data()
-    return await this._render(render_data)
+    return await this._render(data || {})
   }
 }
 
@@ -320,7 +371,23 @@ class StratisEJSTemplateBank {
    * @returns
    */
   async render(template_filepath, context = null) {
-    return await this.load(template_filepath).render(context)
+    const template = await this.load(template_filepath)
+
+    if (context == null) context = {}
+    else if (context instanceof StratisEJSTemplateRenderContext)
+      context = Object.assign({}, context.data)
+    else
+      assert(
+        typeof context == 'object',
+        'The context must be an object or StratisEJSTemplateRenderContext'
+      )
+
+    const render_context = new StratisEJSTemplateRenderContext(
+      context,
+      template
+    )
+
+    return template.render(await render_context.get_ejs_render_data())
   }
 }
 

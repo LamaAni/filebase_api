@@ -344,7 +344,8 @@ class Stratis extends events.EventEmitter {
       stratis_request,
       name,
       await StratisPageApiCall.parse_api_call_args(
-        stratis_request.request.body
+        stratis_request.request.body,
+        stratis_request.request.query
       ),
       true
     )
