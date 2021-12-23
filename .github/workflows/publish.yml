@@ -83,9 +83,10 @@ jobs:
           npm install pkg
           npm install
 
-      - name: Compile binaries
+      - name: Compile & validate binaries
         run: |
-          node_modules/.bin/pkg .
+          node_modules/.bin/pkg . || exit $?
+          ./.local/bin/stratis-linux --version || exit $?
 
       - name: "Release: upload binary files"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
