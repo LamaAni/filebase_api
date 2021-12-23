@@ -77,11 +77,11 @@ On POST the payload is mapped to the first value of the function, and json parsi
 
 # Client-Side html page structure
 
-If on the server-side html template (page), in the head tag, you add,
+If on the server-side html template (page), if you add,
 
 ```html
 <head>
-  <%- render_stratis_script_tag() %>
+  <%- render_stratis_script_tag('stratis') %>
   <script lang="javascript">
     stratis.print_x_plus_2({x: 40}).then(val => console.log(val))
     stratis.y().then(val => console.log(val))
@@ -93,6 +93,10 @@ If on the server-side html template (page), in the head tag, you add,
 ```
 
 A javascript object named `stratis` will be created in the client browser, that includes all the exposed page api function as defined in `[filepath].code.js`. See below website structure.
+
+Note: you can change the name of the api  object to whatever you like. Otherwise,
+1. In main pages the default is `stratis`
+1. On **included** templates the default is the `[filename]` of the template.
 
 # Server website structure
 

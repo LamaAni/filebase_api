@@ -136,8 +136,6 @@ class StratisPageCallContext {
         this.render_stratis_api_description(...args),
       render_stratis_browser_api_script: (...args) =>
         this.render_stratis_browser_api_script(...args),
-      render_stratis_script_tag: (...args) =>
-        this.render_stratis_script_tag(...args),
     }
   }
 
@@ -167,21 +165,23 @@ class StratisPageCallContext {
   }
 
   /**
-   * Template method. Renders the file api script tag.
-   */
-  render_stratis_script_tag() {
-    const request_filename = path.basename(this.stratis_request.query_path)
-    return `<script lang="javascript" src='${request_filename}/render_stratis_browser_api_script'></script>`
-  }
-
-  /**
    * Render stratis api script.
+   * @param {Object} param0
+   * @param {string} param0.api_name The name of the api
+   * @param {string} param0.websocket_path The websocket path to use for inner pages
    */
-  async render_stratis_browser_api_script() {
+  async render_stratis_browser_api_script({
+    api_name = 'stratis',
+    websocket_path = null,
+    needs_core = true,
+  }) {
     /** @type {StratisRequestEnvironment} */
     return await this.stratis_request.stratis.template_bank.render(
       this.stratis.client_api_options.api_code_path,
       {
+        websocket_path,
+        api_name,
+        needs_core,
         code_module: await this.get_code_module_objects(),
         request: this.stratis_request,
         stratis: this.stratis,
@@ -252,36 +252,39 @@ class StratisPageApiCall extends StratisPageCall {
    * Reads the api call args from the payload data. Multiple calls will
    * result in multiple reads.
    * @param {stream.Readable|Buffer|string|Object<string,any>} payload The call payload data.
+   * @param {ejs.Data} query_args The request query args if any.
    * @returns {Object}
    */
-  static async parse_api_call_args(payload) {
-    if (payload == null) return {}
+  static async parse_api_call_args(payload, query_args = null) {
+    if (payload == null) payload = {}
+    else {
+      const is_stream = payload instanceof stream.Readable
+      const is_buffer = payload instanceof Buffer
 
-    const is_stream = payload instanceof stream.Readable
-    const is_buffer = payload instanceof Buffer
+      if (is_stream || is_buffer) {
+        if (is_stream)
+          payload = await stream_to_buffer(split_stream_once(data, '\0')[0])
+        payload = payload.toString('utf-8')
+        payload = payload.length == 0 ? null : payload
+      }
 
-    if (is_stream || is_buffer) {
-      if (is_stream)
-        payload = await stream_to_buffer(split_stream_once(data, '\0')[0])
-      payload = payload.toString('utf-8')
-      payload = payload.length == 0 ? null : payload
+      if (payload != null || typeof payload == 'string') {
+        if (payload != null && /^\s*[\{]/gms.test(payload))
+          payload = JSON.parse(payload)
+        else
+          payload = {
+            payload: payload,
+          }
+      }
+
+      assert(
+        typeof payload == 'string' || typeof payload == 'object',
+        'Payload data must be either a buffer, stream, string or dictionary (or null)'
+      )
     }
 
-    if (payload != null || typeof payload == 'string') {
-      if (payload != null && /^\s*[\{]/gms.test(payload))
-        payload = JSON.parse(payload)
-      else
-        payload = {
-          payload: payload,
-        }
-    }
-
-    assert(
-      typeof payload == 'string' || typeof payload == 'object',
-      'Payload data must be either a buffer, stream, string or dictionary (or null)'
-    )
-
-    return payload
+    if (query_args != null) return Object.assign({}, query_args, payload)
+    else return payload
   }
 
   /**
@@ -329,13 +332,9 @@ class StratisPageRenderRequest extends StratisPageCall {
    * @returns {JsonCompatible} response
    */
   async render(context) {
-    const template_render_context = new StratisEJSTemplateRenderContext(
-      {},
-      context.get_render_objects()
-    )
     return await this.request.stratis.template_bank.render(
       this.request.filepath,
-      template_render_context
+      context.get_render_objects()
     )
   }
 }

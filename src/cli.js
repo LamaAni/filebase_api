@@ -638,9 +638,14 @@ class StratisCli {
       )
         ? 'public'
         : ''
+
       for (const fname of ['index.html', 'index.htm', 'api']) {
-        if (fs.existsSync(path.join(this.serve_path, redirect_basepath, fname)))
+        if (
+          fs.existsSync(path.join(this.serve_path, redirect_basepath, fname))
+        ) {
           this.default_redirect = path.join(redirect_basepath, fname)
+          break
+        }
       }
     }
 
