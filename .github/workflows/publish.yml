@@ -32,9 +32,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply current version
-        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version --no-git-tag-version '${{steps.args.outputs.version}}'
+          npm version --no-git-tag-version '$VERSION'
+        env:
+          VERSION: "${{steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true' ? steps.args.outputs.version : '0.0.0' }}"
 
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
