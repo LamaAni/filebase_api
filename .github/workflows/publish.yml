@@ -34,7 +34,7 @@ jobs:
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version '${{steps.args.outputs.version}}' &&
+          npm version '${{steps.args.outputs.version}}'
 
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
@@ -45,7 +45,6 @@ jobs:
           git fetch &&
           git checkout master &&
           git pull &&
-          npm version '${{steps.args.outputs.version}}' &&
           npm publish && 
           git push origin HEAD
         env:
@@ -76,16 +75,17 @@ jobs:
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version '${{steps.args.outputs.version}}' &&
+          npm version '${{steps.args.outputs.version}}'
 
       - name: Install required packages
         run: |
           npm install pkg
           npm install
 
-      - name: Compile binaries
+      - name: Compile & validate binaries
         run: |
-          node_modules/.bin/pkg .
+          node_modules/.bin/pkg . || exit $?
+          ./.local/bin/stratis-linux --version || exit $?
 
       - name: "Release: upload binary files"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
@@ -112,7 +112,7 @@ jobs:
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version '${{steps.args.outputs.version}}' &&
+          npm version '${{steps.args.outputs.version}}'
 
       - name: "build & push"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
