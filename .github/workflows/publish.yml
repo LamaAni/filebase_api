@@ -33,9 +33,14 @@ jobs:
 
       - name: Apply current version
         run: |
+          if [ "$USE_DEBUG_VERSION" == "true" ]; then
+            export VERSION="$DEBUG_VERSION"
+          fi
           npm version --no-git-tag-version '$VERSION'
         env:
-          VERSION: "${{steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true' ? steps.args.outputs.version : '0.0.0' }}"
+          DEBUG_VERSION: "0.0.0"
+          USE_DEBUG_VERSION: "${{steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}"
+          VERSION: "${{ steps.args.outputs.version }}"
 
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
