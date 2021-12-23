@@ -34,7 +34,7 @@ jobs:
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version '${{steps.args.outputs.version}}'
+          npm version --no-git-tag-version '${{steps.args.outputs.version}}'
 
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
@@ -75,7 +75,7 @@ jobs:
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version '${{steps.args.outputs.version}}'
+          npm version --no-git-tag-version '${{steps.args.outputs.version}}'
 
       - name: Install required packages
         run: |
@@ -112,7 +112,7 @@ jobs:
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
-          npm version '${{steps.args.outputs.version}}'
+          npm version --no-git-tag-version '${{steps.args.outputs.version}}'
 
       - name: "build & push"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
