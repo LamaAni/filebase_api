@@ -3,7 +3,7 @@
 
 name: Build and Run
 on:
-  push:
+  pull_request:
     branches:
       - "*"
   release:
@@ -28,6 +28,13 @@ jobs:
       - name: "Read commit args"
         id: args
         uses: LamaAni/parse-commit-args-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply current version
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
+        run: |
+          npm version '${{steps.args.outputs.version}}' &&
 
       - name: "Publish version to github"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
@@ -63,6 +70,13 @@ jobs:
       - name: "Read commit args"
         id: args
         uses: LamaAni/parse-commit-args-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply current version
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
+        run: |
+          npm version '${{steps.args.outputs.version}}' &&
 
       - name: Install required packages
         run: |
@@ -94,6 +108,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@v2
+
+      - name: Apply current version
+        if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
+        run: |
+          npm version '${{steps.args.outputs.version}}' &&
 
       - name: "build & push"
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
