@@ -28,6 +28,8 @@ jobs:
       - name: "Read commit args"
         id: args
         uses: LamaAni/parse-commit-args-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
@@ -68,6 +70,8 @@ jobs:
       - name: "Read commit args"
         id: args
         uses: LamaAni/parse-commit-args-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply current version
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
