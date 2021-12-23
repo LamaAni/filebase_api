@@ -39,7 +39,7 @@ jobs:
           npm version --no-git-tag-version "$VERSION"
         env:
           DEBUG_VERSION: "0.0.0"
-          USE_DEBUG_VERSION: "${{steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}"
+          USE_DEBUG_VERSION: "${{steps.args.outputs.is_release!='true' && steps.args.outputs.is_prerelease!='true'}}"
           VERSION: "${{ steps.args.outputs.version }}"
 
       - name: "Publish version to github"
