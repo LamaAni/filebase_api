@@ -63,6 +63,15 @@ class StratisCli {
       parse: (v) => v === true || v == 'true',
     }
 
+    /** Show the stratis api version and exit */
+    this.version = false
+    /** @type {CliArgument} */
+    this.__$version = {
+      type: 'flag',
+      default: this.version,
+      description: 'Show the stratis api version and exit',
+    }
+
     /** @type {CliArgument} */
     this.__$serve_path = {
       type: 'positional',
@@ -624,6 +633,25 @@ class StratisCli {
     this.logger.info('Enabled OAuth2 security provider')
   }
 
+  async show_version() {
+    let version_file_options = [
+      path.resolve(path.join(__dirname, '..', 'version')),
+      path.resolve(path.join(__dirname, '..', 'package.json')),
+      path.resolve(path.join(__dirname, 'package.json')),
+    ]
+
+    let ver = null
+
+    for (let package_path of version_file_options) {
+      if (fs.existsSync(package_path)) {
+        if (package_path.endsWith('.json')) ver = require(package_path).version
+        else ver = fs.readFileSync(package_path)
+      }
+    }
+
+    console.log(ver || '[Unknown]')
+  }
+
   /**
    * Initialize the stratis api (configure the service)
    * @param {StratisMiddlewareOptions} options
@@ -691,6 +719,8 @@ class StratisCli {
     cli = cli || new Cli({ name: 'stratis' })
     cli.logger.level = this.log_level
     this.api.logger = cli.logger
+
+    if (this.version) return await this.show_version()
 
     await this.invoke_initialization_scripts(this.logger || console)
 
