@@ -688,31 +688,29 @@ class StratisOAuth2Provider {
 
             return res.redirect(authorize_url)
           }
-          case 'authentication_response':
-            {
-              // Case we already authenticated and we need to get the token.
-              /** @type {StratisOAuthProviderSessionParamsState} */
-              const query_state = this.decode_state(req.query.state) || {}
+          case 'authentication_response': {
+            // Case we already authenticated and we need to get the token.
+            /** @type {StratisOAuthProviderSessionParamsState} */
+            const query_state = this.decode_state(req.query.state) || {}
 
-              assert(
-                oauth_session.params.state != null,
-                'Invalid token validation request, session oauth2 state could not be read from session'
-              )
+            assert(
+              oauth_session.params.state != null,
+              'Invalid token validation request, session oauth2 state could not be read from session'
+            )
 
-              assert(
-                oauth_session.params.state.uuid == query_state.uuid,
-                `Invalid token validation request. UUID mismatch (${oauth_session.params.state.uuid}!=${query_state.uuid})`
-              )
+            assert(
+              oauth_session.params.state.uuid == query_state.uuid,
+              `Invalid token validation request. UUID mismatch (${oauth_session.params.state.uuid}!=${query_state.uuid})`
+            )
 
-              await oauth_session.authenticate(
-                await this.get_token(req.query.code, oauth_redirect_uri)
-              )
+            await oauth_session.authenticate(
+              await this.get_token(req.query.code, oauth_redirect_uri)
+            )
 
-              return res.redirect(
-                query_state.origin || oauth_session.state.origin
-              )
-            }
-            break
+            return res.redirect(
+              query_state.origin || oauth_session.state.origin
+            )
+          }
           case 'revoke': {
             await oauth_session.clear()
 
