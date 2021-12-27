@@ -26,19 +26,24 @@ const {
  * @typedef {Object} StratisOAuthProviderSessionParamsState
  * @property {string} uuid
  * @property {string} origin
- * @property {number} created_at
+ * @property {number} timestamp
  **/
 
 /**
  * @typedef {Object} StratisOAuthProviderSessionParams
  * @property {StratisOAuthProviderSessionParamsState} state
  * @property {string} access_token
+ * @property {string} id_token
+ * @property {number} expires_in
  * @property {string} token_type
  * @property {string} scope
  * @property {string} refresh_token
+ * @property {number} updated The last time this params were updated (ms since epoc, utc)
  * @property {number} authenticated The timestamp of creation (ms since epoc, utc)
+ * @property {string} username
+ * @property {boolean} is_access_granted
+ * @property {boolean} is_barer_token If true, the token origin is a barer token.
  * @property {{}} token_info
- * @property {{}} token_response
  */
 
 /**
@@ -67,6 +72,7 @@ const {
  * @property {console} logger The internal logger.
  * @property {string|[string]} username_from_token_info_path The path to the username to parse out of the user info.
  * @property {string} request_user_object_key The req[key] to save the user information. defaults to user.
+ * @property {[{token_info_path:string, regexp:string}|(info:{})=>boolean}]} access_validators A list of valid access validators.
  * @property {string} response_type The authentication type. Currently supports only code.
  */
 
@@ -101,11 +107,11 @@ class StratisOAuthProviderSession {
    * @param {Response} res the http response
    * @param {StratisOAuthProviderSessionParams} session_params
    */
-  constructor(provider, req, session_params = null) {
+  constructor(provider, req, res, session_params = null) {
     this._provider = provider
-    /** @type {StratisOAuthProviderSessionParams} */
     this.params = session_params || {}
     this._req = req
+    this._res = res
     this.is_barer_token = false
     this.is_session_state = false
   }
@@ -114,29 +120,12 @@ class StratisOAuthProviderSession {
     return this._req
   }
 
+  get res() {
+    return this._res
+  }
+
   get provider() {
     return this._provider
-  }
-
-  /**
-   * Short id for the token, if any.
-   */
-  get token_id() {
-    return this.access_token == null
-      ? '??????'
-      : this.access_token.substring(0, 6)
-  }
-
-  get token_info() {
-    return this.params.token_info || {}
-  }
-
-  /**
-   * The session params state
-   * @type {StratisOAuthProviderSessionParamsState}
-   */
-  get state() {
-    return this.params.state || {}
   }
 
   /**
@@ -149,99 +138,15 @@ class StratisOAuthProviderSession {
   }
 
   /**
-   * @type {string}
-   */
-  get username() {
-    if (this.params == null || this.params.token_info == null)
-      return 'Anonymous'
-    if (this.params.token_info._username == null) {
-      this.token_info._username =
-        this.provider.username_from_token_info_path
-          .map((p) => value_from_object_path(this.params.token_info, p))
-          .filter((v) => v != null)[0] || 'Anonymous'
-    }
-    return this.params.token_info._username
-  }
-
-  get has_token_info() {
-    return this.params.token_info != null
-  }
-
-  get is_authenticated() {
-    return this.params.access_token != null && this.params.authenticated != null
-  }
-
-  get is_elapsed() {
-    // barer tokens cannot be elapsed, since the timeout they have
-    // is dependent on the backend Oauth2 provider.
-    if (this.is_barer_token) return false
-
-    return (
-      milliseconds_utc_since_epoc() - (this.params.authenticated || 0) >=
-      (this.provider.expires_in || Infinity)
-    )
-  }
-
-  get is_active() {
-    return this.token_info.active == true
-  }
-
-  get is_access_granted() {
-    if (!this.is_authenticated) return false
-    if (this.is_elapsed) return false
-    return true
-  }
-
-  needs_access_token_validation() {
-    if (!this.is_authenticated) return false
-    if (this.is_elapsed) return false
-
-    // if no token info needs validation.
-    if (!this.has_token_info) return true
-
-    const elapsed_since_last_recheck =
-      milliseconds_utc_since_epoc() - (this.params.authenticated || 0)
-
-    return (
-      elapsed_since_last_recheck >= (this.provider.recheck_interval || Infinity)
-    )
-  }
-
-  /**
-   * Authenticate the current access token, and mark the authenticated timestamp.
-   * @param {{}} token_response The authenticated access token
-   */
-  async authenticate(token_response) {
-    this.params.token_response = token_response
-    this.params.access_token = token_response.access_token
-    this.params.scope = token_response.scope
-    this.params.refresh_token = token_response.refresh_token
-    this.params.token_type = token_response.token_type
-    this.params.authenticated = milliseconds_utc_since_epoc()
-
-    await this.save()
-  }
-
-  /**
-   * Save the current state if needed.
-   */
-  async save() {
-    this.params.updated = milliseconds_utc_since_epoc()
-    if (this.is_session_state)
-      this.req.session[this.provider.session_key] = this.params
-    if (this.is_barer_token && this.access_token != null)
-      this.provider.token_cache_bank.set(this.access_token, this.params)
-  }
-
-  /**
    * Loads the OAuth provider session from the request.
    * @param {StratisOAuth2Provider} provider
    * @param {Request} req
+   * @param {Response} res
    */
-  static async load(provider, req) {
-    const session_value = (req.session || {})[provider.session_key] || {}
+  static async load(provider, req, res) {
+    const session_value = (req.session || {})[provider.session_key]
     const barer_token = parse_barer_token(req)
-    const oauth_session = new StratisOAuthProviderSession(provider, req)
+    const oauth_session = new StratisOAuthProviderSession(provider, req, res)
 
     // assume that if there is a bearer token then use it.
     if (barer_token != null) {
@@ -250,7 +155,7 @@ class StratisOAuthProviderSession {
         access_token: barer_token,
       }
       oauth_session.is_barer_token = true
-    } else if (req.session != null)
+    } else if (session_value != null)
       try {
         oauth_session.params =
           typeof session_value == 'string'
@@ -265,29 +170,24 @@ class StratisOAuthProviderSession {
   }
 
   /**
-   * Sends a request to the service for updating the token info.
+   * Authenticate the current access token, and mark the authenticated timestamp.
+   * @param {string} access_token The authenticated access token
    */
-  async update() {
-    // nothing to do. Not authenticated.
-    if (!this.is_authenticated) return false
-    if (this.needs_access_token_validation()) {
-      this.params.token_info = this.provider.token_introspect_url
-        ? await this.provider.get_token_info(this.access_token)
-        : {
-            active: true,
-          }
-      // save the changes.
-      await this.save()
-      return true
-    } else return false
+  authenticate(access_token) {
+    this.params.access_token = access_token
+    this.params.authenticated = milliseconds_utc_since_epoc()
   }
 
   /**
-   * Clear the current authentication.
+   * Save the current state if needed.
    */
-  async clear() {
-    this.params = {}
-    await this.save()
+  async save() {
+    this.params.updated = milliseconds_utc_since_epoc()
+    if (this.is_session_state) this.req.session[this.session_key] = this.params
+    if (this.is_barer_token && this.access_token != null)
+      this.token_cache_bank.set(this.access_token, this.params)
+
+    return session_params
   }
 }
 
@@ -312,6 +212,7 @@ class StratisOAuth2Provider {
     expires_in = null,
     request_timeout = 1000 * 10,
     logger = console,
+    access_validators = [],
     request_user_object_key = 'user',
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
     state_generator = null,
@@ -390,6 +291,32 @@ class StratisOAuth2Provider {
       ? username_from_token_info_path
       : [username_from_token_info_path]
 
+    access_validators = access_validators || []
+    /**
+     * @type {[(token_info)=>boolean}]}
+     */
+    this.access_validators = access_validators
+      .map((av) => {
+        if (typeof av == 'function') return av
+        assert(
+          typeof av.regexp == 'string' && typeof av.token_info_path == 'string',
+          'access validations must be either a function or an object {token_info_path:string, regex:string}'
+        )
+        const regex = new RegExp(av.regexp)
+        return (token_info) => {
+          let val = value_from_object_path(token_info, av.token_info_path)
+          if (val == null) return false
+          val = typeof val == 'object' ? JSON.stringify(val) : val + ''
+          return regex.test(val)
+        }
+      })
+      .filter((av) => av != null)
+
+    assert(
+      this.access_validators.length == 0 || this.token_introspect_url != null,
+      'If access validators are provided you must provide a token introspect url.'
+    )
+
     assert(
       this.token_introspect_url != null || this.expires_in != null,
       'If token introspect url was not provided a session expires_in must be provided'
@@ -414,23 +341,6 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * @param {StratisOAuthProviderSessionParamsState} state
-   * @returns {string}
-   */
-  encode_state(state) {
-    return Buffer.from(JSON.stringify(state), 'utf-8').toString('base64url')
-  }
-
-  /**
-   * @param {string} state
-   * @returns {StratisOAuthProviderSessionParamsState}
-   */
-  decode_state(state) {
-    const state_json = Buffer.from(state, 'base64url').toString('utf-8')
-    return JSON.parse(state_json)
-  }
-
-  /**
    * Configures the superagent request.
    * @param {superagent.Request} request The superagent request
    * @param {boolean} use_proxies
@@ -452,6 +362,79 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * @param {StratisOAuthProviderSessionParamsState} state
+   * @returns {string}
+   */
+  encode_state(state) {
+    return Buffer.from(JSON.stringify(state), 'utf-8').toString('base64url')
+  }
+
+  /**
+   * @param {string} state
+   * @returns {StratisOAuthProviderSessionParamsState}
+   */
+  decode_state(state) {
+    const state_json = Buffer.from(state, 'base64url').toString('utf-8')
+    return JSON.parse(state_json)
+  }
+
+  /**
+   * @param {Request} req
+   * @returns {StratisOAuthProviderSessionParams} The current session params
+   */
+  read_oauth_session_params(req) {
+    if (req.session != null) {
+      let session_value =
+        req.session == null ? null : req.session[this.session_key]
+      if (session_value != null) {
+        try {
+          session_value =
+            typeof session_value == 'string'
+              ? JSON.parse(session_value)
+              : session_value
+        } catch (err) {
+          throw new Error('Could not parse oauth session value')
+        }
+        return session_value
+      }
+    }
+
+    if ('authorization' in req.headers && this.token_introspect_url != null) {
+      // barer tokens are not allowed when not having introspect urls.
+      // checking token in headers.
+      let access_token = req.headers['authorization']
+      if (access_token.toLowerCase().startsWith('bearer '))
+        access_token = access_token.substr('bearer '.length)
+      else access_token = null
+
+      if (access_token == null) return null
+
+      const params = this.token_cache_bank.get(access_token) || /**
+       * @type {StratisOAuthProviderSessionParams}
+       */
+      {
+        access_token: access_token,
+      }
+
+      return params
+    }
+  }
+
+  /**
+   * @param {Request} req
+   * @param {StratisOAuthProviderSessionParams} session_params
+   */
+  write_oauth_session_params(req, session_params) {
+    session_params.authenticated =
+      session_params.authenticated || milliseconds_utc_since_epoc()
+    session_params.updated = milliseconds_utc_since_epoc()
+    req.session[this.session_key] = session_params
+    if (session_params.access_token != null)
+      this.token_cache_bank.set(session_params.access_token, session_params)
+    return session_params
+  }
+
+  /**
    * Compose a url from a base url and query arguments
    * @param {string|URL} base_url The base url to compose from
    * @param {{}} query The query arguments to compose from
@@ -465,12 +448,6 @@ class StratisOAuth2Provider {
     return url
   }
 
-  /**
-   * Composes a url for authorization.
-   * @param {string} redirect_uri The redirect url.
-   * @param {{}} state The oauth request state.
-   * @returns
-   */
   compose_authorize_url(redirect_uri, state = null) {
     return this.compose_url(this.authorize_url, {
       redirect_uri: redirect_uri,
@@ -484,12 +461,6 @@ class StratisOAuth2Provider {
     })
   }
 
-  /**
-   * Sends a request to the remote service and returns the token.
-   * @param {string} code The get token authorization steps code.
-   * @param {string} redirect_uri The redirect url.
-   * @returns
-   */
   async get_token(code, redirect_uri) {
     const token_url = this.compose_url(this.token_url, {
       client_id: this.client_id,
@@ -504,11 +475,6 @@ class StratisOAuth2Provider {
     ).body
   }
 
-  /**
-   * Returns the token info using the introspect url. Sends a request to the server.
-   * @param {string} token The token to get info about.
-   * @param {string} token_type The token type.
-   */
   async get_token_info(token, token_type = 'access_token') {
     const token_introspect_url = this.compose_url(this.token_introspect_url, {
       client_id: this.client_id,
@@ -533,11 +499,18 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Sends a revoke request for a specific token.
-   * @param {string} token The token
-   * @param {string} token_type The token type.
-   * @returns
+   * Internal. Call to update the token info and access validation.
+   * @param {StratisOAuthProviderSessionParams} params
    */
+  async _update_auth_info(params) {
+    try {
+      const token_info = await this.get_token_info(
+        params.access_token,
+        'access_token'
+      )
+    } catch (err) {}
+  }
+
   async revoke(token, token_type = 'access_token') {
     const token_revoke_url = this.compose_url(this.revoke_url, {
       client_id: this.client_id,
@@ -556,34 +529,101 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Redirect the response to login page.
-   * @param {Request} req The request
-   * @param {Response} res The response.
-   * @returns
+   *
+   * @param {StratisOAuthProviderSessionParams} params
+   * @returns {'no_authenticated'|'updated'|'valid'|'invalid'}
    */
+  async update_token_info(params) {
+    if (params == null || params.access_token == null) return 'missing'
+
+    const elapsed_since_last_check =
+      params.updated == null
+        ? Infinity
+        : milliseconds_utc_since_epoc() - params.updated
+
+    const elapsed_since_authenticated =
+      params.authenticated == null
+        ? Infinity
+        : milliseconds_utc_since_epoc() - params.authenticated
+
+    if (
+      params.access_token != null &&
+      this.expires_in != null &&
+      elapsed_since_authenticated > this.expires_in
+    ) {
+      return 'invalid'
+    } else if (
+      (params.token_info == null && this.token_introspect_url != null) ||
+      elapsed_since_last_check > this.recheck_interval ||
+      params.is_access_granted == null
+    ) {
+      if (this.token_introspect_url != null) {
+        params.token_info = await this.get_token_info(
+          params.access_token,
+          'access_token'
+        )
+
+        // checking access
+        if (params.token_info.active != true) {
+          params.access_token = null
+          params.is_access_granted = false
+        } else
+          params.is_access_granted =
+            this.access_validators.length > 0
+              ? this.access_validators.every((av) => av(params.token_info))
+              : true
+
+        params.username = this.username_from_token_info_path
+          .map((p) => value_from_object_path(params.token_info, p))
+          .filter((v) => v != null)[0]
+      } else {
+        assert(
+          this.access_validators.length == 0,
+          'Access validators were provided but token_introspect_url is null'
+        )
+        params.username = 'Anonymous'
+        params.is_access_granted = true
+      }
+
+      params.token_ident =
+        params.access_token == null ? '??????' : params.access_token
+      params.token_ident =
+        params.token_ident.length < 6
+          ? '[short]'
+          : params.token_ident.substr(params.token_ident.length - 6)
+
+      this.logger.debug(
+        `Authentication info updated for ${params.username}. (TID: ${
+          params.token_ident
+        }, Access ${params.is_access_granted ? 'GRANTED' : 'DENIED'})`
+      )
+      return 'updated'
+    } else return 'valid'
+  }
+
+  /**
+   * Update the request user object.
+   * @param {Request} req
+   * @param {StratisOAuthProviderSessionParams} params
+   */
+  update_request_user_object(req, params) {
+    let user_object = req[this.request_user_object_key] || {}
+    if (typeof user_object != 'object') user_object = {}
+    user_object = Object.assign(user_object, {
+      username: user_object.username || params.username,
+      access_token: params.access_token,
+      token_info: params.token_info,
+    })
+
+    req[this.request_user_object_key] = user_object
+  }
+
   redirect_to_login(req, res) {
     const redirecturl = `${this.basepath}?origin=${encodeURIComponent(
       req.originalUrl
     )}`
 
     return res.redirect(redirecturl)
-  }
-
-  /**
-   * INTERNAL. Update the request user object.
-   * @param {Request} req
-   * @param {StratisOAuthProviderSession} session
-   */
-  _update_request_user_object(req, session) {
-    const current_user_object = req[this.request_user_object_key] || {}
-    req[this.request_user_object_key] = Object.assign(
-      typeof current_user_object != 'object' ? {} : current_user_object,
-      {
-        username: current_user_object.username || session.username,
-        access_token: session.access_token,
-        token_info: session.token_info,
-      }
-    )
   }
 
   redirect_to_revoke(req, res) {
@@ -596,7 +636,7 @@ class StratisOAuth2Provider {
 
   /**
    * Implements the authentication check middleware. If called request
-   * must be authenticated against OAuth2 to proceed. Use login_middleware
+   * must be authenticated against oauth2 to proceed. Use login_middleware
    * to create a login page redirect.
    * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
    */
@@ -610,26 +650,24 @@ class StratisOAuth2Provider {
       if (req.path == this.basepath) return next()
 
       try {
-        const oauth_session = await StratisOAuthProviderSession.load(this, req)
+        const params = this.read_oauth_session_params(req)
+        const token_state = await this.update_token_info(params)
 
-        // check for token updates.
-        if (await oauth_session.update()) {
-          this.logger.debug(
-            `Authentication info updated for ${oauth_session.username}. (TID: ${
-              oauth_session.token_id
-            }, Access ${
-              oauth_session.is_access_granted ? 'GRANTED' : 'DENIED'
-            })`
-          )
+        switch (token_state) {
+          case 'no_authenticated':
+            return this.redirect_to_login(req, res)
+          case 'invalid':
+            return this.redirect_to_revoke(req, res)
+          case 'updated':
+            this.write_oauth_session_params(req, params)
+            break
         }
 
-        if (!oauth_session.is_authenticated)
-          return this.redirect_to_login(req, res)
-        if (!oauth_session.is_active || oauth_session.is_elapsed == true)
-          return this.redirect_to_revoke(req, res)
+        if (params.is_access_granted === false)
+          throw new StratisNotAuthorizedReloadError()
 
         // updating the user object.
-        this._update_request_user_object(req, oauth_session)
+        this.update_request_user_object(req, params)
       } catch (err) {
         return next(err)
       }
@@ -653,9 +691,6 @@ class StratisOAuth2Provider {
      */
     const intercept = async (req, res, next) => {
       const request_url = get_express_request_url(req)
-      const oauth_redirect_uri =
-        this.redirect_url ||
-        `${request_url.protocol}//${request_url.host}${request_url.pathname}`
 
       const query = Object.assign(
         {},
@@ -663,84 +698,85 @@ class StratisOAuth2Provider {
         JSON.parse(req.body || '{}')
       )
 
-      /**
-       * @returns {'authenticate'|'authentication_response'|'revoke'|'unknown'}
-       */
-      function get_query_type() {
-        if (req.query.revoke == 'true') return 'revoke'
-        if (req.query.code == null && req.query.origin != null)
-          return 'authenticate'
-        if (req.query.state != null) return 'authentication_response'
-        return 'unknown'
-      }
-
       try {
         if (query.error != null) {
           throw new Error(`${JSON.stringify(query)}`)
         }
 
-        const oauth_session = await StratisOAuthProviderSession.load(this, req)
+        let oauth_redirect_uri =
+          this.redirect_url ||
+          `${request_url.protocol}//${request_url.host}${request_url.pathname}`
 
-        switch (get_query_type()) {
-          case 'authenticate': {
-            const origin = query.origin || '/'
-            oauth_session.params.state = {
-              created_at: milliseconds_utc_since_epoc(),
-              uuid: create_uuid(),
-              origin,
-            }
+        const session_params = this.read_oauth_session_params(req)
 
-            // saving the new state.
-            await oauth_session.save()
+        const is_revoke = req.query.revoke == 'true'
 
-            const authorize_url = this.compose_authorize_url(
-              oauth_redirect_uri,
-              oauth_session.state
-            )
+        const is_authentication_request =
+          req.query.code == null && query.origin != null
+        const is_authentication_response = query.code != null
 
-            this.logger.debug(
-              `Auth redirect when requesting origin: ${origin}. Redirect -> ${authorize_url}`
-            )
+        if (is_revoke) {
+          if (session_params.access_token != null)
+            await this.revoke(session_params.access_token, 'access_token')
 
-            return res.redirect(authorize_url)
-          }
-          case 'authentication_response':
-            {
-              // Case we already authenticated and we need to get the token.
-              /** @type {StratisOAuthProviderSessionParamsState} */
-              const query_state = this.decode_state(req.query.state) || {}
+          session_params.access_token = null
+          this.write_oauth_session_params(req, session_params)
 
-              assert(
-                oauth_session.params.state != null,
-                'Invalid token validation request, session oauth2 state could not be read from session'
-              )
+          return res.redirect(
+            req.query.redirect_to ||
+              `${request_url.protocol}//${request_url.host}`
+          )
+        } else if (is_authentication_response) {
+          // Case we already authenticated and we need to get the token.
+          const auth_state = this.decode_state(req.query.state)
+          /** @type {StratisOAuthProviderSessionParamsState} */
+          const session_params_state = (session_params || {}).state || {}
 
-              assert(
-                oauth_session.params.state.uuid == query_state.uuid,
-                `Invalid token validation request. UUID mismatch (${oauth_session.params.state.uuid}!=${query_state.uuid})`
-              )
+          assert(
+            session_params != null,
+            'Invalid token validation request, session state could not retrieve state validation key'
+          )
+          assert(
+            session_params_state.uuid == auth_state.uuid,
+            `Invalid token validation request. UUID mismatch (${session_params_state.uuid}!=${auth_state.uuid})`
+          )
 
-              await oauth_session.authenticate(
-                await this.get_token(req.query.code, oauth_redirect_uri)
-              )
+          const token = await this.get_token(req.query.code, oauth_redirect_uri)
 
-              return res.redirect(
-                query_state.origin || oauth_session.state.origin
-              )
-            }
-            break
-          case 'revoke': {
-            await oauth_session.clear()
+          session_params.authenticated = milliseconds_utc_since_epoc()
 
-            return res.redirect(
-              req.query.redirect_to ||
-                `${request_url.protocol}//${request_url.host}`
-            )
-          }
-          default:
-            throw new Error(
-              'Unknown authentication request type: ' + request_url.href
-            )
+          this.write_oauth_session_params(
+            req,
+            Object.assign({}, session_params, token)
+          )
+
+          return res.redirect(session_params.state.origin)
+        } else if (is_authentication_request) {
+          // we have not yet authenticated and need redirect.
+          const origin = query.origin || '/'
+
+          const session_params = this.write_oauth_session_params(req, {
+            state: Object.assign(
+              {},
+              this.state_generator ? await this.state_generator() : {},
+              {
+                updated_at: new Date().getTime(),
+                uuid: create_uuid(),
+                origin,
+              }
+            ),
+          })
+
+          const authorize_url = this.compose_authorize_url(
+            oauth_redirect_uri,
+            session_params.state
+          )
+
+          this.logger.debug(`Auth redirect when requesting origin: ${origin}`)
+
+          return res.redirect(authorize_url)
+        } else {
+          throw new Error('unknown auth request: ' + request_url.href)
         }
       } catch (err) {
         return next(err)
@@ -785,17 +821,16 @@ class StratisOAuth2Provider {
     stratis.on('stratis_request', async (stratis_request) => {
       if (stratis_request.access_mode != 'secure') return
 
-      /** @type {StratisOAuthProviderSession} */
-      const oauth_session =
-        stratis_request.request.stratis_oauth_session ||
-        (await StratisOAuthProviderSession.load(this, stratis_request.request))
+      const params = this.read_oauth_session_params(stratis_request.request)
+      const token_state = await this.update_token_info(params)
 
-      await oauth_session.update()
-
-      if (!oauth_session.is_access_granted)
+      if (token_state == 'invalid')
         throw new StratisNotAuthorizedReloadError(
           'User session unauthorized or expired'
         )
+
+      if (token_state == 'updated')
+        this.write_oauth_session_params(stratis_request.request, params)
     })
   }
 }

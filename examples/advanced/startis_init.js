@@ -9,7 +9,6 @@ function get_oauth2_test_config() {
     client_secret: process.env['TEST_OAUTH2_CLIENT_SECRET'],
     recheck_interval: 10 * 1000,
     session_key: 'test_oauth_session',
-    // access_validators: [{ regexp: 'zav', token_info_path: 'username' }],
     scope: ['okta.users.read.self'],
   }
 }
