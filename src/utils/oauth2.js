@@ -66,6 +66,7 @@ const {
  * @property {string|[string]} username_from_token_info_path The path to the username to parse out of the user info.
  * @property {string} request_user_object_key The req[key] to save the user information. defaults to user.
  * @property {string} response_type The authentication type. Currently supports only code.
+ * @property {StratisOAuth2Provider.allow_login} allow_login Check if the current request source allows redirect to login.
  */
 
 /**
@@ -191,11 +192,10 @@ class StratisOAuthProviderSession {
   }
 
   needs_access_token_validation() {
-    if (!this.is_authenticated) return false
     if (this.is_elapsed) return false
 
     // if no token info needs validation.
-    if (!this.has_token_info) return true
+    if (!this.has_token_info || this.params.authenticated == null) return true
 
     const elapsed_since_last_recheck =
       milliseconds_utc_since_epoc() - (this.params.authenticated || 0)
@@ -266,14 +266,25 @@ class StratisOAuthProviderSession {
    * Sends a request to the service for updating the token info.
    */
   async update() {
-    // nothing to do. Not authenticated.
-    if (!this.is_authenticated) return false
+    // nothing to do. No access token.
+    if (this.access_token == null) return false
     if (this.needs_access_token_validation()) {
       this.params.token_info = this.provider.token_introspect_url
         ? await this.provider.get_token_info(this.access_token)
         : {
             active: true,
           }
+
+      this.authenticate(
+        Object.assign(
+          {},
+          this.params.token_response || this.params.token_info,
+          {
+            access_token: this.access_token,
+          }
+        )
+      )
+
       // save the changes.
       await this.save()
       return true
@@ -309,6 +320,7 @@ class StratisOAuth2Provider {
     request_timeout = 1000 * 10,
     logger = console,
     request_user_object_key = 'user',
+    allow_login = StratisOAuth2Provider.allow_login,
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
@@ -358,6 +370,7 @@ class StratisOAuth2Provider {
     this.basepath = basepath
     this.response_type = response_type
 
+    this.allow_login = allow_login
     this.scope = scope
     this.session_key = session_key
     this.recheck_interval = recheck_interval
@@ -385,6 +398,21 @@ class StratisOAuth2Provider {
           ? expires_in
           : recheck_interval * 2,
     })
+  }
+
+  /**
+   * Check if the current request allows login.
+   * @param {Request} req
+   * @returns {boolean} If true then allow login.
+   */
+  static async allow_login(req) {
+    const accetps = (req.headers['accept'] || '')
+      .split(/[, ]/)
+      .filter((v) => v.trim().length > 0)
+
+    if (!accetps.includes('text/html')) return false
+
+    return true
   }
 
   /**
@@ -607,6 +635,8 @@ class StratisOAuth2Provider {
         }
 
         if (!oauth_session.is_authenticated) {
+          if (this.allow_login != null && !(await this.allow_login(req)))
+            throw new StratisNotAuthorizedReloadError('Access denied')
           return this.redirect_to_login(req, res)
         }
         if (!oauth_session.is_active || oauth_session.is_elapsed == true)

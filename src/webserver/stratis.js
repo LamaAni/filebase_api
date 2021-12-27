@@ -340,11 +340,20 @@ class Stratis extends events.EventEmitter {
       .filter((v) => v.trim().length > 0)
       .join('.')
 
+    /** @type {Buffer} */
+    const body_buffer = stratis_request.request.readable
+      ? stratis_request.request.read()
+      : null
+
     const call = new StratisPageApiCall(
       stratis_request,
       name,
       await StratisPageApiCall.parse_api_call_args(
-        stratis_request.request.body,
+        body_buffer
+          ? body_buffer.toString(
+              stratis_request.request.readableEncoding || 'utf-8'
+            )
+          : null,
         stratis_request.request.query
       ),
       true
