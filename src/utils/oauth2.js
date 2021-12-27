@@ -634,12 +634,13 @@ class StratisOAuth2Provider {
           )
         }
 
-        if (!oauth_session.is_authenticated) {
+        if (!oauth_session.is_authenticated || !oauth_session.is_active) {
           if (this.allow_login != null && !(await this.allow_login(req)))
             throw new StratisNotAuthorizedReloadError('Access denied')
           return this.redirect_to_login(req, res)
         }
-        if (!oauth_session.is_active || oauth_session.is_elapsed == true)
+
+        if (oauth_session.is_elapsed == true)
           return this.redirect_to_revoke(req, res)
 
         // updating the user object.
