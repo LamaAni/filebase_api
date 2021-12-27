@@ -56,8 +56,6 @@ const {
  * @property {string} revoke_path The path for revoke, overrides token_url path
  * @property {string} token_path The path for a token, overrides token_url path
  * @property {string|URL} redirect_url The server response redirect url. If null takes the current request url as redirect url.
- * @property {'json' |'form'} body_format The request body format.
- * @property {"header" | "body"} authorization_method
  * @property {[string]} scope the scope to use.
  * @property {string} session_key The session key to use when recording the oauth token
  * @property {(req:Request)=>{}} state_generator The oauth state generator.
@@ -106,7 +104,7 @@ class StratisOAuthProviderSession {
     /** @type {StratisOAuthProviderSessionParams} */
     this.params = session_params || {}
     this._req = req
-    this.is_barer_token = false
+    this.is_bearer_token = false
     this.is_session_state = false
   }
 
@@ -174,7 +172,7 @@ class StratisOAuthProviderSession {
   get is_elapsed() {
     // barer tokens cannot be elapsed, since the timeout they have
     // is dependent on the backend Oauth2 provider.
-    if (this.is_barer_token) return false
+    if (this.is_bearer_token) return false
 
     return (
       milliseconds_utc_since_epoc() - (this.params.authenticated || 0) >=
@@ -229,7 +227,7 @@ class StratisOAuthProviderSession {
     this.params.updated = milliseconds_utc_since_epoc()
     if (this.is_session_state)
       this.req.session[this.provider.session_key] = this.params
-    if (this.is_barer_token && this.access_token != null)
+    if (this.is_bearer_token && this.access_token != null)
       this.provider.token_cache_bank.set(this.access_token, this.params)
   }
 
@@ -249,7 +247,7 @@ class StratisOAuthProviderSession {
       oauth_session.params = provider.token_cache_bank.get(barer_token) || {
         access_token: barer_token,
       }
-      oauth_session.is_barer_token = true
+      oauth_session.is_bearer_token = true
     } else if (req.session != null)
       try {
         oauth_session.params =
@@ -303,8 +301,6 @@ class StratisOAuth2Provider {
     revoke_url = null,
     redirect_url = null,
     basepath = '/oauth2',
-    body_format = 'form',
-    authorization_method = 'header',
     scope = [],
     session_key = 'stratis:oauth2:token',
     response_type = 'code',
@@ -314,7 +310,6 @@ class StratisOAuth2Provider {
     logger = console,
     request_user_object_key = 'user',
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
-    state_generator = null,
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
     assert_non_empty_string(
@@ -325,16 +320,6 @@ class StratisOAuth2Provider {
     assert(
       scope instanceof Array && scope.every((v) => is_non_empty_string(v)),
       'scope must be a non empty string'
-    )
-
-    assert_non_empty_string(
-      body_format,
-      'body_format must be a non empty string'
-    )
-
-    assert_non_empty_string(
-      authorization_method,
-      'authorization_method must be a non empty string'
     )
 
     assert_non_empty_string(
@@ -371,13 +356,10 @@ class StratisOAuth2Provider {
     this.redirect_url = as_url(redirect_url)
 
     this.basepath = basepath
-    this.body_format = body_format
-    this.authorization_method = authorization_method
     this.response_type = response_type
 
     this.scope = scope
     this.session_key = session_key
-    this.state_generator = state_generator
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.expires_in = expires_in
@@ -624,8 +606,9 @@ class StratisOAuth2Provider {
           )
         }
 
-        if (!oauth_session.is_authenticated)
+        if (!oauth_session.is_authenticated) {
           return this.redirect_to_login(req, res)
+        }
         if (!oauth_session.is_active || oauth_session.is_elapsed == true)
           return this.redirect_to_revoke(req, res)
 

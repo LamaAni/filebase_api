@@ -42,7 +42,7 @@ const {
  * @property {number} authenticated The timestamp of creation (ms since epoc, utc)
  * @property {string} username
  * @property {boolean} is_access_granted
- * @property {boolean} is_barer_token If true, the token origin is a barer token.
+ * @property {boolean} is_bearer_token If true, the token origin is a barer token.
  * @property {{}} token_info
  */
 
@@ -112,7 +112,7 @@ class StratisOAuthProviderSession {
     this.params = session_params || {}
     this._req = req
     this._res = res
-    this.is_barer_token = false
+    this.is_bearer_token = false
     this.is_session_state = false
   }
 
@@ -154,7 +154,7 @@ class StratisOAuthProviderSession {
       oauth_session.params = provider.token_cache_bank.get(barer_token) || {
         access_token: barer_token,
       }
-      oauth_session.is_barer_token = true
+      oauth_session.is_bearer_token = true
     } else if (session_value != null)
       try {
         oauth_session.params =
@@ -184,7 +184,7 @@ class StratisOAuthProviderSession {
   async save() {
     this.params.updated = milliseconds_utc_since_epoc()
     if (this.is_session_state) this.req.session[this.session_key] = this.params
-    if (this.is_barer_token && this.access_token != null)
+    if (this.is_bearer_token && this.access_token != null)
       this.token_cache_bank.set(this.access_token, this.params)
 
     return session_params
