@@ -437,7 +437,7 @@ class Stratis extends events.EventEmitter {
     )
       res.end(`${err.stack || err}`)
     else {
-      next(err)
+      res.end('')
     }
   }
 

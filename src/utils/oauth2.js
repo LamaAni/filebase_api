@@ -529,15 +529,11 @@ class StratisOAuth2Provider {
 
     let token_info = {}
 
-    try {
-      token_info = (
-        await this.configure_request(
-          superagent.post(token_introspect_url.href)
-        ).send()
-      ).body
-    } catch (err) {
-      throw new Error('Error retrieving token info.', err)
-    }
+    token_info = (
+      await this.configure_request(
+        superagent.post(token_introspect_url.href)
+      ).send()
+    ).body
 
     return token_info
   }
