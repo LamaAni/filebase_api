@@ -611,6 +611,7 @@ class StratisOAuth2Provider {
 
       try {
         const oauth_session = await StratisOAuthProviderSession.load(this, req)
+        req.stratis_oauth_session = oauth_session
 
         // check for token updates.
         if (await oauth_session.update()) {
