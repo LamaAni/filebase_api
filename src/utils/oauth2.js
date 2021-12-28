@@ -207,14 +207,25 @@ class StratisOAuthProviderSession {
 
   /**
    * Authenticate the current access token, and mark the authenticated timestamp.
-   * @param {{}} token_response The authenticated access token
+   * @param {Object} token_response The authenticated access token
    */
-  async authenticate(token_response) {
-    this.params.token_response = token_response
-    this.params.access_token = token_response.access_token
-    this.params.scope = token_response.scope
-    this.params.refresh_token = token_response.refresh_token
-    this.params.token_type = token_response.token_type
+  async authenticate({
+    access_token,
+    scope = null,
+    refresh_token = null,
+    token_type = null,
+  }) {
+    Object.entries({
+      access_token,
+      scope,
+      refresh_token,
+      token_type,
+    })
+      .filter((e) => e[1] != null)
+      .forEach((e) => {
+        this.params[e[0]] = e[1]
+      })
+
     this.params.authenticated = milliseconds_utc_since_epoc()
 
     await this.save()
@@ -275,14 +286,10 @@ class StratisOAuthProviderSession {
             active: true,
           }
 
-      this.authenticate(
-        Object.assign(
-          {},
-          this.params.token_response || this.params.token_info,
-          {
-            access_token: this.access_token,
-          }
-        )
+      await this.authenticate(
+        Object.assign({}, this.params.token_response, {
+          access_token: this.access_token,
+        })
       )
 
       // save the changes.
@@ -686,10 +693,6 @@ class StratisOAuth2Provider {
       }
 
       try {
-        if (query.error != null) {
-          throw new Error(`${JSON.stringify(query)}`)
-        }
-
         const oauth_session = await StratisOAuthProviderSession.load(this, req)
 
         switch (get_query_type()) {
@@ -719,6 +722,22 @@ class StratisOAuth2Provider {
             // Case we already authenticated and we need to get the token.
             /** @type {StratisOAuthProviderSessionParamsState} */
             const query_state = this.decode_state(req.query.state) || {}
+            const origin_url = query_state.origin || oauth_session.state.origin
+
+            if (query.error != null) {
+              // try to redirect to origin.
+              if (origin_url) {
+                this.logger.debug(
+                  `Authentication failed, redirecting to origin: ${origin_url}`
+                )
+                return res.redirect(origin_url)
+              }
+
+              // Otherwise error
+              throw new StratisNotAuthorizedReloadError(
+                `Unauthorized: ${query.error}`
+              )
+            }
 
             assert(
               oauth_session.params.state != null,
@@ -730,15 +749,29 @@ class StratisOAuth2Provider {
               `Invalid token validation request. UUID mismatch (${oauth_session.params.state.uuid}!=${query_state.uuid})`
             )
 
-            await oauth_session.authenticate(
-              await this.get_token(req.query.code, oauth_redirect_uri)
+            const token_info = await this.get_token(
+              req.query.code,
+              oauth_redirect_uri
             )
 
-            return res.redirect(
-              query_state.origin || oauth_session.state.origin
+            await oauth_session.authenticate(token_info)
+
+            this.logger.debug(
+              `Authentication successfull for token ${oauth_session.token_id}, redirecting to: ${origin_url}`
             )
+
+            return res.redirect(origin_url)
           }
           case 'revoke': {
+            try {
+              if (oauth_session.access_token)
+                await this.revoke(oauth_session.access_token)
+            } catch (err) {
+              this.logger.warn(
+                `Unable to revoke token ${oauth_session.token_id}. Clearing session but token is still active.`
+              )
+            }
+
             await oauth_session.clear()
 
             return res.redirect(
@@ -747,9 +780,11 @@ class StratisOAuth2Provider {
             )
           }
           default:
-            throw new Error(
-              'Unknown authentication request type: ' + request_url.href
-            )
+            if (query.error != null) throw new Error(`${JSON.stringify(query)}`)
+            else
+              throw new Error(
+                'Unknown authentication request type: ' + request_url.href
+              )
         }
       } catch (err) {
         return next(err)

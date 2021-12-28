@@ -255,7 +255,7 @@ class StratisCli {
     }
 
     /** The log level, DEBUG will show all requests*/
-    this.log_level = 'INFO'
+    this.log_level = null
 
     /** @type {CliArgument} The log level, DEBUG will show all requests*/
     this.__$log_level = {
@@ -717,10 +717,13 @@ class StratisCli {
    */
   async run(cli = null, listen_sync = false) {
     cli = cli || new Cli({ name: 'stratis' })
-    cli.logger.level = this.log_level
+    cli.logger.level = this.log_level || cli.logger.level 
     this.api.logger = cli.logger
 
     if (this.version) return await this.show_version()
+
+    // will only print in debug mode.
+    this.logger.debug('Debug mode ACTIVE'.yellow)
 
     await this.invoke_initialization_scripts(this.logger || console)
 
