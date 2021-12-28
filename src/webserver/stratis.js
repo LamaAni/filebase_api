@@ -367,7 +367,7 @@ class Stratis extends events.EventEmitter {
 
     stratis_request._context = context
 
-    const rslt = await call.invoke(context)
+    let rslt = await call.invoke(context)
     if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
 
     return res.end(rslt)
