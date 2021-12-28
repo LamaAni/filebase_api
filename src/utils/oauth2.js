@@ -508,7 +508,7 @@ class StratisOAuth2Provider {
    * @returns
    */
   async get_token(code, redirect_uri) {
-    const token_url = this.compose_url(this.token_url, {
+    const url = this.compose_url(this.token_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       grant_type: this.grant_type || 'authorization_code',
@@ -516,9 +516,14 @@ class StratisOAuth2Provider {
       redirect_uri,
     })
 
-    return (
-      await this.configure_request(superagent.post(token_url.href)).send()
-    ).body
+    try {
+      return (await this.configure_request(superagent.post(url.href)).send())
+        .body
+    } catch (err) {
+      throw new Error(
+        `Error while getting token from ${url.origin}${url.pathname}, ${err}`
+      )
+    }
   }
 
   /**
@@ -527,7 +532,7 @@ class StratisOAuth2Provider {
    * @param {string} token_type The token type.
    */
   async get_token_info(token, token_type = 'access_token') {
-    const token_introspect_url = this.compose_url(this.token_introspect_url, {
+    const url = this.compose_url(this.token_introspect_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       token,
@@ -536,12 +541,15 @@ class StratisOAuth2Provider {
 
     let token_info = {}
 
-    token_info = (
-      await this.configure_request(
-        superagent.post(token_introspect_url.href)
-      ).send()
-    ).body
-
+    try {
+      token_info = (
+        await this.configure_request(superagent.post(url.href)).send()
+      ).body
+    } catch (err) {
+      throw new Error(
+        `Error while getting token info from ${url.origin}${url.pathname}, ${err}`
+      )
+    }
     return token_info
   }
 
@@ -552,19 +560,22 @@ class StratisOAuth2Provider {
    * @returns
    */
   async revoke(token, token_type = 'access_token') {
-    const token_revoke_url = this.compose_url(this.revoke_url, {
+    const url = this.compose_url(this.revoke_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       token,
       token_type_hint: token_type,
     })
 
-    const rsp = (
-      await this.configure_request(
-        superagent.post(token_revoke_url.href)
-      ).send()
-    ).body
-
+    try {
+      const rsp = (
+        await this.configure_request(superagent.post(url.href)).send()
+      ).body
+    } catch (err) {
+      throw new Error(
+        `Error revoking token using ${url.origin}${url.pathname}, ${err}`
+      )
+    }
     return rsp
   }
 
