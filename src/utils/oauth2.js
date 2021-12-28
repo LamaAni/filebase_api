@@ -244,12 +244,13 @@ class StratisOAuthProviderSession {
 
   /**
    * Loads the OAuth provider session from the request.
-   * @param {StratisOAuth2Provider} provider
-   * @param {Request} req
+   * @param {StratisOAuth2Provider} provider The provider
+   * @param {Request} req The request object.
+   * @param {string} barer_token The bearer token to load from
    */
-  static async load(provider, req) {
+  static async load(provider, req, barer_token = null) {
     const session_value = (req.session || {})[provider.session_key] || {}
-    const barer_token = parse_barer_token(req)
+    barer_token = barer_token || parse_barer_token(req)
     const oauth_session = new StratisOAuthProviderSession(provider, req)
 
     // assume that if there is a bearer token then use it.
@@ -296,6 +297,16 @@ class StratisOAuthProviderSession {
       await this.save()
       return true
     } else return false
+  }
+
+  /**
+   * Returns the bearer token session given the access token.
+   * (Allows for third party bearer token to be directly accessed for validation)
+   * @param {string} token The bearer token
+   * @returns {StratisOAuthProviderSession} The bearer token session.
+   */
+  async get_bearer_token_session(token) {
+    return await this.provider.get_bearer_token_session(token, this.req)
   }
 
   /**
@@ -499,6 +510,20 @@ class StratisOAuth2Provider {
           : this.scope.join(' '),
       state: this.encode_state(state),
     })
+  }
+
+  /**
+   * Returns the bearer token session given the access token.
+   * (Allows for third party bearer token to be directly accessed for validation)
+   * @param {string} token The bearer token
+   * @param {Request} req The express request.
+   * @returns {StratisOAuthProviderSession} The bearer token session.
+   */
+  async get_bearer_token_session(token, req) {
+    assert(typeof token == 'string', 'Token must be a string value')
+    const session = await StratisOAuthProviderSession.load(this, req, token)
+    await session.update()
+    return session
   }
 
   /**
@@ -857,6 +882,7 @@ class StratisOAuth2Provider {
 
 module.exports = {
   StratisOAuth2Provider,
+  StratisOAuthProviderSession,
   /** @type {StratisOAuth2ProviderOptions} */
   StratisOAuth2ProviderOptions: {},
 }

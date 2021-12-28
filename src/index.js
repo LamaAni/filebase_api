@@ -4,6 +4,7 @@ const { StratisRequest } = require('./webserver/requests')
 const { JsonCompatible, StratisApiObject } = require('./webserver/interfaces')
 const { StratisPageCallContext } = require('./webserver/pages')
 const { StratisCli, create_statis_cli } = require('./cli')
+const { StratisOAuth2Provider } = require('./utils/oauth2')
 const websocket = require('./utils/websocket')
 
 /**
@@ -18,7 +19,7 @@ const websocket = require('./utils/websocket')
  * @typedef {import('./webserver/stratis').StratisClientSideApiOptions} StratisClientSideApiOptions
  * @typedef {import('./webserver/stratis').StratisCodeModuleBankOptions} StratisCodeModuleBankOptions
  * @typedef {import('./webserver/stratis').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
- * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
+ * @typedef {import('./utils/oauth2.js').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
  */
 
 module.exports = {
@@ -30,4 +31,5 @@ module.exports = {
   StratisCli,
   StratisRequest,
   StratisPageCallContext,
+  StratisOAuth2Provider,
 }
