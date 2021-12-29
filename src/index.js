@@ -4,7 +4,10 @@ const { StratisRequest } = require('./webserver/requests')
 const { JsonCompatible, StratisApiObject } = require('./webserver/interfaces')
 const { StratisPageCallContext } = require('./webserver/pages')
 const { StratisCli, create_statis_cli } = require('./cli')
-const { StratisOAuth2Provider } = require('./utils/oauth2')
+const {
+  StratisOAuth2Provider,
+  StratisOAuth2ProviderSession,
+} = require('./utils/oauth2')
 const websocket = require('./utils/websocket')
 
 /**
@@ -32,4 +35,5 @@ module.exports = {
   StratisRequest,
   StratisPageCallContext,
   StratisOAuth2Provider,
+  StratisOAuth2ProviderSession,
 }

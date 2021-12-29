@@ -397,7 +397,7 @@ class StratisCli {
   get api() {
     if (this._api == null) {
       this._api = new Stratis({
-        ejs_options: {
+        template_options: {
           add_require: this.ejs_add_require,
         },
       })
@@ -622,6 +622,12 @@ class StratisCli {
     this.api.middleware_options.authenticate =
       security_provider.auth_middleware()
 
+    // binding the provider
+    this.app.use((req, res, next) => {
+      req.stratis_security_provider = security_provider
+      next()
+    })
+
     // set the login path
     this.app.use(
       security_provider.basepath,
@@ -631,6 +637,8 @@ class StratisCli {
     security_provider.bind_stratis_api(this.api)
 
     this.logger.info('Enabled OAuth2 security provider')
+
+    return security_provider
   }
 
   async show_version() {
@@ -658,7 +666,7 @@ class StratisCli {
    */
   async initialize(options = {}) {
     this._initialized = true
-    this.api.return_errors_to_client = this.show_app_errors
+    this.api.logging_options.return_stack_trace_to_client = this.show_app_errors
 
     if (typeof this.default_redirect != 'string') {
       const redirect_basepath = fs.existsSync(
@@ -680,7 +688,6 @@ class StratisCli {
     // composing the default middleware options.
     this.api.middleware_options = {
       serve_path: this.serve_path,
-      log_errors: true,
       next_on_private: false,
       next_on_not_found: true,
     }
@@ -717,8 +724,8 @@ class StratisCli {
    */
   async run(cli = null, listen_sync = false) {
     cli = cli || new Cli({ name: 'stratis' })
-    cli.logger.level = this.log_level || cli.logger.level 
-    this.api.logger = cli.logger
+    cli.logger.level = this.log_level || cli.logger.level
+    this.api.logging_options.logger = cli.logger
 
     if (this.version) return await this.show_version()
 

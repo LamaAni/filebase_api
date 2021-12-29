@@ -208,7 +208,9 @@ class StratisEJSTemplateRenderContext {
       this.data || {},
       {
         include: async (...args) => await this.include(...args),
-        require: this.stratis.ejs_options.add_require ? template_require : null,
+        require: this.stratis.template_options.add_require
+          ? template_require
+          : null,
         __dirname: path.dirname(this.template.template_filepath),
         __filename: this.template.template_filepath,
         render_stratis_script_tag: (...args) =>
@@ -282,10 +284,12 @@ class StratisEJSTemplate {
       'utf-8'
     )
 
-    this._render = ejs.compile(template_string, {
+    const render_options = Object.assign({}, this.stratis.template_options, {
       context: this,
       async: true,
     })
+
+    this._render = ejs.compile(template_string, render_options)
   }
 
   /**
@@ -295,7 +299,17 @@ class StratisEJSTemplate {
    */
   async render(data) {
     await this.compile()
-    return await this._render(data || {})
+    try {
+      return await this._render(data || {})
+    } catch (err) {
+      const render_error = `Error rendering template @ ${this.template_filepath}`
+      if (err.message != null) {
+        err.message = `${render_error}: ${err.message}`
+        throw err
+      } else {
+        throw new Error(`${render_error}: ${err}`)
+      }
+    }
   }
 }
 

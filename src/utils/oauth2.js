@@ -16,22 +16,22 @@ const {
 
 /**
  * @typedef {import('express').Express} Express
- * @typedef {import('../index').Stratis} Stratis
+ * @typedef {import('../webserver/stratis').Stratis} Stratis
  * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
  * @typedef {import('express/index').NextFunction} NextFunction
  */
 
 /**
- * @typedef {Object} StratisOAuthProviderSessionParamsState
+ * @typedef {Object} StratisOAuth2ProviderSessionParamsState
  * @property {string} uuid
  * @property {string} origin
  * @property {number} created_at
  **/
 
 /**
- * @typedef {Object} StratisOAuthProviderSessionParams
- * @property {StratisOAuthProviderSessionParamsState} state
+ * @typedef {Object} StratisOAuth2ProviderSessionParams
+ * @property {StratisOAuth2ProviderSessionParamsState} state
  * @property {string} access_token
  * @property {string} token_type
  * @property {string} scope
@@ -88,21 +88,17 @@ function parse_barer_token(req) {
   return authorization.replace(auth_barer_regex, '').trim()
 }
 
-/**
- * Provides information about the current stratis oauth provider session
- * and parameters.
- */
-class StratisOAuthProviderSession {
+class StratisOAuth2ProviderSession {
   /**
-   *
+   * The current session state for the stratis authentication provider.
    * @param {StratisOAuth2Provider} provider
    * @param {Request} req the http request
    * @param {Response} res the http response
-   * @param {StratisOAuthProviderSessionParams} session_params
+   * @param {StratisOAuth2ProviderSessionParams} session_params
    */
   constructor(provider, req, session_params = null) {
     this._provider = provider
-    /** @type {StratisOAuthProviderSessionParams} */
+    /** @type {StratisOAuth2ProviderSessionParams} */
     this.params = session_params || {}
     this._req = req
     this.is_bearer_token = false
@@ -132,7 +128,7 @@ class StratisOAuthProviderSession {
 
   /**
    * The session params state
-   * @type {StratisOAuthProviderSessionParamsState}
+   * @type {StratisOAuth2ProviderSessionParamsState}
    */
   get state() {
     return this.params.state || {}
@@ -142,7 +138,7 @@ class StratisOAuthProviderSession {
    * @type {string}
    */
   get access_token() {
-    /** @type {StratisOAuthProviderSessionParams} */
+    /** @type {StratisOAuth2ProviderSessionParams} */
     const params = this.params || {}
     return params.access_token
   }
@@ -251,7 +247,7 @@ class StratisOAuthProviderSession {
   static async load(provider, req, barer_token = null) {
     const session_value = (req.session || {})[provider.session_key] || {}
     barer_token = barer_token || parse_barer_token(req)
-    const oauth_session = new StratisOAuthProviderSession(provider, req)
+    const oauth_session = new StratisOAuth2ProviderSession(provider, req)
 
     // assume that if there is a bearer token then use it.
     if (barer_token != null) {
@@ -303,7 +299,7 @@ class StratisOAuthProviderSession {
    * Returns the bearer token session given the access token.
    * (Allows for third party bearer token to be directly accessed for validation)
    * @param {string} token The bearer token
-   * @returns {StratisOAuthProviderSession} The bearer token session.
+   * @returns {StratisOAuth2ProviderSession} The bearer token session.
    */
   async get_bearer_token_session(token) {
     return await this.provider.get_bearer_token_session(token, this.req)
@@ -442,7 +438,7 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * @param {StratisOAuthProviderSessionParamsState} state
+   * @param {StratisOAuth2ProviderSessionParamsState} state
    * @returns {string}
    */
   encode_state(state) {
@@ -451,7 +447,7 @@ class StratisOAuth2Provider {
 
   /**
    * @param {string} state
-   * @returns {StratisOAuthProviderSessionParamsState}
+   * @returns {StratisOAuth2ProviderSessionParamsState}
    */
   decode_state(state) {
     const state_json = Buffer.from(state, 'base64url').toString('utf-8')
@@ -517,11 +513,11 @@ class StratisOAuth2Provider {
    * (Allows for third party bearer token to be directly accessed for validation)
    * @param {string} token The bearer token
    * @param {Request} req The express request.
-   * @returns {StratisOAuthProviderSession} The bearer token session.
+   * @returns {StratisOAuth2ProviderSession} The bearer token session.
    */
   async get_bearer_token_session(token, req) {
     assert(typeof token == 'string', 'Token must be a string value')
-    const session = await StratisOAuthProviderSession.load(this, req, token)
+    const session = await StratisOAuth2ProviderSession.load(this, req, token)
     await session.update()
     return session
   }
@@ -621,7 +617,7 @@ class StratisOAuth2Provider {
   /**
    * INTERNAL. Update the request user object.
    * @param {Request} req
-   * @param {StratisOAuthProviderSession} session
+   * @param {StratisOAuth2ProviderSession} session
    */
   _update_request_user_object(req, session) {
     const current_user_object = req[this.request_user_object_key] || {}
@@ -656,11 +652,12 @@ class StratisOAuth2Provider {
      * @param {NextFunction} next
      */
     const intercrept = async (req, res, next) => {
+      // check if this applies to the provider.
       if (req.path == this.basepath) return next()
 
       try {
-        const oauth_session = await StratisOAuthProviderSession.load(this, req)
-        req.stratis_oauth_session = oauth_session
+        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+        req.stratis_oauth2_session = oauth_session
 
         // check for token updates.
         if (await oauth_session.update()) {
@@ -729,7 +726,7 @@ class StratisOAuth2Provider {
       }
 
       try {
-        const oauth_session = await StratisOAuthProviderSession.load(this, req)
+        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
 
         switch (get_query_type()) {
           case 'authenticate': {
@@ -756,7 +753,7 @@ class StratisOAuth2Provider {
           }
           case 'authentication_response': {
             // Case we already authenticated and we need to get the token.
-            /** @type {StratisOAuthProviderSessionParamsState} */
+            /** @type {StratisOAuth2ProviderSessionParamsState} */
             const query_state = this.decode_state(req.query.state) || {}
             const origin_url = query_state.origin || oauth_session.state.origin
 
@@ -856,19 +853,17 @@ class StratisOAuth2Provider {
    * @param {Stratis} stratis
    */
   bind_stratis_api(stratis) {
-    stratis.user_and_permission_options.get_user_info = async (
-      stratis_request
-    ) => {
-      return stratis_request.request[this.request_user_object_key]
+    stratis.session_options.get_user_info = async (req) => {
+      return req[this.request_user_object_key]
     }
 
     stratis.on('stratis_request', async (stratis_request) => {
       if (stratis_request.access_mode != 'secure') return
 
-      /** @type {StratisOAuthProviderSession} */
+      /** @type {StratisOAuth2ProviderSession} */
       const oauth_session =
-        stratis_request.request.stratis_oauth_session ||
-        (await StratisOAuthProviderSession.load(this, stratis_request.request))
+        stratis_request.request.stratis_oauth2_session ||
+        (await StratisOAuth2ProviderSession.load(this, stratis_request.request))
 
       await oauth_session.update()
 
@@ -882,7 +877,7 @@ class StratisOAuth2Provider {
 
 module.exports = {
   StratisOAuth2Provider,
-  StratisOAuthProviderSession,
+  StratisOAuth2ProviderSession,
   /** @type {StratisOAuth2ProviderOptions} */
   StratisOAuth2ProviderOptions: {},
 }
