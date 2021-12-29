@@ -367,9 +367,10 @@ class Stratis extends events.EventEmitter {
               JSON.stringify({
                 rid: ws_request_args.rid,
                 reload: err.requires_reload === true,
-                error: this.logging_options.return_stack_trace_to_client
-                  ? `${err}`
-                  : 'Error while serving request',
+                error: this._render_error_text(
+                  err,
+                  stratis_request.return_stack_trace_to_client
+                ),
               })
             )
           } catch (err) {
@@ -500,7 +501,7 @@ class Stratis extends events.EventEmitter {
     )
 
     res.end(
-      this._render_error_text(stratis_request.return_stack_trace_to_client)
+      this._render_error_text(err, stratis_request.return_stack_trace_to_client)
     )
   }
 
@@ -623,7 +624,7 @@ class Stratis extends events.EventEmitter {
           return res.sendStatus(403)
         }
 
-        if (authenticate != null && stratis_request.access_mode == 'secure') {
+        if (authenticate != null) {
           // authentication runs internally so next would mean continue
           let sf_next_error = null
           const sf_next = (...args) => {
@@ -641,16 +642,18 @@ class Stratis extends events.EventEmitter {
           // no need to continue.
           if (res.writableEnded) return
 
-          // checking result.
-          if (auth_result === false)
-            throw new StratisNotAuthorizedError(
-              `Cannot access or find ${stratis_request.query_path}`
-            )
+          if (stratis_request.access_mode == 'secure') {
+            // checking result.
+            if (auth_result === false)
+              throw new StratisNotAuthorizedError(
+                `Cannot access or find ${stratis_request.query_path}`
+              )
 
-          if (!(await stratis_request.is_permitted()))
-            throw new StratisNotAuthorizedError(
-              `Cannot access secure resources. Permission for ${stratis_request.query_path} denied.`
-            )
+            if (!(await stratis_request.is_permitted()))
+              throw new StratisNotAuthorizedError(
+                `Cannot access secure resources. Permission for ${stratis_request.query_path} denied.`
+              )
+          }
         }
         // res has ended. No need to continue.
         else if (res.writableEnded) return

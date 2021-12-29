@@ -206,7 +206,7 @@ class StratisRequest {
   async get_user_info() {
     if (this.stratis.session_options.get_user_info == null) return {}
 
-    return await this.stratis.session_options.get_user_info(this)
+    return await this.stratis.session_options.get_user_info(this.request)
   }
 
   /**

@@ -17,6 +17,8 @@ const {
 /**
  * @typedef {import('express').Express} Express
  * @typedef {import('../webserver/stratis').Stratis} Stratis
+ * @typedef {import('../webserver/interfaces').StratisExpressRequest} StratisExpressRequest
+ * @typedef {import('../webserver/interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('express/index').Request} Request
  * @typedef {import('express/index').Response} Response
  * @typedef {import('express/index').NextFunction} NextFunction
@@ -620,6 +622,10 @@ class StratisOAuth2Provider {
    * @param {StratisOAuth2ProviderSession} session
    */
   _update_request_user_object(req, session) {
+    if (!session.is_authenticated) {
+      req[this.request_user_object_key] = null
+      return
+    }
     const current_user_object = req[this.request_user_object_key] || {}
     req[this.request_user_object_key] = Object.assign(
       typeof current_user_object != 'object' ? {} : current_user_object,
@@ -647,40 +653,50 @@ class StratisOAuth2Provider {
    */
   auth_middleware() {
     /**
-     * @param {Request} req
-     * @param {Response} res
+     * @param {StratisExpressRequest} req The express request. If a stratis express request then
+     * uses the stratis request to check access mode to be secure.
+     * @param {StratisExpressResponse} res The express response.
      * @param {NextFunction} next
      */
     const intercrept = async (req, res, next) => {
-      // check if this applies to the provider.
+      // check if this request is an auth login request
       if (req.path == this.basepath) return next()
 
       try {
         const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
         req.stratis_oauth2_session = oauth_session
 
-        // check for token updates.
-        if (await oauth_session.update()) {
-          this.logger.debug(
-            `Authentication info updated for ${oauth_session.username}. (TID: ${
-              oauth_session.token_id
-            }, Access ${
-              oauth_session.is_access_granted ? 'GRANTED' : 'DENIED'
-            })`
-          )
-        }
+        // only run authentication in the case where we have a need.
+        // for the case of a stratis request, if its secure.
+        if (
+          req.stratis_request == null ||
+          req.stratis_request.access_mode == 'secure'
+        ) {
+          // check for token updates.
+          if (await oauth_session.update()) {
+            this.logger.debug(
+              `Authentication info updated for ${
+                oauth_session.username
+              }. (TID: ${oauth_session.token_id}, Access ${
+                oauth_session.is_access_granted ? 'GRANTED' : 'DENIED'
+              })`
+            )
+          }
 
-        if (!oauth_session.is_authenticated || !oauth_session.is_active) {
-          if (this.allow_login != null && !(await this.allow_login(req)))
-            throw new StratisNotAuthorizedReloadError('Access denied')
-          return this.redirect_to_login(req, res)
-        }
+          if (!oauth_session.is_authenticated || !oauth_session.is_active) {
+            if (this.allow_login != null && !(await this.allow_login(req)))
+              throw new StratisNotAuthorizedReloadError('Access denied')
+            return this.redirect_to_login(req, res)
+          }
 
-        if (oauth_session.is_elapsed == true)
-          return this.redirect_to_revoke(req, res)
+          if (oauth_session.is_elapsed == true)
+            return this.redirect_to_revoke(req, res)
+        }
 
         // updating the user object.
         this._update_request_user_object(req, oauth_session)
+
+        return oauth_session.is_authenticated && oauth_session.is_active
       } catch (err) {
         return next(err)
       }
