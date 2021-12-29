@@ -28,7 +28,7 @@ class StratisRequest {
    * @param {StratisExpressRequest} param0.request
    * @param {StratisFileAccessMode} param0.access_mode
    * @param {boolean} param0.log_errors
-   * @param {boolean} param0.return_errors_to_client
+   * @param {boolean} param0.return_stack_trace_to_client
    * @param {string} param0.request_user_object_key
    * @param {StratisPageCallContext} param0.context
    */
@@ -39,7 +39,7 @@ class StratisRequest {
     access_mode = null,
     access_modifiers_match_regex = ACCESS_MODIFIERS_MATCH_REGEX,
     log_errors = true,
-    return_errors_to_client = false,
+    return_stack_trace_to_client = null,
     request_user_object_key = 'user',
     context = null,
   } = {}) {
@@ -57,7 +57,7 @@ class StratisRequest {
     this._stratis = stratis
     this._request = request
     this._log_errors = log_errors
-    this._return_errors_to_client = return_errors_to_client
+    this._return_stack_trace_to_client = return_stack_trace_to_client
     this._request_user_object_key = request_user_object_key
     this._url = new URL(request.url, `http://${request.headers.host}`)
 
@@ -150,15 +150,18 @@ class StratisRequest {
   /**
    * If true, returns errors to client on this request.
    */
-  get return_errors_to_client() {
-    return this._return_errors_to_client
+  get return_stack_trace_to_client() {
+    return (
+      this._return_stack_trace_to_client ||
+      this.stratis.logging_options.return_stack_trace_to_client
+    )
   }
 
   /**
    * If true, returns errors to client on this request.
    */
-  set return_errors_to_client(val) {
-    this._return_errors_to_client = val == true
+  set return_stack_trace_to_client(val) {
+    this._return_stack_trace_to_client = val == true
   }
 
   /**
@@ -201,10 +204,9 @@ class StratisRequest {
    * @returns {Object<string,any>} The user information.
    */
   async get_user_info() {
-    if (this.stratis.user_and_permission_options.get_user_info == null)
-      return {}
+    if (this.stratis.session_options.get_user_info == null) return {}
 
-    return this.stratis.user_and_permission_options.get_user_info(this)
+    return await this.stratis.session_options.get_user_info(this.request)
   }
 
   /**
@@ -213,12 +215,8 @@ class StratisRequest {
    * @returns
    */
   async is_permitted(...args) {
-    if (this.stratis.user_and_permission_options.is_permitted == null)
-      return true
-    return await this.stratis.user_and_permission_options.is_permitted(
-      this,
-      ...args
-    )
+    if (this.stratis.session_options.is_permitted == null) return true
+    return await this.stratis.session_options.is_permitted(this, ...args)
   }
 
   /**
@@ -226,11 +224,8 @@ class StratisRequest {
    * Must be authenticated.
    */
   async is_secure_permitted() {
-    if (this.stratis.user_and_permission_options.is_secure_permitted == null)
-      return true
-    return await this.stratis.user_and_permission_options.is_secure_permitted(
-      this
-    )
+    if (this.stratis.session_options.is_secure_permitted == null) return true
+    return await this.stratis.session_options.is_secure_permitted(this)
   }
 
   /**
@@ -287,8 +282,9 @@ class StratisRequest {
     }
 
     this._is_page =
-      new Set(this.stratis.page_file_ext).has(path.extname(this.query_path)) ||
-      (await path_exists(this.codepath))
+      new Set(this.stratis.page_options.page_extensions).has(
+        path.extname(this.query_path)
+      ) || (await path_exists(this.codepath))
 
     return this
   }

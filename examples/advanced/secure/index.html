@@ -9,6 +9,7 @@
   </head>
   <body>
     <div>
+      User: <%- req.user.username %><br />
       <%- JSON.stringify(a_value) %><br />
       <%- await print_something() %>
       <br />

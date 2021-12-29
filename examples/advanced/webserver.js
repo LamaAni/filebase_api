@@ -1,8 +1,8 @@
-const { Stratis } = require('../../src/index')
+const { Stratis } = require('../../src/webserver/stratis')
 const path = require('path')
 
 const serve_directory_fullpath = path.resolve(path.join(__dirname, 'public'))
-const app = new Stratis({}).server(serve_directory_fullpath)
+const app = new Stratis().server(serve_directory_fullpath)
 const port = 8080
 
 app.all('/test', (req, rsp, next) => {
