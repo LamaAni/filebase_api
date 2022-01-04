@@ -263,7 +263,11 @@ class Stratis extends events.EventEmitter {
         /** @type {StratisApiWebSocketRequestArgs} */
         let ws_request_args = {}
         try {
-          ws_request_args = await StratisPageApiCall.parse_api_call_args(data)
+          ws_request_args = await StratisPageApiCall.parse_api_call_args(
+            data,
+            {},
+            stratis_request.request.headers['content-encoding']
+          )
           ws_request_args.args = ws_request_args.args || {}
           if (
             ws_request_args.rid == null ||
@@ -345,17 +349,43 @@ class Stratis extends events.EventEmitter {
       ? stratis_request.request.read()
       : null
 
+    // checking request payload type.
+    let request_args = null
+    const encoding = stratis_request.request.headers['content-encoding']
+
+    switch (stratis_request.request.method) {
+      case 'PUT':
+        request_args = await StratisPageApiCall.parse_api_call_args(
+          null,
+          Object.assign({}, stratis_request.request.query, {
+            data: body_buffer,
+          }),
+          encoding
+        )
+        break
+      case 'GET':
+        request_args = await StratisPageApiCall.parse_api_call_args(
+          null,
+          Object.assign({}, stratis_request.request.query),
+          encoding
+        )
+        break
+      default:
+        request_args = await StratisPageApiCall.parse_api_call_args(
+          body_buffer
+            ? body_buffer.toString(
+                stratis_request.request.readableEncoding || 'utf-8'
+              )
+            : null,
+          encoding
+        )
+        break
+    }
+
     const call = new StratisPageApiCall(
       stratis_request,
       name,
-      await StratisPageApiCall.parse_api_call_args(
-        body_buffer
-          ? body_buffer.toString(
-              stratis_request.request.readableEncoding || 'utf-8'
-            )
-          : null,
-        stratis_request.request.query
-      ),
+      request_args || {},
       true
     )
 
