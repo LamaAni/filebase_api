@@ -446,8 +446,6 @@ class Stratis extends events.EventEmitter {
       true
     )
 
-    const call = new StratisPageApiCall(stratis_request, name, call_args, true)
-
     const context = new this.page_options.page_context_constructor({
       stratis_request,
       res,
