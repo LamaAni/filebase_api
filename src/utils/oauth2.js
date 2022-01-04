@@ -211,6 +211,7 @@ class StratisOAuth2ProviderSession {
     access_token,
     scope = null,
     refresh_token = null,
+    id_token = null,
     token_type = null,
   }) {
     Object.entries({
@@ -218,6 +219,7 @@ class StratisOAuth2ProviderSession {
       scope,
       refresh_token,
       token_type,
+      id_token,
     })
       .filter((e) => e[1] != null)
       .forEach((e) => {
