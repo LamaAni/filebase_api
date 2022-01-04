@@ -129,14 +129,14 @@ class StratisPageCallContext {
   }
 
   get_api_objects() {
-    return {
+    return Object.assign({}, this.stratis.template_options.common_api || {}, {
       render_stratis_api_yaml_description: (...args) =>
         this.render_stratis_api_description(...args),
       render_stratis_api_description: (...args) =>
         this.render_stratis_api_description(...args),
       render_stratis_browser_api_script: (...args) =>
         this.render_stratis_browser_api_script(...args),
-    }
+    })
   }
 
   get_render_objects() {

@@ -7,11 +7,6 @@ const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
 
 const {
-  STRATIS_CLIENTSIDE_SOURCE,
-  DEFAULT_PAGE_FILE_EXT,
-} = require('./consts.js')
-
-const {
   StratisNotFoundError,
   StratisError,
   StratisTimeOutError,
@@ -26,6 +21,17 @@ const {
   StratisPageRenderRequest,
   StratisPageCallContext,
 } = require('./pages.js')
+
+const {
+  DEFAULT_PAGE_OPTIONS,
+  DEFAULT_LOGGING_OPTIONS,
+  DEFAULT_SESSION_OPTIONS,
+  DEFAULT_MIDDLEWARE_OPTIONS,
+  DEFAULT_CLIENT_API_OPTIONS,
+  DEFAULT_TEMPLATE_OPTIONS,
+  DEFAULT_TEMPLATE_BANK_OPTIONS,
+  DEFAULT_CODE_MODULE_BANK_OPTIONS,
+} = require('./consts.js')
 
 /**
  * @typedef {import('./interfaces').StratisEventListenRegister} StratisEventListenRegister
@@ -66,35 +72,50 @@ const {
  */
 
 /**
- * @typedef {Object} StratisUserAndPermissionOptions
- * @property {(context:StratisRequest)=>{}} get_user_info Stratis assumes that the user
+ * @typedef {Object} StratisSessionOptions
+ * @property {(req:StratisExpressRequest)=>{}} get_user_info Stratis assumes that the user
  * info is attached to the express request. Either provide method or request string key.
- * @property {(context:StratisRequest,...permit_args)=>boolean} is_permitted A method to check if the
- * current permission set is allowed.
- * @property {(context:StratisRequest)=>boolean} is_secure_permitted Check if by default
- * the user is permitted.
+ * @property {(req:StratisExpressRequest,...permit_args)=>boolean} is_permitted A method to check if the
+ * current request is allowed.
+ */
+
+/**
+ * @typedef {Object} StratisTemplateOptionsExtension
+ * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
+ * @property {Object<string,StratisApiObject>} common_api A collection of core api objects or
+ * methods to expose.
+ *
+ * @typedef {StratisTemplateOptionsExtension & StratisEJSOptions} StratisTemplateOptions
+ */
+
+/**
+ * @typedef {Object} StratisLoggingOptions
+ * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{}}} logger The logger to use,
+ * must have logging methods (info, warn, error ...)
+ * @property {boolean} log_errors If true, prints the application errors to the logger.
+ * @property {boolean} next_on_error If true, errors on express request are sent to the next handler.
+ * @property {boolean} return_stack_trace_to_client If true, prints the application errors to the http 500 response.
+ * NOTE! To be used for debug, may expose sensitive information.
+ */
+
+/**
+ * @typedef {Object} StratisPageOptions
+ * @property {StratisPageCallContext} page_context_constructor A page call context constructor
+ * @property {integer} timeout The client side request timeout [ms]
+ * @property {[string]} page_extensions A list of extensions that denote a template page. For example .html
  */
 
 /**
  * Interface for Stratis options.
  * @typedef {Object} StratisOptions
- * @property {[string]} page_file_ext A list of page default extensions to match.
- * @property {Object<string,StratisApiObject>} common_api A collection of core api objects or
- * methods to expose.
- * @property {StratisEJSOptions} ejs_options A collection of stratis extended ejs options.
- * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank
+ * @property {StratisSessionOptions} session_options A collection of security options for stratis.
+ * @property {StratisPageOptions} page_options A collection of options for pages.
+ * @property {StratisLoggingOptions} logging_options A collection of options for logging.
+ * @property {StratisTemplateOptions} template_options A collection of stratis extended ejs and template options.
  * @property {StratisEJSTemplateBankOptions} template_bank_options A collection of template bank options.
- * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
- * @property {console| {}} logger The logger to use, must have logging methods (info, warn, error ...)
- * @property {integer} timeout The client side request timeout [ms]
- * @property {boolean} log_errors If true, prints the application errors to the logger.
- * @property {boolean} return_errors_to_client If true, prints the application errors to the http 500 response.
+ * @property {StratisCodeModuleBankOptions} code_module_bank_options A collection of options for the code module bank
  * @property {StratisMiddlewareOptions} middleware_options A collection of default middleware options.
- * NOTE! To be used for debug, may expose sensitive information.
- * @property {StratisUserAndPermissionOptions} user_and_permission_options A collection of security
- * options for stratis.
  * @property {StratisClientSideApiOptions} client_api_options client api options.
- * @property {StratisPageCallContext} page_call_context_constructor A page call context constructor
  */
 
 const STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS = {
@@ -108,6 +129,17 @@ const STRATIS_DEFAULT_EJS_OPTIONS = {
   add_require: true,
 }
 
+function merge_missing(target, to_merge) {
+  target = target || {}
+  assert(
+    typeof target == 'object',
+    'An option collection must be of type Object'
+  )
+  for (let key of Object.keys(to_merge))
+    if (!(key in target)) target[key] = to_merge[key]
+  return target
+}
+
 class Stratis extends events.EventEmitter {
   /**
    * Creates a file api handler that can be used to generate
@@ -115,55 +147,72 @@ class Stratis extends events.EventEmitter {
    * @param {StratisOptions} param0
    */
   constructor({
-    page_file_ext = DEFAULT_PAGE_FILE_EXT,
-    common_api = {},
-    code_module_bank_options = {},
-    template_bank_options = {},
-    client_api_options = STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
-    ejs_options = STRATIS_DEFAULT_EJS_OPTIONS,
-    log_errors = true,
-    return_errors_to_client = false,
-    codefile_extension = '.code.js',
-    logger = console,
-    middleware_options = {},
-    user_and_permission_options = {},
-    timeout = 1000 * 60,
-    page_call_context_constructor = StratisPageCallContext,
+    session_options = null,
+    page_options = null,
+    logging_options = null,
+    middleware_options = null,
+    client_api_options = null,
+    template_options = null,
+    template_bank_options = null,
+    code_module_bank_options = null,
   } = {}) {
     super()
 
+    /** @type {StratisSessionOptions} */
+    this.session_options = merge_missing(
+      session_options,
+      DEFAULT_SESSION_OPTIONS
+    )
+
+    /** @type {StratisPageOptions} */
+    this.page_options = merge_missing(page_options, DEFAULT_PAGE_OPTIONS)
+
+    /** @type {StratisLoggingOptions} */
+    this.logging_options = merge_missing(
+      logging_options,
+      DEFAULT_LOGGING_OPTIONS
+    )
+
+    /** @type {StratisMiddlewareOptions} */
+    this.middleware_options = merge_missing(
+      middleware_options,
+      DEFAULT_MIDDLEWARE_OPTIONS
+    )
+
+    /** @type {StratisClientSideApiOptions} */
+    this.client_api_options = merge_missing(
+      client_api_options,
+      DEFAULT_CLIENT_API_OPTIONS
+    )
+
+    /** @type {StratisTemplateOptions} */
+    this.template_options = merge_missing(
+      template_options,
+      DEFAULT_TEMPLATE_OPTIONS
+    )
+
+    /** @type {StratisEJSTemplateBankOptions} */
+    template_bank_options = merge_missing(
+      template_bank_options,
+      DEFAULT_TEMPLATE_BANK_OPTIONS
+    )
+
+    /** @type {StratisCodeModuleBankOptions} */
+    code_module_bank_options = merge_missing(
+      code_module_bank_options,
+      DEFAULT_CODE_MODULE_BANK_OPTIONS
+    )
+
+    this.page_options.page_context_constructor =
+      this.page_options.page_context_constructor || StratisPageCallContext
+
+    // validating default options
     assert(
-      page_call_context_constructor.prototype.constructor ==
+      this.page_options.page_context_constructor.prototype.constructor ==
         StratisPageCallContext ||
-        page_call_context_constructor.prototype instanceof
+        this.page_options.page_context_constructor instanceof
           StratisPageCallContext,
-      'page_call_context_constructor must be of type StratisPageCallContext'
-    )
-
-    this.page_file_ext = page_file_ext
-    this.common_api = common_api
-    this.logger = logger || console
-    this.log_errors = log_errors
-    this.return_errors_to_client = return_errors_to_client
-    this.middleware_options = middleware_options
-    this.user_and_permission_options = user_and_permission_options
-    this.ejs_options = Object.assign(
-      {},
-      STRATIS_DEFAULT_EJS_OPTIONS,
-      ejs_options
-    )
-    this.codefile_extension = codefile_extension
-    this.page_call_context_constructor = page_call_context_constructor
-    this.timeout =
-      typeof timeout != 'number' || timeout <= 0 ? Infinity : timeout
-
-    /**
-     * @type {StratisClientSideApiOptions}
-     */
-    this.client_api_options = Object.assign(
-      { timeout: this.timeout },
-      STRATIS_CLIENTSIDE_API_DEFAULT_OPTIONS,
-      client_api_options || {}
+      'this.page_options.page_context_constructor must be of type StratisPageCallContext'
     )
 
     /** @type {StratisEventListenRegister} */
@@ -176,11 +225,15 @@ class Stratis extends events.EventEmitter {
     this.on('error', (...args) => this._internal_on_emit_error(...args))
 
     // collections
+    this.template_bank = new StratisEJSTemplateBank(this, template_bank_options)
     this.code_module_bank = new StratisCodeModuleBank(
       this,
       code_module_bank_options
     )
-    this.template_bank = new StratisEJSTemplateBank(this, template_bank_options)
+  }
+
+  get logger() {
+    return this.logging_options.logger
   }
 
   /** @type {StratisEventEmitter} */
@@ -230,14 +283,17 @@ class Stratis extends events.EventEmitter {
    * @param {string} file_path The file path to compose a codefile for.
    */
   compose_codefile_path(file_path) {
-    return file_path.replace(/\.[^/.]+$/, '') + this.codefile_extension
+    return (
+      file_path.replace(/\.[^/.]+$/, '') +
+      this.template_options.codefile_extension
+    )
   }
 
   /**
    * @param {string} file_path The filepath to check
    */
   is_codefile(file_path) {
-    return file_path.endsWith(this.codefile_extension)
+    return file_path.endsWith(this.template_options.codefile_extension)
   }
 
   /**
@@ -245,10 +301,10 @@ class Stratis extends events.EventEmitter {
    * @param {StratisExpressRequest} stratis_request
    */
   _internal_on_emit_error(err, req) {
-    let request_log_errors =
+    const request_log_errors =
       req.stratis_request != null && req.stratis_request.log_errors === true
 
-    if (request_log_errors || this.log_errors)
+    if (request_log_errors || this.logging_options.log_errors)
       this.logger.error(err.stack || `${err}`)
   }
 
@@ -284,7 +340,7 @@ class Stratis extends events.EventEmitter {
             ws_request_args.args
           )
 
-          const context = new this.page_call_context_constructor({
+          const context = new this.page_options.page_context_constructor({
             stratis_request,
             ws,
           })
@@ -298,7 +354,7 @@ class Stratis extends events.EventEmitter {
             async () => {
               return await call.invoke(context)
             },
-            this.timeout,
+            this.page_options.timeout,
             new StratisTimeOutError('Websocket request timed out')
           )
 
@@ -315,9 +371,10 @@ class Stratis extends events.EventEmitter {
               JSON.stringify({
                 rid: ws_request_args.rid,
                 reload: err.requires_reload === true,
-                error: this.return_errors_to_client
-                  ? `${err}`
-                  : 'Error while serving request',
+                error: this._render_error_text(
+                  err,
+                  stratis_request.return_stack_trace_to_client
+                ),
               })
             )
           } catch (err) {
@@ -389,7 +446,9 @@ class Stratis extends events.EventEmitter {
       true
     )
 
-    const context = new this.page_call_context_constructor({
+    const call = new StratisPageApiCall(stratis_request, name, call_args, true)
+
+    const context = new this.page_options.page_context_constructor({
       stratis_request,
       res,
       next,
@@ -397,7 +456,7 @@ class Stratis extends events.EventEmitter {
 
     stratis_request._context = context
 
-    const rslt = await call.invoke(context)
+    let rslt = await call.invoke(context)
     if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
 
     return res.end(rslt)
@@ -410,7 +469,7 @@ class Stratis extends events.EventEmitter {
    */
   async handle_page_render_request(stratis_request, res, next) {
     const call = new StratisPageRenderRequest(stratis_request)
-    const context = new this.page_call_context_constructor({
+    const context = new this.page_options.page_context_constructor({
       stratis_request,
       res,
       next,
@@ -441,6 +500,20 @@ class Stratis extends events.EventEmitter {
   }
 
   /**
+   * INTERNAL.
+   * @param {Error} err The error.
+   * @param {boolean} return_stack_trace
+   */
+  _render_error_text(err, return_stack_trace = null) {
+    return_stack_trace =
+      return_stack_trace === null
+        ? this.logging_options.return_stack_trace_to_client
+        : return_stack_trace
+
+    return return_stack_trace ? `${err.stack || err}` : `${err.message || err}`
+  }
+
+  /**
    * Handle errors with stratis.
    * @param {Error} err The error
    * @param {StratisExpressRequest} req The express request
@@ -448,6 +521,7 @@ class Stratis extends events.EventEmitter {
    * @param {NextFunction} next The express next function
    */
   async handle_errors(err, req, res, next) {
+    /** @type {StratisRequest} */
     const stratis_request = req.stratis_request || {}
 
     const http_response_code =
@@ -460,15 +534,10 @@ class Stratis extends events.EventEmitter {
     res.status(
       err instanceof StratisError ? err.http_response_code || 500 : 500
     )
-    if (
-      stratis_request.return_errors_to_client == null
-        ? this.return_errors_to_client
-        : stratis_request.return_errors_to_client
+
+    res.end(
+      this._render_error_text(err, stratis_request.return_stack_trace_to_client)
     )
-      res.end(`${err.stack || err}`)
-    else {
-      res.end('')
-    }
   }
 
   /**
@@ -552,8 +621,9 @@ class Stratis extends events.EventEmitter {
         stratis: this,
         request: req,
         access_mode: default_access_mode,
-        return_errors_to_client: this.return_errors_to_client,
-        log_errors: this.log_errors,
+        return_stack_trace_to_client:
+          this.logging_options.return_stack_trace_to_client,
+        log_errors: this.logging_options.log_errors,
         request_user_object_key,
       })
 
@@ -589,7 +659,7 @@ class Stratis extends events.EventEmitter {
           return res.sendStatus(403)
         }
 
-        if (authenticate != null && stratis_request.access_mode == 'secure') {
+        if (authenticate != null) {
           // authentication runs internally so next would mean continue
           let sf_next_error = null
           const sf_next = (...args) => {
@@ -607,16 +677,18 @@ class Stratis extends events.EventEmitter {
           // no need to continue.
           if (res.writableEnded) return
 
-          // checking result.
-          if (auth_result === false)
-            throw new StratisNotAuthorizedError(
-              `Cannot access or find ${stratis_request.query_path}`
-            )
+          if (stratis_request.access_mode == 'secure') {
+            // checking result.
+            if (auth_result === false)
+              throw new StratisNotAuthorizedError(
+                `Cannot access or find ${stratis_request.query_path}`
+              )
 
-          if (!(await stratis_request.is_secure_permitted()))
-            throw new StratisNotAuthorizedError(
-              `Cannot access secure resources. Permission for ${stratis_request.query_path} denied.`
-            )
+            if (!(await stratis_request.is_permitted()))
+              throw new StratisNotAuthorizedError(
+                `Cannot access secure resources. Permission for ${stratis_request.query_path} denied.`
+              )
+          }
         }
         // res has ended. No need to continue.
         else if (res.writableEnded) return
@@ -632,7 +704,7 @@ class Stratis extends events.EventEmitter {
               return this.handle_websocket_request(stratis_request, res, next)
             return this.handle_page_request(stratis_request, res, next)
           },
-          this.timeout,
+          this.page_options.timeout,
           new StratisTimeOutError('timed out processing request')
         )
       } catch (err) {

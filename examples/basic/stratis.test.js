@@ -3,7 +3,7 @@ const path = require('path')
 
 const serve_path = path.resolve(__dirname)
 
-const app = new Stratis({}).server(path.resolve(serve_path))
+const app = new Stratis().server(path.resolve(serve_path))
 const port = 8080
 
 app.all('/test', (req, res, next) => {
