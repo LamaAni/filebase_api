@@ -42,6 +42,9 @@ async function stream_to_buffer(strm, data_type = 'bytes') {
     })
     strm.on('error', (err) => reject(err))
     strm.on('end', () => {
+      if (chunks.length > 1) {
+        console.log('Chunks: ' + chunks.length)
+      }
       resolve(
         Buffer.concat(
           chunks.map((c) => (typeof c == 'string' ? Buffer.from([c]) : c))
