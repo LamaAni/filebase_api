@@ -402,37 +402,25 @@ class Stratis extends events.EventEmitter {
       .join('.')
 
     // checking request payload type.
-    let request_args = null
-    const encoding = stratis_request.request.headers['content-encoding']
+    const encoding =
+      stratis_request.request.headers['content-encoding'] || 'utf-8'
+    const content_type = stratis_request.request.headers['content-type']
 
-    switch (stratis_request.request.method) {
-      case 'POST':
-        const body_buffer = stratis_request.request.readable
-          ? stratis_request.request.read()
-          : null
-
-        request_args = await StratisPageApiCall.parse_api_call_args(
-          body_buffer
-            ? body_buffer.toString(
-                stratis_request.request.readableEncoding || 'utf-8'
-              )
-            : null,
-          encoding
-        )
-        break
-      default:
-        request_args = await StratisPageApiCall.parse_api_call_args(
-          null,
-          Object.assign({}, stratis_request.request.query),
-          encoding
-        )
-        break
-    }
+    let json_args_payload = null
+    if (
+      (content_type == null || /\bjson\b/.test(content_type.toLowerCase())) &&
+      stratis_request.request.readable
+    )
+      json_args_payload = stratis_request.request.read().toString(encoding)
 
     const call = new StratisPageApiCall(
       stratis_request,
       name,
-      request_args || {},
+      await StratisPageApiCall.parse_api_call_args(
+        json_args_payload,
+        stratis_request.request.query,
+        encoding
+      ),
       true
     )
 

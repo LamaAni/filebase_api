@@ -198,7 +198,7 @@ http(s)://mydomain.com/[filepath.ext]/[api_exposed_method_or_function]?arg1=..&a
 Where the method first argument is the merge result of the dictionaries,
 
 1. `query-string` - the dictionary of arguments.
-1. `request payload` - If the request method is 'POST' then parse as json. If cannot parse or there is a parse error,
+1. `request payload` - If content type is not defined or content type includes the word 'json', parse as json. If cannot parse json or there is a parse error,
    ```javascript
    {
       payload_error,
