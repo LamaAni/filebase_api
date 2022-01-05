@@ -82,6 +82,13 @@ class StratisRequest {
   }
 
   /**
+   * The stratis logger
+   */
+  get logger() {
+    return this.stratis.logger
+  }
+
+  /**
    * The enhanced express object.
    */
   get request() {

@@ -5,9 +5,9 @@ const {
   StratisNotAuthorizedError,
 } = require('./errors.js')
 const { assert } = require('../common')
-const { split_stream_once, stream_to_buffer } = require('../utils/streams.js')
-const { StratisEJSTemplateRenderContext } = require('./templates')
+const { stream_to_buffer } = require('../utils/streams.js')
 const { Request, Response } = require('express')
+const { StratisParseError } = require('./errors')
 const WebSocket = require('ws')
 
 /**
@@ -279,10 +279,10 @@ class StratisPageApiCall extends StratisPageCall {
           try {
             as_json = JSON.parse(as_json)
           } catch (err) {
-            as_json = {
-              payload_error: err,
-              payload: as_json,
-            }
+            throw new StratisParseError(
+              as_json,
+              `Failed to parse stratis request payload: ${err}`
+            )
           }
         else
           as_json = {

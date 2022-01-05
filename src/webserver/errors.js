@@ -1,5 +1,7 @@
 /**
- * @typedef {import('express').Response} Response
+ * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
+ * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
+ * @typedef {import('express').NextFunction} NextFunction
  **/
 
 class StratisError extends Error {
@@ -14,6 +16,13 @@ class StratisError extends Error {
   get requires_reload() {
     return false
   }
+
+  /**
+   * @param {StratisExpressRequest} req The express request
+   * @param {StratisExpressResponse} res The express response
+   * @param {NextFunction} next The express next function
+   */
+  handle_error(req, res, next) {}
 }
 
 class StratisNotFoundError extends StratisError {
@@ -44,10 +53,27 @@ class StratisTimeOutError extends StratisError {
   }
 }
 
+class StratisParseError extends StratisError {
+  constructor(source, ...args) {
+    super(...args)
+    this.source = source
+  }
+
+  /**
+   * @param {StratisExpressRequest} req The express request
+   * @param {StratisExpressResponse} res The express response
+   * @param {NextFunction} next The express next function
+   */
+  handle_error(req, res, next) {
+    req.stratis_request.logger.debug(`Parse error: ${this.message}. Source:  \n${this.source}`)
+  }
+}
+
 module.exports = {
   StratisError,
   StratisNotFoundError,
   StratisTimeOutError,
   StratisNotAuthorizedError,
   StratisNotAuthorizedReloadError,
+  StratisParseError,
 }

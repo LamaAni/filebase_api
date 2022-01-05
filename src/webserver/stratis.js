@@ -90,7 +90,7 @@ const {
 
 /**
  * @typedef {Object} StratisLoggingOptions
- * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{}}} logger The logger to use,
+ * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{}, debug(...args)=>{}}} logger The logger to use,
  * must have logging methods (info, warn, error ...)
  * @property {boolean} log_errors If true, prints the application errors to the logger.
  * @property {boolean} next_on_error If true, errors on express request are sent to the next handler.
@@ -502,6 +502,8 @@ class Stratis extends events.EventEmitter {
 
     const http_response_code =
       err instanceof StratisError ? err.http_response_code || 500 : 500
+
+    if (err instanceof StratisError) await err.handle_error(req, res, next)
 
     if (http_response_code == 500)
       // application error.
