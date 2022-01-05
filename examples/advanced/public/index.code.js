@@ -1,5 +1,10 @@
 const fs = require('fs')
 const path = require('path')
+const {
+  StratisError,
+  StratisNotAuthorizedError,
+  StratisParseError,
+} = require('../../../src/webserver/errors')
 /**
  * @typedef {import('../../../src/index').StratisApiHandler} StratisApiHandler
  */

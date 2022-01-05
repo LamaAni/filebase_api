@@ -18,6 +18,13 @@ class StratisError extends Error {
   }
 
   /**
+   * If true then emit error event
+   */
+  get emit_error_event() {
+    return this.http_response_code == 500
+  }
+
+  /**
    * @param {StratisExpressRequest} req The express request
    * @param {StratisExpressResponse} res The express response
    * @param {NextFunction} next The express next function
@@ -65,7 +72,13 @@ class StratisParseError extends StratisError {
    * @param {NextFunction} next The express next function
    */
   handle_error(req, res, next) {
-    req.stratis_request.logger.debug(`Parse error: ${this.message}. Source:  \n${this.source}`)
+    req.stratis_request.logger.debug(
+      `Parse error: ${this.message}. Source:  \n${this.source}`
+    )
+  }
+
+  get emit_error_event() {
+    return false
   }
 }
 

@@ -500,19 +500,12 @@ class Stratis extends events.EventEmitter {
   async handle_errors(err, req, res, next) {
     /** @type {StratisRequest} */
     const stratis_request = req.stratis_request || {}
-
-    const http_response_code =
-      err instanceof StratisError ? err.http_response_code || 500 : 500
-
     if (err instanceof StratisError) await err.handle_error(req, res, next)
 
-    if (http_response_code == 500)
-      // application error.
-      this.emit_error(err, req)
+    // Check the emit error event. Will be false if defined.
+    if (err.emit_error_event !== false) this.emit_error(err, req)
 
-    res.status(
-      err instanceof StratisError ? err.http_response_code || 500 : 500
-    )
+    res.status(err.http_response_code || 500)
 
     res.end(
       this._render_error_text(err, stratis_request.return_stack_trace_to_client)
