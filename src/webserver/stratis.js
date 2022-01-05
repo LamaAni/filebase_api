@@ -5,6 +5,7 @@ const fs = require('fs')
 const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
+const { create_content_stream, stream_to_buffer } = require('../utils/streams')
 
 const {
   StratisNotFoundError,
@@ -406,18 +407,18 @@ class Stratis extends events.EventEmitter {
       stratis_request.request.headers['content-encoding'] || 'utf-8'
     const content_type = stratis_request.request.headers['content-type']
 
-    let json_args_payload = null
+    let payload = null
     if (
       (content_type == null || /\bjson\b/.test(content_type.toLowerCase())) &&
       stratis_request.request.readable
     )
-      json_args_payload = stratis_request.request.read()
+      payload = stratis_request.request.body || stratis_request.request
 
     const call = new StratisPageApiCall(
       stratis_request,
       name,
       await StratisPageApiCall.parse_api_call_args(
-        json_args_payload,
+        payload,
         stratis_request.request.query,
         encoding
       ),
@@ -499,19 +500,12 @@ class Stratis extends events.EventEmitter {
   async handle_errors(err, req, res, next) {
     /** @type {StratisRequest} */
     const stratis_request = req.stratis_request || {}
-
-    const http_response_code =
-      err instanceof StratisError ? err.http_response_code || 500 : 500
-
     if (err instanceof StratisError) await err.handle_error(req, res, next)
 
-    if (http_response_code == 500)
-      // application error.
-      this.emit_error(err, req)
+    // Check the emit error event. Will be false if defined.
+    if (err.emit_error_event !== false) this.emit_error(err, req)
 
-    res.status(
-      err instanceof StratisError ? err.http_response_code || 500 : 500
-    )
+    res.status(err.http_response_code || 500)
 
     res.end(
       this._render_error_text(err, stratis_request.return_stack_trace_to_client)
@@ -529,6 +523,24 @@ class Stratis extends events.EventEmitter {
     res.stratis = this
     req.stratis_request = stratis_request
     res.stratis_request = stratis_request
+
+    if (req.body == null) {
+      // determine body type.
+      let data_type = 'bytes'
+      let encoding = req.headers['content-encoding'] || 'utf-8'
+      switch (encoding) {
+        case 'gzip':
+          data_type = 'gzip'
+          encoding = 'utf-8'
+          break
+        case 'deflate':
+          data_type = 'deflate'
+          encoding = 'utf-8'
+          break
+      }
+
+      req.body = create_content_stream(req, data_type)
+    }
 
     return { req, res }
   }

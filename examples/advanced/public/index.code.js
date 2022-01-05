@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+
 /**
  * @typedef {import('../../../src/index').StratisApiHandler} StratisApiHandler
  */
