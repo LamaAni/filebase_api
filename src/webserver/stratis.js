@@ -411,7 +411,7 @@ class Stratis extends events.EventEmitter {
       (content_type == null || /\bjson\b/.test(content_type.toLowerCase())) &&
       stratis_request.request.readable
     )
-      json_args_payload = stratis_request.request.read().toString(encoding)
+      json_args_payload = stratis_request.request.read()
 
     const call = new StratisPageApiCall(
       stratis_request,
