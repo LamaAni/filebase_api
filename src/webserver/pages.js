@@ -15,7 +15,7 @@ const WebSocket = require('ws')
  */
 
 /**
- * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
+ * @typedef {import('./interfaces').StratisApiHandler} StratisApiHandler
  * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
  * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('./requests').StratisRequest} StratisRequest
@@ -150,7 +150,7 @@ class StratisPageCallContext {
 
   /**
    * @param {boolean} include_api_objects
-   * @returns {Object<string, StratisApiObject>}
+   * @returns {Object<string, StratisApiHandler>}
    */
   async get_code_module_objects(include_api_objects = true) {
     const code_module_api_objects = (
@@ -251,40 +251,46 @@ class StratisPageApiCall extends StratisPageCall {
   /**
    * Reads the api call args from the payload data. Multiple calls will
    * result in multiple reads.
-   * @param {stream.Readable|Buffer|string|Object<string,any>} payload The call payload data.
+   * @param {stream.Readable|Buffer|string|Object<string,any>} as_json The call payload data.
    * @param {ejs.Data} query_args The request query args if any.
+   * @param {string} encoding The json string encoding
    * @returns {Object}
    */
-  static async parse_api_call_args(payload, query_args = null) {
-    if (payload == null) payload = {}
+  static async parse_api_call_args(
+    as_json = null,
+    query_args = null,
+    encoding = 'utf-8'
+  ) {
+    encoding = encoding || 'utf-8'
+
+    if (as_json == null) as_json = {}
     else {
-      const is_stream = payload instanceof stream.Readable
-      const is_buffer = payload instanceof Buffer
+      const is_stream = as_json instanceof stream.Readable
+      const is_buffer = as_json instanceof Buffer
 
       if (is_stream || is_buffer) {
-        if (is_stream)
-          payload = await stream_to_buffer(split_stream_once(data, '\0')[0])
-        payload = payload.toString('utf-8')
-        payload = payload.length == 0 ? null : payload
+        if (is_stream) as_json = await stream_to_buffer(data)
+        as_json = as_json.toString(encoding).trim()
+        as_json = as_json.length == 0 ? null : as_json
       }
 
-      if (payload != null || typeof payload == 'string') {
-        if (payload != null && /^\s*[\{]/gms.test(payload))
-          payload = JSON.parse(payload)
+      if (as_json != null || typeof as_json == 'string') {
+        if (as_json != null && /^\s*[\{]/gms.test(as_json))
+          as_json = JSON.parse(as_json)
         else
-          payload = {
-            payload: payload,
+          as_json = {
+            payload: as_json,
           }
       }
 
       assert(
-        typeof payload == 'string' || typeof payload == 'object',
+        typeof as_json == 'string' || typeof as_json == 'object',
         'Payload data must be either a buffer, stream, string or dictionary (or null)'
       )
     }
 
-    if (query_args != null) return Object.assign({}, query_args, payload)
-    else return payload
+    if (query_args != null) return Object.assign({}, query_args, as_json)
+    else return as_json
   }
 
   /**

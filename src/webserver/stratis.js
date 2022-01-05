@@ -40,7 +40,7 @@ const {
  * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
  * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
- * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
+ * @typedef {import('./interfaces').StratisApiHandler} StratisApiHandler
  * @typedef {import('./interfaces').StratisApiWebSocketRequestArgs} StratisApiWebSocketRequestArgs
  * @typedef {import('./pages').StratisPageCallContext} StratisPageCallContext
  * @typedef {import('./requests').StratisFileAccessMode} StratisFileAccessMode
@@ -82,7 +82,7 @@ const {
 /**
  * @typedef {Object} StratisTemplateOptionsExtension
  * @property {string} codefile_extension The file extension (without starting .) for recognizing code files.
- * @property {Object<string,StratisApiObject>} common_api A collection of core api objects or
+ * @property {Object<string,StratisApiHandler>} common_api A collection of core api objects or
  * methods to expose.
  *
  * @typedef {StratisTemplateOptionsExtension & StratisEJSOptions} StratisTemplateOptions
@@ -319,7 +319,11 @@ class Stratis extends events.EventEmitter {
         /** @type {StratisApiWebSocketRequestArgs} */
         let ws_request_args = {}
         try {
-          ws_request_args = await StratisPageApiCall.parse_api_call_args(data)
+          ws_request_args = await StratisPageApiCall.parse_api_call_args(
+            data,
+            {},
+            stratis_request.request.headers['content-encoding']
+          )
           ws_request_args.args = ws_request_args.args || {}
           if (
             ws_request_args.rid == null ||
@@ -397,21 +401,40 @@ class Stratis extends events.EventEmitter {
       .filter((v) => v.trim().length > 0)
       .join('.')
 
-    /** @type {Buffer} */
-    const body_buffer = stratis_request.request.readable
-      ? stratis_request.request.read()
-      : null
+    // checking request payload type.
+    let request_args = null
+    const encoding = stratis_request.request.headers['content-encoding']
 
-    const call_args = await StratisPageApiCall.parse_api_call_args(
-      body_buffer
-        ? body_buffer.toString(
-            stratis_request.request.readableEncoding || 'utf-8'
-          )
-        : null,
-      stratis_request.request.query
+    switch (stratis_request.request.method) {
+      case 'POST':
+        const body_buffer = stratis_request.request.readable
+          ? stratis_request.request.read()
+          : null
+
+        request_args = await StratisPageApiCall.parse_api_call_args(
+          body_buffer
+            ? body_buffer.toString(
+                stratis_request.request.readableEncoding || 'utf-8'
+              )
+            : null,
+          encoding
+        )
+        break
+      default:
+        request_args = await StratisPageApiCall.parse_api_call_args(
+          null,
+          Object.assign({}, stratis_request.request.query),
+          encoding
+        )
+        break
+    }
+
+    const call = new StratisPageApiCall(
+      stratis_request,
+      name,
+      request_args || {},
+      true
     )
-
-    const call = new StratisPageApiCall(stratis_request, name, call_args, true)
 
     const context = new this.page_options.page_context_constructor({
       stratis_request,
@@ -631,32 +654,24 @@ class Stratis extends events.EventEmitter {
             if (args[0] instanceof Error) sf_next_error = args[0]
           }
 
-          const auth_result = await authenticate(req, res, sf_next)
+          await authenticate(req, res, sf_next)
 
           // checking for errors.
           if (sf_next_error != null) {
             throw sf_next_error
           }
 
-          // res has ended. Either redirect or other error.
+          // response has ended. Either redirect or response.
           // no need to continue.
           if (res.writableEnded) return
 
           if (stratis_request.access_mode == 'secure') {
-            // checking result.
-            if (auth_result === false)
-              throw new StratisNotAuthorizedError(
-                `Cannot access or find ${stratis_request.query_path}`
-              )
-
             if (!(await stratis_request.is_permitted()))
               throw new StratisNotAuthorizedError(
                 `Cannot access secure resources. Permission for ${stratis_request.query_path} denied.`
               )
           }
         }
-        // res has ended. No need to continue.
-        else if (res.writableEnded) return
 
         if (!stratis_request.is_page)
           // file download.

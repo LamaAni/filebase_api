@@ -20,7 +20,6 @@
  * @typedef {(event: 'log', level:'DEBUG'|'INFO'|'WARN'|'ERROR', ...args) => this} StratisEventEmitLog
  * @typedef {(event: 'stratis_request', stratis_request:StratisRequest) => this} StratisEventEmitStratisRequest
  * @typedef {StratisEventEmitStratisRequest & StratisEventEmitError & StratisEventEmitLog} StratisEventEmitter
-
  */
 
 /**
@@ -29,7 +28,7 @@
  */
 
 /**
- * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible|string|number|Object} StratisApiObject
+ * @typedef {(args:{}|string, context: StratisPageCallContext)=>JsonCompatible|string|number|Object} StratisApiHandler
  */
 
 /**
@@ -63,15 +62,13 @@
  * @typedef {(request: Request, )=>{}} StratisPermissionsFilter
  */
 
-
-
 module.exports = {
   /** @type {StratisEventEmitter} */
   StratisEventEmitter: () => {},
   /** @type {StratisEventListenRegister} */
   StratisEventListenRegister: () => {},
-  /** @type {StratisApiObject} */
-  StratisApiObject: () => {},
+  /** @type {StratisApiHandler} */
+  StratisApiHandler: () => {},
   /** @type {JsonCompatible} */
   JsonCompatible: {},
   /** @type {StratisExpressRequest} **/
