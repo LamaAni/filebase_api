@@ -276,7 +276,14 @@ class StratisPageApiCall extends StratisPageCall {
 
       if (as_json != null || typeof as_json == 'string') {
         if (as_json != null && /^\s*[\{]/gms.test(as_json))
-          as_json = JSON.parse(as_json)
+          try {
+            as_json = JSON.parse(as_json)
+          } catch (err) {
+            as_json = {
+              payload_error: err,
+              payload: as_json,
+            }
+          }
         else
           as_json = {
             payload: as_json,
