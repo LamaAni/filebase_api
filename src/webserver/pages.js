@@ -15,7 +15,7 @@ const WebSocket = require('ws')
  */
 
 /**
- * @typedef {import('./interfaces').StratisApiObject} StratisApiObject
+ * @typedef {import('./interfaces').StratisApiHandler} StratisApiHandler
  * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
  * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('./requests').StratisRequest} StratisRequest
@@ -150,7 +150,7 @@ class StratisPageCallContext {
 
   /**
    * @param {boolean} include_api_objects
-   * @returns {Object<string, StratisApiObject>}
+   * @returns {Object<string, StratisApiHandler>}
    */
   async get_code_module_objects(include_api_objects = true) {
     const code_module_api_objects = (

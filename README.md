@@ -2,15 +2,16 @@
 
 ### BETA
 
-A file based web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods, that can run parallel/sidecar with your application.
+A file based web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods. Stratis can run parallel/sidecar with your application.
 
 1. Command line server startup.
 1. Built-in REST API.
 1. Build-in WebSocket API.
 1. Live update (triggered by file changes).
-1. Built in authentication and user permissions (for requests).
 1. Templating.
 1. Client side (browser) javascript api.
+1. Built in OAuth2 and user permissions (Including websocket)
+1. Binary distributions.
 
 Implemented in,
 
@@ -52,7 +53,7 @@ The page html definition `index.html`,
 The page code api methods `index.code.js`,
 
 ```javascript
-async function print_x_plus_2({ x }, req, res) {
+async function print_x_plus_2({ x }, context) {
   return x + 2
 }
 
@@ -62,7 +63,9 @@ module.exports = {
 }
 ```
 
-`*.code.js` are always **private**. To call the index.html api with REST,
+`*.code.js` are always **private**.
+
+To call the index.html api with REST,
 
 ```url
 GET http://[my_domain]/index.html/my_api_function?arg1=...&arg2=...
@@ -73,11 +76,11 @@ POST http://[my_domain]/index.html/my_api_function
 payload: { "arg": "value" }
 ```
 
-On POST the payload is mapped to the first value of the function, and json parsing is attempted.
+Note! Only on POST the payload is parsed as json, otherwise any payload (for example for PUT requests) is not parsed at all. You can access the value via regular express request (context.req).
 
 # Client-Side html page structure
 
-If on the server-side html template (page), if you add,
+If you add on the server-side html template (page),
 
 ```html
 <head>
@@ -94,18 +97,19 @@ If on the server-side html template (page), if you add,
 
 A javascript object named `stratis` will be created in the client browser, that includes all the exposed page api function as defined in `[filepath].code.js`. See below website structure.
 
-Note: you can change the name of the api  object to whatever you like. Otherwise,
+Note: you can change the name of the api object to whatever you like. Otherwise,
+
 1. In main pages the default is `stratis`
 1. On **included** templates the default is the `[filename]` of the template.
 
 # Server website structure
 
-Stratis uses files paths and extensions to specify application behavior. e.g.,
+Stratis uses file paths and extensions to specify application behavior (see Access control rules below). e.g.,
 
-- `/public/index.html` or `/lama.public.html` would be public files since they match the public path specifier.
-- `/private/index.html` or `/lama.private.html` would be private files since they match the private path specifier
-- `/secure/index.html` or `/lama.secure.html` would be secure (See secure filter) files since they match
-  the secure path specifier.
+- `/public/index.html` or `/index.public.html` would be public files since they match the public path specifier.
+- `/private/index.html` or `/index.private.html` would be private files since they match the private path specifier
+- `/secure/index.html` or `/index.secure.html` would be secure files since they match
+  the secure path specifier (Will trigger security_provider if defined).
 - `/public/index.code.js` would be an api code file for html since it ends in `.code.js`
 - `/public/my_api` would be an api description, it would only be available if a matching `.code.js` file is found
 - `/public/my_api.code.js` would be an api code file for `my_api` since it ends in `.code.js`
@@ -129,14 +133,14 @@ would be public, private or secure respectively, following,
 
 ### Access control defaults
 
-All files are by default public unless the folder `[serve_path]/public` exists, then all files are by default private unless under the folder `public`. (See cli to override)
+All files are by default public unless the folder `[serve_path]/public` exists, then all files are by default private unless under the folder `public`.
 
 ## Pages (rendered templates)
 
 Page files are rendered as templates if downloaded, and can have attached page code, remote methods and a rest api. Files with path `[filepath].[ext]` are considered page files if,
 
-1. Match the ext: `.htm`, `.html`, `.css`, `.json`, `.yaml`
-1. There exists a file named `[filepath].code.js`, in which the file is rendered as template.
+1. Match the extension: `.htm`, `.html`, `.css`, `.json`, `.yaml`
+1. There exists a file named `[filepath without ext].code.js`.
 
 Page files are rendered as templates using the `ejs` template engine.
 
@@ -150,7 +154,7 @@ Code files define the methods/ejs objects/configuration of the page. A file will
 A example of a basic code file,
 
 ```javascript
-async function print_server_date_with_prefix({ send_from_client }, context) {
+async function print_server_date_with_prefix({ sent_from_client }, context) {
   // return value must json complient.
   return `${sent_from_client}, server date: ${new Date()}`
 }
@@ -165,7 +169,7 @@ module.exports = {
 }
 ```
 
-And `context` is of type `StratisPageCallContext`. Some of its properties,
+And `context` is of type [StratisPageCallContext](src/webserver/pages.js). Some of its properties,
 
 ```javascript
 {
@@ -194,11 +198,9 @@ http(s)://mydomain.com/[filepath.ext]/[api_exposed_method_or_function]?arg1=..&a
 Where the method first argument is the merge result of the dictionaries,
 
 1. `query-string` - the dictionary of arguments.
-1. `payload`:
-   1. If the header `CONTENT_TYPE="application/json"`, parse to json dictionary and merge with previous.
-   1. If anything else, then added as the key 'payload'.
+1. `request payload` - If the request method is 'POST' then parse as json.
 
-````
+**NOTE!** Only on POST the payload is parsed as json, otherwise any payload (for example for PUT requests) is not parsed at all. For uploading files you can use the PUT HTTP method. See example [here](examples/advanced/public/index.code.js).
 
 ## WebSocket API calls
 
@@ -206,7 +208,7 @@ Code files methods are exposed as WebSocket api. You can connect a websocket to 
 
 ```url
 ws(s)://mydomain.com/[filepath.ext]
-````
+```
 
 Where the WebSocket payload is,
 
@@ -219,6 +221,8 @@ Where the WebSocket payload is,
   }
 }
 ```
+
+You cannot send files through the websocket api. Use the REST API instead (see above).
 
 ## Built in API methods
 

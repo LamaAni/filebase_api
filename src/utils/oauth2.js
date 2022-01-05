@@ -185,6 +185,7 @@ class StratisOAuth2ProviderSession {
 
   get is_access_granted() {
     if (!this.is_authenticated) return false
+    if (!this.is_active) return false
     if (this.is_elapsed) return false
     return true
   }
@@ -434,6 +435,30 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Redirect the response to login page.
+   * @param {Request} req The request
+   * @param {string} redirect_to Once logged in, redirect to.
+   * @returns
+   */
+  compose_oauth2_login_url(req, redirect_to = null) {
+    return `${this.basepath}?origin=${encodeURIComponent(
+      redirect_to || req.originalUrl
+    )}`
+  }
+
+  /**
+   * Redirect the response to oauth2 revoke.
+   * @param {Request} req The request
+   * @param {string} redirect_to Once revoked in, redirect to.
+   * @returns
+   */
+  compose_oauth2_revoke_url(req) {
+    return `${this.basepath}?revoke=true&&redirect_to=${encodeURIComponent(
+      redirect_to || req.originalUrl
+    )}`
+  }
+
+  /**
    * The cache token bank that allows the interface to preserve the cache
    * refresh time for the token.
    */
@@ -605,20 +630,6 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Redirect the response to login page.
-   * @param {Request} req The request
-   * @param {Response} res The response.
-   * @returns
-   */
-  redirect_to_login(req, res) {
-    const redirecturl = `${this.basepath}?origin=${encodeURIComponent(
-      req.originalUrl
-    )}`
-
-    return res.redirect(redirecturl)
-  }
-
-  /**
    * INTERNAL. Update the request user object.
    * @param {Request} req
    * @param {StratisOAuth2ProviderSession} session
@@ -637,14 +648,6 @@ class StratisOAuth2Provider {
         token_info: session.token_info,
       }
     )
-  }
-
-  redirect_to_revoke(req, res) {
-    const redirecturl = `${
-      this.basepath
-    }?revoke=true&&redirect_to=${encodeURIComponent(req.originalUrl)}`
-
-    return res.redirect(redirecturl)
   }
 
   /**
@@ -685,24 +688,28 @@ class StratisOAuth2Provider {
             )
           }
 
-          if (!oauth_session.is_authenticated || !oauth_session.is_active) {
+          if (!oauth_session.is_access_granted) {
             if (this.allow_login != null && !(await this.allow_login(req)))
               throw new StratisNotAuthorizedReloadError('Access denied')
-            return this.redirect_to_login(req, res)
-          }
 
-          if (oauth_session.is_elapsed == true)
-            return this.redirect_to_revoke(req, res)
+            // check if needs clearing.
+            if (
+              oauth_session.is_authenticated &&
+              (!oauth_session.is_active || oauth_session.is_elapsed == true)
+            )
+              await oauth_session.clear()
+
+            return res.redirect(this.compose_oauth2_login_url(req))
+          }
         }
 
         // updating the user object.
         this._update_request_user_object(req, oauth_session)
 
-        return oauth_session.is_authenticated && oauth_session.is_active
+        next()
       } catch (err) {
         return next(err)
       }
-      return next()
     }
 
     return intercrept

@@ -1,8 +1,8 @@
 /**
- * @typedef {import('../../../src/index').StratisApiObject} StratisApiObject
+ * @typedef {import('../../../src/index').StratisApiHandler} StratisApiHandler
  */
 module.exports = {
-  /** @type {StratisApiObject} */
+  /** @type {StratisApiHandler} */
   async check_if_permitted({ group = '[unknown]' }, context) {
     context.assert_permitted(
       await context.is_permitted(group),
@@ -10,7 +10,7 @@ module.exports = {
     )
     return true
   },
-  /** @type {StratisApiObject} */
+  /** @type {StratisApiHandler} */
   async get_user_access_token({}, context) {
     const user_info = await context.stratis_request.get_user_info()
     return user_info.access_token

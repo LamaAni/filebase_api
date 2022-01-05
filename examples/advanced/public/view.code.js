@@ -1,8 +1,8 @@
 /**
- * @typedef {import('../../../src/index').StratisApiObject} StratisApiObject
+ * @typedef {import('../../../src/index').StratisApiHandler} StratisApiHandler
  */
 module.exports = {
-  /** @type {StratisApiObject} */
+  /** @type {StratisApiHandler} */
   view_action: ({}, context) => {
     return 'from view action'
   },
