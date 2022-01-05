@@ -604,6 +604,13 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Called to refresh the access token.
+   * @param {*} token 
+   * @param {*} token_type 
+   */
+  async refresh_token(access_token, token_type = 'access_token') {}
+
+  /**
    * Sends a revoke request for a specific token.
    * @param {string} token The token
    * @param {string} token_type The token type.
