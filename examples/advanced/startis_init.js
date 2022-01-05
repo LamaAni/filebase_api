@@ -21,7 +21,6 @@ module.exports = async (stratis) => {
   stratis.show_app_errors = true
   if (process.env['TEST_USE_OAUTH2'] == 'true') {
     stratis.oauth2_config = get_oauth2_test_config()
-
     stratis.api.session_options.is_permitted =
       /**
        * Extra oauth validation options. Can be NULL.
