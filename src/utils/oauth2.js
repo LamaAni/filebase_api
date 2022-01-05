@@ -146,6 +146,13 @@ class StratisOAuth2ProviderSession {
   }
 
   /**
+   * @type {string} The refresh token
+   */
+  get refresh_token() {
+    return (this.params || {}).refresh_token
+  }
+
+  /**
    * @type {string}
    */
   get username() {
@@ -287,6 +294,21 @@ class StratisOAuth2ProviderSession {
         : {
             active: true,
           }
+
+      if (!this.is_active && this.refresh_token != null) {
+        // attempting to re authenticate
+        let refresh_token_info = null
+        try {
+          refresh_token_info = await this.provider.get_token_from_refresh_token(
+            this.refresh_token
+          )
+        } catch (err) {}
+
+        if (refresh_token_info) {
+          await this.authenticate(refresh_token_info)
+          return await this.update()
+        }
+      }
 
       await this.authenticate(
         Object.assign({}, this.params.token_response, {
@@ -553,18 +575,22 @@ class StratisOAuth2Provider {
 
   /**
    * Sends a request to the remote service and returns the token.
-   * @param {string} code The get token authorization steps code.
-   * @param {string} redirect_uri The redirect url.
+   * @param {{}} token_flow_args A dictionary of token flow args to send.
+   * @param {string} grant_type The grant type
    * @returns
    */
-  async get_token(code, redirect_uri) {
-    const url = this.compose_url(this.token_url, {
-      client_id: this.client_id,
-      client_secret: this.client_secret,
-      grant_type: this.grant_type || 'authorization_code',
-      code,
-      redirect_uri,
-    })
+  async get_token(grant_type, token_flow_args) {
+    const url = this.compose_url(
+      this.token_url,
+      Object.assign(
+        {
+          client_id: this.client_id,
+          client_secret: this.client_secret,
+          grant_type,
+        },
+        token_flow_args
+      )
+    )
 
     try {
       return (await this.configure_request(superagent.post(url.href)).send())
@@ -574,6 +600,30 @@ class StratisOAuth2Provider {
         `Error while getting token from ${url.origin}${url.pathname}, ${err}`
       )
     }
+  }
+
+  /**
+   * Sends a request to the remote service and returns the token.
+   * @param {string} code The get token authorization steps code.
+   * @param {string} redirect_uri The redirect url.
+   * @returns
+   */
+  async get_token_from_code(code, redirect_uri) {
+    return await this.get_token('authorization_code', {
+      code,
+      redirect_uri,
+    })
+  }
+
+  /**
+   * Sends a request to the remote service and returns the token.
+   * @param {string} refresh_token The get token authorization steps code.
+   * @returns
+   */
+  async get_token_from_refresh_token(refresh_token) {
+    return await this.get_token('refresh_token', {
+      refresh_token,
+    })
   }
 
   /**
@@ -807,7 +857,7 @@ class StratisOAuth2Provider {
               `Invalid token validation request. UUID mismatch (${oauth_session.params.state.uuid}!=${query_state.uuid})`
             )
 
-            const token_info = await this.get_token(
+            const token_info = await this.get_token_from_code(
               req.query.code,
               oauth_redirect_uri
             )
