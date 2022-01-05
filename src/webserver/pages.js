@@ -269,7 +269,9 @@ class StratisPageApiCall extends StratisPageCall {
       const is_buffer = as_json instanceof Buffer
 
       if (is_stream || is_buffer) {
-        if (is_stream) as_json = await stream_to_buffer(data)
+        if (is_stream) {
+          as_json = await stream_to_buffer(as_json)
+        }
         as_json = as_json.toString(encoding).trim()
         as_json = as_json.length == 0 ? null : as_json
       }

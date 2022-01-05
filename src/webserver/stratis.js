@@ -5,6 +5,7 @@ const fs = require('fs')
 const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
+const { create_content_stream, stream_to_buffer } = require('../utils/streams')
 
 const {
   StratisNotFoundError,
@@ -406,18 +407,18 @@ class Stratis extends events.EventEmitter {
       stratis_request.request.headers['content-encoding'] || 'utf-8'
     const content_type = stratis_request.request.headers['content-type']
 
-    let json_args_payload = null
+    let payload = null
     if (
       (content_type == null || /\bjson\b/.test(content_type.toLowerCase())) &&
       stratis_request.request.readable
     )
-      json_args_payload = stratis_request.request.read()
+      payload = stratis_request.request.body || stratis_request.request
 
     const call = new StratisPageApiCall(
       stratis_request,
       name,
       await StratisPageApiCall.parse_api_call_args(
-        json_args_payload,
+        payload,
         stratis_request.request.query,
         encoding
       ),
@@ -529,6 +530,24 @@ class Stratis extends events.EventEmitter {
     res.stratis = this
     req.stratis_request = stratis_request
     res.stratis_request = stratis_request
+
+    if (req.body == null) {
+      // determine body type.
+      let data_type = 'bytes'
+      let encoding = req.headers['content-encoding'] || 'utf-8'
+      switch (encoding) {
+        case 'gzip':
+          data_type = 'gzip'
+          encoding = 'utf-8'
+          break
+        case 'deflate':
+          data_type = 'deflate'
+          encoding = 'utf-8'
+          break
+      }
+
+      req.body = create_content_stream(req, data_type)
+    }
 
     return { req, res }
   }
