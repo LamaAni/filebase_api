@@ -90,7 +90,7 @@ const {
 
 /**
  * @typedef {Object} StratisLoggingOptions
- * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{}}} logger The logger to use,
+ * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{}, debug(...args)=>{}}} logger The logger to use,
  * must have logging methods (info, warn, error ...)
  * @property {boolean} log_errors If true, prints the application errors to the logger.
  * @property {boolean} next_on_error If true, errors on express request are sent to the next handler.
@@ -402,37 +402,25 @@ class Stratis extends events.EventEmitter {
       .join('.')
 
     // checking request payload type.
-    let request_args = null
-    const encoding = stratis_request.request.headers['content-encoding']
+    const encoding =
+      stratis_request.request.headers['content-encoding'] || 'utf-8'
+    const content_type = stratis_request.request.headers['content-type']
 
-    switch (stratis_request.request.method) {
-      case 'POST':
-        const body_buffer = stratis_request.request.readable
-          ? stratis_request.request.read()
-          : null
-
-        request_args = await StratisPageApiCall.parse_api_call_args(
-          body_buffer
-            ? body_buffer.toString(
-                stratis_request.request.readableEncoding || 'utf-8'
-              )
-            : null,
-          encoding
-        )
-        break
-      default:
-        request_args = await StratisPageApiCall.parse_api_call_args(
-          null,
-          Object.assign({}, stratis_request.request.query),
-          encoding
-        )
-        break
-    }
+    let json_args_payload = null
+    if (
+      (content_type == null || /\bjson\b/.test(content_type.toLowerCase())) &&
+      stratis_request.request.readable
+    )
+      json_args_payload = stratis_request.request.read()
 
     const call = new StratisPageApiCall(
       stratis_request,
       name,
-      request_args || {},
+      await StratisPageApiCall.parse_api_call_args(
+        json_args_payload,
+        stratis_request.request.query,
+        encoding
+      ),
       true
     )
 
@@ -514,6 +502,8 @@ class Stratis extends events.EventEmitter {
 
     const http_response_code =
       err instanceof StratisError ? err.http_response_code || 500 : 500
+
+    if (err instanceof StratisError) await err.handle_error(req, res, next)
 
     if (http_response_code == 500)
       // application error.

@@ -198,7 +198,13 @@ http(s)://mydomain.com/[filepath.ext]/[api_exposed_method_or_function]?arg1=..&a
 Where the method first argument is the merge result of the dictionaries,
 
 1. `query-string` - the dictionary of arguments.
-1. `request payload` - If the request method is 'POST' then parse as json.
+1. `request payload` - If content type is not defined or content type includes the word 'json', parse as json. If cannot parse json or there is a parse error,
+   ```javascript
+   {
+      payload_error,
+      payload,
+   }
+   ```
 
 **NOTE!** Only on POST the payload is parsed as json, otherwise any payload (for example for PUT requests) is not parsed at all. For uploading files you can use the PUT HTTP method. See example [here](examples/advanced/public/index.code.js).
 
