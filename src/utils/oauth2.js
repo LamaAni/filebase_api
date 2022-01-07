@@ -1,4 +1,3 @@
-const ProxyAgent = require('proxy-agent')
 const { StratisRequests } = require('./requests')
 const { CacheDictionary } = require('../webserver/collections')
 const { StratisNotAuthorizedReloadError } = require('../webserver/errors')
@@ -70,6 +69,7 @@ const {
  * @property {string} request_user_object_key The req[key] to save the user information. defaults to user.
  * @property {string} response_type The authentication type. Currently supports only code.
  * @property {StratisOAuth2Provider.allow_login} allow_login Check if the current request source allows redirect to login.
+ * @property {boolean} use_proxies If true, and proxies are detected use them.
  */
 
 /**
@@ -363,6 +363,7 @@ class StratisOAuth2Provider {
     logger = console,
     request_user_object_key = 'user',
     allow_login = StratisOAuth2Provider.allow_login,
+    use_proxies = true,
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
   } = {}) {
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
@@ -420,6 +421,7 @@ class StratisOAuth2Provider {
     this.expires_in = expires_in
     this.logger = logger
     this.request_user_object_key = request_user_object_key
+
     /** @type {[string]} */
     this.username_from_token_info_path = Array.isArray(
       username_from_token_info_path
@@ -441,7 +443,12 @@ class StratisOAuth2Provider {
           : recheck_interval * 2,
     })
 
-    this.requests = new StratisRequests()
+    this.requests = new StratisRequests({
+      use_proxies,
+      proxy_agent_options: {
+        timeout: request_timeout,
+      },
+    })
   }
 
   /**
@@ -519,9 +526,6 @@ class StratisOAuth2Provider {
     client_options.headers = {}
     client_options.headers['Content-Type'] = 'application/x-www-form-urlencoded'
     client_options.timeout = this.request_timeout
-    if (use_proxies) {
-      client_options.agent = new ProxyAgent()
-    }
 
     return Object.assign({}, client_options, options)
   }

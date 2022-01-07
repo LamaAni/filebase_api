@@ -1,13 +1,15 @@
 const bent = require('bent')
 const http = require('http')
 const https = require('https')
+const ProxyAgent = require('proxy-agent')
 const { assert } = require('../common')
-const stream = require('stream')
+
 const { stream_to_buffer, create_content_stream } = require('./streams')
 
 /**
  * @typedef {'string'|'json'|'bytes'|(buffer:Buffer)=>any} StreamDataParser
  * @typedef {import('./streams').StreamDataType} StreamDataType
+ * @typedef {import('agent-base').AgentOptions} AgentOptions
  */
 
 /**
@@ -52,6 +54,17 @@ function get_stream_content_type(encoding) {
  */
 
 class StratisRequests {
+  /**
+   *
+   * @param {Object} param0
+   * @param {boolean} param0.use_proxies If true, check for proxies and use them (proxy-agent package)
+   * @param {AgentOptions} param0.proxy_agent_options If true, check for proxies and use them (proxy-agent package)
+   */
+  constructor({ use_proxies = true, proxy_agent_options = null }) {
+    this.use_proxies = use_proxies
+    this.proxy_agent_options = proxy_agent_options
+  }
+
   /**
    * @param {StratisRequestResponse} response The server response.
    * @param {string | (response: StratisRequestResponse)=>string} message The message to show. Can be null
@@ -182,6 +195,9 @@ class StratisRequests {
     /** @type {http.OutgoingHttpHeaders} */
     const base_headers = {}
 
+    if (this.use_proxies) {
+    }
+
     if (options.payload != null) {
       if (typeof options.payload == 'string') {
         base_headers['Content-Type'] = 'application/text'
@@ -200,6 +216,9 @@ class StratisRequests {
     /** @type {http.RequestOptions} */
     options = Object.assign(
       {
+        agent: this.use_proxies
+          ? null
+          : new ProxyAgent(this.proxy_agent_options || {}),
         method: 'GET',
         hostname: url.hostname,
         port: url.port || url.protocol == 'http:' ? 80 : 443,
