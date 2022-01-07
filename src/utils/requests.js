@@ -1,4 +1,3 @@
-const bent = require('bent')
 const http = require('http')
 const https = require('https')
 const ProxyAgent = require('proxy-agent')

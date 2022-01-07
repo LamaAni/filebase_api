@@ -43,14 +43,11 @@
   },
   "dependencies": {
     "@lamaani/infer": "github:lamaani/infer#0.1.7",
-    "bent": "^7.3.12",
     "cookie-parser": "^1.4.5",
     "cookie-session": "^1.4.0",
     "ejs": "^3.1.6",
     "express": "^4.17.1",
     "proxy-agent": "^5.0.0",
-    "simple-oauth2": "^4.2.0",
-    "superagent": "^6.1.0",
     "ws": "^7.4.4"
   },
   "author": "Zav Shotan",
