@@ -3,7 +3,7 @@ const client = new StratisRequests()
 
 async function main() {
   console.log(
-    await (await client.request('https://www.google.com')).to_string()
+    await (await client.request('https://www.google.com/asds')).to_string()
   )
 }
 

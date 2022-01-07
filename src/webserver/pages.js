@@ -102,8 +102,11 @@ class StratisPageCallContext {
     return this._next
   }
 
-  get request() {
-    return this.stratis.request
+  /**
+   * Requests client to send http/https requests
+   */
+  get requests() {
+    return this.stratis.requests
   }
 
   /**

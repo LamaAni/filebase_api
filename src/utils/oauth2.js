@@ -1,5 +1,5 @@
 const ProxyAgent = require('proxy-agent')
-const superagent = require('superagent')
+const { StratisRequests } = require('./requests')
 const { CacheDictionary } = require('../webserver/collections')
 const { StratisNotAuthorizedReloadError } = require('../webserver/errors')
 const {
@@ -15,6 +15,7 @@ const {
 } = require('../common')
 
 /**
+ * @typedef {import('./requests').StratisRequestOptions} StratisRequestOptions
  * @typedef {import('express').Express} Express
  * @typedef {import('../webserver/stratis').Stratis} Stratis
  * @typedef {import('../webserver/interfaces').StratisExpressRequest} StratisExpressRequest
@@ -439,6 +440,8 @@ class StratisOAuth2Provider {
           ? expires_in
           : recheck_interval * 2,
     })
+
+    this.requests = new StratisRequests()
   }
 
   /**
@@ -506,24 +509,21 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Configures the superagent request.
-   * @param {superagent.Request} request The superagent request
-   * @param {boolean} use_proxies
-   * @param {*} content_type
-   * @returns {superagent.Request}
+   * Updates and returns the request options for the oauth client.
+   * @param {StratisRequestOptions} options
+   * @param {boolean} use_proxies If true, attempt to use proxy agent.
    */
-  configure_request(
-    request,
-    use_proxies = true,
-    content_type = 'application/x-www-form-urlencoded'
-  ) {
+  compose_request_options(options = {}, use_proxies = true) {
+    /** @type {StratisRequestOptions} */
+    const client_options = {}
+    client_options.headers = {}
+    client_options.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    client_options.timeout = this.request_timeout
     if (use_proxies) {
-      request = request.agent(new ProxyAgent())
+      client_options.agent = new ProxyAgent()
     }
-    request = request.timeout(this.request_timeout)
-    if (content_type != null)
-      request = request.set('Content-Type', 'application/x-www-form-urlencoded')
-    return request
+
+    return Object.assign({}, client_options, options)
   }
 
   /**
@@ -592,14 +592,14 @@ class StratisOAuth2Provider {
       )
     )
 
-    try {
-      return (await this.configure_request(superagent.post(url.href)).send())
-        .body
-    } catch (err) {
-      throw new Error(
-        `Error while getting token from ${url.origin}${url.pathname}, ${err}`
+    return await (
+      await this.requests.get(
+        url,
+        this.compose_request_options({
+          custom_error_message: `Error while getting token from ${url.origin}${url.pathname}`,
+        })
       )
-    }
+    ).to_json()
   }
 
   /**
@@ -639,18 +639,14 @@ class StratisOAuth2Provider {
       token_type_hint: token_type,
     })
 
-    let token_info = {}
-
-    try {
-      token_info = (
-        await this.configure_request(superagent.post(url.href)).send()
-      ).body
-    } catch (err) {
-      throw new Error(
-        `Error while getting token info from ${url.origin}${url.pathname}, ${err}`
+    return await (
+      await this.requests.get(
+        url,
+        this.compose_request_options({
+          custom_error_message: `Error while getting token info from ${url.origin}${url.pathname}`,
+        })
       )
-    }
-    return token_info
+    ).to_json()
   }
 
   /**
@@ -667,16 +663,14 @@ class StratisOAuth2Provider {
       token_type_hint: token_type,
     })
 
-    try {
-      const rsp = (
-        await this.configure_request(superagent.post(url.href)).send()
-      ).body
-    } catch (err) {
-      throw new Error(
-        `Error revoking token using ${url.origin}${url.pathname}, ${err}`
+    return await (
+      await this.requests.get(
+        url,
+        this.compose_request_options({
+          custom_error_message: `Error while revoking token at ${url.origin}${url.pathname}`,
+        })
       )
-    }
-    return rsp
+    ).to_json()
   }
 
   /**
