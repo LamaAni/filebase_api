@@ -58,11 +58,11 @@ class StratisRequests {
    *
    * @param {Object} param0
    * @param {boolean} param0.use_proxies If true, check for proxies and use them (proxy-agent package)
-   * @param {AgentOptions} param0.proxy_agent_options If true, check for proxies and use them (proxy-agent package)
+   * @param {number} param0.timeout The timeout for requests.
    */
-  constructor({ use_proxies = true, proxy_agent_options = null }) {
+  constructor({ use_proxies = true, timeout = 1000 * 10 } = {}) {
     this.use_proxies = use_proxies
-    this.proxy_agent_options = proxy_agent_options
+    this.timeout = timeout || 1000 * 10 // default 5 mins.
   }
 
   /**
@@ -213,18 +213,20 @@ class StratisRequests {
       base_headers['Content-Length'] = options.payload.length
     }
 
+    const proxy_agent = this.use_proxies ? new ProxyAgent() : null
+    if (this.use_proxies && this.timeout != null)
+      proxy_agent.timeout = this.timeout
+
     /** @type {http.RequestOptions} */
     options = Object.assign(
       {
-        agent: this.use_proxies
-          ? null
-          : new ProxyAgent(this.proxy_agent_options || {}),
+        agent: proxy_agent,
         method: 'GET',
         hostname: url.hostname,
         port: url.port || url.protocol == 'http:' ? 80 : 443,
         path: `${url.pathname}${url.search}`,
         protocol: url.protocol,
-        timeout: 1000,
+        timeout: this.timeout,
       },
       options,
       {
