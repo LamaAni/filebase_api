@@ -10,12 +10,9 @@ module.exports = {
     return `something ${to_print}`
   },
   /** @type {StratisApiHandler} */
-  get_page: async ({ url = 'https://google.com' }, context) => {
+  get_page: async ({ url = 'https://www.google.com' }, context) => {
     const get_string = context.request('GET', 'string')
-    context.stratis.logger.info('Sending request to ' + url)
-    const rslt = await get_string(url)
-    context.stratis.logger.info('Got response from ' + url)
-    return rslt
+    return await get_string(url)
   },
   /** @type {StratisApiHandler} */
   a_value: {
