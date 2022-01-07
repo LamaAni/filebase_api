@@ -2,6 +2,7 @@ const express = require('express')
 const events = require('events')
 const path = require('path')
 const fs = require('fs')
+const bent = require('bent')
 const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
@@ -233,6 +234,10 @@ class Stratis extends events.EventEmitter {
     )
   }
 
+  get request() {
+    return bent
+  }
+
   get logger() {
     return this.logging_options.logger
   }
@@ -436,6 +441,7 @@ class Stratis extends events.EventEmitter {
     let rslt = await call.invoke(context)
     if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
 
+    if (res.writableEnded) return
     return res.end(rslt)
   }
 
@@ -454,7 +460,9 @@ class Stratis extends events.EventEmitter {
 
     stratis_request._context = context
 
-    return res.end(await call.render(context))
+    const rslt = await call.render(context)
+    if (res.writableEnded) return
+    return res.end(rslt)
   }
 
   /**

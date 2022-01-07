@@ -102,6 +102,10 @@ class StratisPageCallContext {
     return this._next
   }
 
+  get request() {
+    return this.stratis.request
+  }
+
   /**
    * Returns the user info
    * @returns {{}}

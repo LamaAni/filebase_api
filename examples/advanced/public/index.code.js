@@ -10,6 +10,10 @@ module.exports = {
     return `something ${to_print}`
   },
   /** @type {StratisApiHandler} */
+  get_page: async ({ url = 'https://google.com' }, context) => {
+    return await context.request('string')(url)
+  },
+  /** @type {StratisApiHandler} */
   a_value: {
     some: 'value',
   },
