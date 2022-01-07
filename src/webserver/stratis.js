@@ -7,6 +7,7 @@ const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
 const { create_content_stream, stream_to_buffer } = require('../utils/streams')
+const { get_stream_content_type } = require('../utils/requests')
 
 const {
   StratisNotFoundError,
@@ -534,19 +535,9 @@ class Stratis extends events.EventEmitter {
 
     if (req.body == null) {
       // determine body type.
-      let data_type = 'bytes'
-      let encoding = req.headers['content-encoding'] || 'utf-8'
-      switch (encoding) {
-        case 'gzip':
-          data_type = 'gzip'
-          encoding = 'utf-8'
-          break
-        case 'deflate':
-          data_type = 'deflate'
-          encoding = 'utf-8'
-          break
-      }
-
+      const data_type = get_stream_content_type(
+        req.headers['content-encoding'] || 'utf-8'
+      )
       req.body = create_content_stream(req, data_type)
     }
 
