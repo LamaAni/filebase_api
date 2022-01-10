@@ -42,13 +42,13 @@
     "outputPath": ".local/bin"
   },
   "dependencies": {
-    "@lamaani/infer": "github:lamaani/infer#0.1.7",
-    "cookie-parser": "^1.4.5",
-    "cookie-session": "^1.4.0",
-    "ejs": "^3.1.6",
-    "express": "^4.17.1",
-    "proxy-agent": "^5.0.0",
-    "ws": "^7.4.4"
+    "express": "4.17.1",
+    "proxy-agent": "5.0.0",
+    "colors": "1.4.1",
+    "cookie-parser": "1.4.5",
+    "cookie-session": "1.4.0",
+    "ejs": "3.1.6",
+    "@lamaani/infer": "github:lamaani/infer"
   },
   "author": "Zav Shotan",
   "license": "MIT",
