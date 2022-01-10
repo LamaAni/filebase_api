@@ -15,6 +15,7 @@ const WebSocket = require('ws')
  */
 
 /**
+ * @typedef {import('../utils/requests').StratisRequestsClient} StratisRequestsClient
  * @typedef {import('./interfaces').StratisApiHandler} StratisApiHandler
  * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
  * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
@@ -104,6 +105,7 @@ class StratisPageCallContext {
 
   /**
    * Requests client to send http/https requests
+   * @type {StratisRequestsClient}
    */
   get requests() {
     return this.stratis.requests

@@ -9,6 +9,7 @@ const {
   StratisOAuth2ProviderSession,
 } = require('./utils/oauth2')
 const websocket = require('./utils/websocket')
+const { StratisRequestsClient } = require('./utils/requests')
 
 /**
  * @typedef {import('@lamaani/infer').Cli} Cli
@@ -35,5 +36,6 @@ module.exports = {
   StratisRequest,
   StratisPageCallContext,
   StratisOAuth2Provider,
+  StratisRequestsClient,
   StratisOAuth2ProviderSession,
 }

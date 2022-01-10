@@ -1,4 +1,4 @@
-const { StratisRequests } = require('./requests')
+const { StratisRequestsClient } = require('./requests')
 const { CacheDictionary } = require('../webserver/collections')
 const { StratisNotAuthorizedReloadError } = require('../webserver/errors')
 const {
@@ -443,7 +443,7 @@ class StratisOAuth2Provider {
           : recheck_interval * 2,
     })
 
-    this.requests = new StratisRequests({
+    this.requests = new StratisRequestsClient({
       use_proxies,
       proxy_agent_options: {
         timeout: request_timeout,

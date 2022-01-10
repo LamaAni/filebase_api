@@ -52,7 +52,7 @@ function get_stream_content_type(encoding) {
  * @typedef {http.RequestOptions & StratisRequestOptionsExtension} StratisRequestOptions
  */
 
-class StratisRequests {
+class StratisRequestsClient {
   /**
    *
    * @param {Object} param0
@@ -403,11 +403,11 @@ class StratisRequests {
  * @returns {StratisRequestResponse} The server response
  */
 async function request(url, options) {
-  return await new StratisRequests().request(url, options)
+  return await new StratisRequestsClient().request(url, options)
 }
 
 module.exports = {
   request,
   get_stream_content_type,
-  StratisRequests,
+  StratisRequestsClient,
 }
