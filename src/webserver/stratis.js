@@ -7,7 +7,7 @@ const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
 const { create_content_stream, stream_to_buffer } = require('../utils/streams')
 const { get_stream_content_type } = require('../utils/requests')
-const { StratisRequests } = require('../utils/requests')
+const { StratisRequestsClient } = require('../utils/requests')
 
 const {
   StratisNotFoundError,
@@ -234,11 +234,13 @@ class Stratis extends events.EventEmitter {
       code_module_bank_options
     )
 
-    this._requests = new StratisRequests()
+    /** @type {StratisRequestsClient} */
+    this._requests = new StratisRequestsClient()
   }
 
   /**
    * Requests client to send http/https requests
+   * @type {StratisRequestsClient}
    */
   get requests() {
     return this._requests

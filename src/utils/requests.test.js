@@ -1,5 +1,5 @@
-const { StratisRequests } = require('./requests')
-const client = new StratisRequests()
+const { StratisRequestsClient } = require('./requests')
+const client = new StratisRequestsClient()
 
 async function main() {
   console.log(
