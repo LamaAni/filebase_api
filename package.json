@@ -42,23 +42,18 @@
     "outputPath": ".local/bin"
   },
   "dependencies": {
-    "@lamaani/infer": "github:lamaani/infer#0.1.7",
-    "cookie-parser": "^1.4.5",
-    "cookie-session": "^1.4.0",
-    "ejs": "^3.1.6",
-    "express": "^4.17.1",
-    "proxy-agent": "^5.0.0",
-    "simple-oauth2": "^4.2.0",
-    "superagent": "^6.1.0",
-    "ws": "^7.4.4"
+    "@lamaani/infer": "github:lamaani/infer#0.1.8",
+    "cookie-parser": "1.4.5",
+    "cookie-session": "1.4.0",
+    "ejs": "3.1.6",
+    "express": "4.17.1",
+    "proxy-agent": "5.0.0",
+    "ws": "8.4.0"
   },
   "author": "Zav Shotan",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/LamaAni/stratis/issues"
   },
-  "homepage": "https://github.com/LamaAni/stratis#readme",
-  "devDependencies": {
-    "@types/node": "^17.0.0"
-  }
+  "homepage": "https://github.com/LamaAni/stratis#readme"
 }

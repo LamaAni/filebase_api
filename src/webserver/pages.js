@@ -103,6 +103,13 @@ class StratisPageCallContext {
   }
 
   /**
+   * Requests client to send http/https requests
+   */
+  get requests() {
+    return this.stratis.requests
+  }
+
+  /**
    * Returns the user info
    * @returns {{}}
    */

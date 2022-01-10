@@ -6,6 +6,8 @@ const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../utils/websocket.js')
 const { assert, with_timeout } = require('../common.js')
 const { create_content_stream, stream_to_buffer } = require('../utils/streams')
+const { get_stream_content_type } = require('../utils/requests')
+const { StratisRequests } = require('../utils/requests')
 
 const {
   StratisNotFoundError,
@@ -231,6 +233,15 @@ class Stratis extends events.EventEmitter {
       this,
       code_module_bank_options
     )
+
+    this._requests = new StratisRequests()
+  }
+
+  /**
+   * Requests client to send http/https requests
+   */
+  get requests() {
+    return this._requests
   }
 
   get logger() {
@@ -436,6 +447,7 @@ class Stratis extends events.EventEmitter {
     let rslt = await call.invoke(context)
     if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
 
+    if (res.writableEnded) return
     return res.end(rslt)
   }
 
@@ -454,7 +466,9 @@ class Stratis extends events.EventEmitter {
 
     stratis_request._context = context
 
-    return res.end(await call.render(context))
+    const rslt = await call.render(context)
+    if (res.writableEnded) return
+    return res.end(rslt)
   }
 
   /**
@@ -526,19 +540,9 @@ class Stratis extends events.EventEmitter {
 
     if (req.body == null) {
       // determine body type.
-      let data_type = 'bytes'
-      let encoding = req.headers['content-encoding'] || 'utf-8'
-      switch (encoding) {
-        case 'gzip':
-          data_type = 'gzip'
-          encoding = 'utf-8'
-          break
-        case 'deflate':
-          data_type = 'deflate'
-          encoding = 'utf-8'
-          break
-      }
-
+      const data_type = get_stream_content_type(
+        req.headers['content-encoding'] || 'utf-8'
+      )
       req.body = create_content_stream(req, data_type)
     }
 
