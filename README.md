@@ -76,8 +76,6 @@ POST http://[my_domain]/index.html/my_api_function
 payload: { "arg": "value" }
 ```
 
-Note! Only on POST the payload is parsed as json, otherwise any payload (for example for PUT requests) is not parsed at all. You can access the value via regular express request (context.req).
-
 # Client-Side html page structure
 
 If you add on the server-side html template (page),
@@ -198,15 +196,9 @@ http(s)://mydomain.com/[filepath.ext]/[api_exposed_method_or_function]?arg1=..&a
 Where the method first argument is the merge result of the dictionaries,
 
 1. `query-string` - the dictionary of arguments.
-1. `request payload` - If content type is not defined or content type includes the word 'json', parse as json. If cannot parse json or there is a parse error,
-   ```javascript
-   {
-      payload_error,
-      payload,
-   }
-   ```
+1. `request payload` - If content type is not defined or content type includes the word 'json', parse as json args. Otherwise assume input stream in request. Websocket request are always json.
 
-**NOTE!** Only on POST the payload is parsed as json, otherwise any payload (for example for PUT requests) is not parsed at all. For uploading files you can use the PUT HTTP method. See example [here](examples/advanced/public/index.code.js).
+**NOTE!** See file upload example [here](examples/advanced/public/index.code.js).
 
 ## WebSocket API calls
 
