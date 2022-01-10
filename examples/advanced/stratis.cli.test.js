@@ -10,9 +10,9 @@ module.exports = {
   stratis,
 }
 
-if (require.main == module){
-stratis.run().catch((err) => {
-  console.error(err)
-  process.exit(err.code || 1)
-})
+if (require.main == module) {
+  stratis.run().catch((err) => {
+    console.error(err)
+    process.exit(err.code || 1)
+  })
 }

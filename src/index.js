@@ -23,6 +23,13 @@ const { StratisRequestsClient } = require('./utils/requests')
  * @typedef {import('./webserver/stratis').StratisClientSideApiOptions} StratisClientSideApiOptions
  * @typedef {import('./webserver/stratis').StratisCodeModuleBankOptions} StratisCodeModuleBankOptions
  * @typedef {import('./webserver/stratis').StratisEJSTemplateBankOptions} StratisEJSTemplateBankOptions
+ * */
+
+/**
+ * @typedef {import('./utils/requests').StratisRequestOptions} StratisRequestOptions
+ */
+
+/**
  * @typedef {import('./utils/oauth2.js').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
  */
 
