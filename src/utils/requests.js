@@ -48,8 +48,9 @@ function get_stream_content_type(encoding) {
  * @property {Object|string|Buffer|ReadableStream} payload The request payload to send to the remote.
  * @property {boolean} use_pretty_json If true, and the payload is converted to json, use pretty format.
  * @property {string} custom_error_message If not null, added at the beginning of the error message.
+ * @property {boolean} follow_redirects If true, then follow redirect requests.
  *
- * @typedef {http.RequestOptions & StratisRequestOptionsExtension} StratisRequestOptions
+ * @typedef {http.RequestOptions & https.RequestOptions & StratisRequestOptionsExtension} StratisRequestOptions
  */
 
 class StratisRequestsClient {
@@ -58,10 +59,16 @@ class StratisRequestsClient {
    * @param {Object} param0
    * @param {boolean} param0.use_proxies If true, check for proxies and use them (proxy-agent package)
    * @param {number} param0.timeout The timeout for requests.
+   * @param {boolean} param0.follow_redirects If true, follow http redirects.
    */
-  constructor({ use_proxies = true, timeout = 1000 * 10 } = {}) {
+  constructor({
+    use_proxies = true,
+    timeout = 1000 * 10,
+    follow_redirects = true,
+  } = {}) {
     this.use_proxies = use_proxies
     this.timeout = timeout || 1000 * 10 // default 5 mins.
+    this.follow_redirects = follow_redirects
   }
 
   /**
@@ -189,6 +196,7 @@ class StratisRequestsClient {
     )
 
     const handler = url.protocol == 'http:' ? http : https
+    const original_options = options
     options = Object.assign({}, options)
 
     /** @type {http.OutgoingHttpHeaders} */
@@ -226,6 +234,7 @@ class StratisRequestsClient {
         path: `${url.pathname}${url.search}`,
         protocol: url.protocol,
         timeout: this.timeout,
+        follow_redirects: this.follow_redirects,
       },
       options,
       {
@@ -234,7 +243,7 @@ class StratisRequestsClient {
     )
 
     try {
-      return this.to_stratis_response_object(
+      const res = this.to_stratis_response_object(
         await new Promise((resolve, reject) => {
           try {
             const req = handler.request(options, function (res) {
@@ -252,6 +261,33 @@ class StratisRequestsClient {
           }
         })
       )
+
+      if (
+        options.follow_redirects === true &&
+        typeof res.headers.location == 'string' &&
+        [301, 302].includes(res.statusCode)
+      ) {
+        /** @type {[string]} */
+        const redirection_already_visited =
+          original_options.redirection_already_visited || []
+
+        redirection_already_visited.push(url.href)
+
+        if (redirection_already_visited.includes(res.headers.location))
+          throw new Error(
+            `Circular redirect detected:\n${redirection_already_visited.join(
+              '\n -> '
+            )}`
+          )
+
+        // redirecting to new location.
+        return await this.request(
+          res.headers.location,
+          Object.assign({}, original_options, { redirection_already_visited })
+        )
+      }
+
+      return res
     } catch (err) {
       if (options.custom_error_message) {
         err.message = `${options.custom_error_message} ${err.message}`

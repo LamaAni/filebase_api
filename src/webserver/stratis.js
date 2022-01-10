@@ -1,6 +1,7 @@
 const express = require('express')
 const events = require('events')
 const path = require('path')
+const { Readable } = require('stream')
 const fs = require('fs')
 const { Request, Response, NextFunction } = require('express/index')
 const websocket = require('../utils/websocket.js')
@@ -364,13 +365,16 @@ class Stratis extends events.EventEmitter {
           // invoking the event.
           await this.emit_stratis_request(stratis_request)
 
-          const rsp_data = await with_timeout(
+          let rsp_data = await with_timeout(
             async () => {
               return await call.invoke(context)
             },
             this.page_options.timeout,
             new StratisTimeOutError('Websocket request timed out')
           )
+
+          if (rsp_data instanceof ReadableStream)
+            rsp_data = await stream_to_buffer(rsp_data)
 
           ws.send(
             JSON.stringify({
@@ -447,9 +451,34 @@ class Stratis extends events.EventEmitter {
     stratis_request._context = context
 
     let rslt = await call.invoke(context)
-    if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
 
     if (res.writableEnded) return
+
+    if (rslt instanceof Readable) {
+      /** @type {Readable} */
+      const readable_rslt = rslt
+      if (readable_rslt.readableEnded)
+        throw new Error(
+          'Cannot process readable invoke result that has ended. [Readable].readableEnded = true'
+        )
+
+      readable_rslt.pipe(res)
+
+      return await new Promise((resolve, reject) => {
+        readable_rslt.on('end', () => {
+          res.end()
+          resolve()
+        })
+        readable_rslt.on('error', (err) => {
+          reject(err)
+        })
+      })
+    }
+
+    // all but buffer should be converted.
+    if (rslt instanceof Buffer) {
+    } else if (typeof rslt == 'object') rslt = JSON.stringify(rslt)
+
     return res.end(rslt)
   }
 
