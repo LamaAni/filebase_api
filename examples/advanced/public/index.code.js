@@ -11,8 +11,7 @@ module.exports = {
   },
   /** @type {StratisApiHandler} */
   get_page: async ({ url = 'https://www.google.com' }, context) => {
-    const get_string = context.request('GET', 'string')
-    return await get_string(new URL(url))
+    return await (await context.requests.get(url)).to_string()
   },
   /** @type {StratisApiHandler} */
   a_value: {
