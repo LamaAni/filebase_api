@@ -548,7 +548,7 @@ class Stratis extends events.EventEmitter {
     if (err instanceof StratisError) await err.handle_error(req, res, next)
 
     // Check the emit error event. Will be false if defined.
-    if (err.emit_error_event !== false) this.emit_error(err, req)
+    if (err.emit_error !== false) this.emit_error(err, req)
 
     res.status(err.http_response_code || 500)
 
