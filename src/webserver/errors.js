@@ -20,7 +20,7 @@ class StratisError extends Error {
   /**
    * If true then emit error event
    */
-  get emit_error_event() {
+  get emit_error() {
     return this.http_response_code == 500
   }
 
@@ -77,7 +77,7 @@ class StratisParseError extends StratisError {
     )
   }
 
-  get emit_error_event() {
+  get emit_error() {
     return false
   }
 }
