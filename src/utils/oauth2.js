@@ -778,10 +778,25 @@ class StratisOAuth2Provider {
    */
   compose_service_url(req, type = null, query = null) {
     return this.compose_url(
-      [this.basepath, type].filter((v) => v != null).join('/'),
-      query,
+      this.basepath,
+      Object.assign({}, query || {}, {
+        service_type: type,
+      }),
       `${req.protocol}://${req.get('host')}`
     )
+  }
+
+  /**
+   * @param {Request} req the express request
+   * @param {StratisOAuth2ProviderServiceType} type
+   * @param {{}} query The query arguments
+   */
+  compose_redirect_uri(req, query = null) {
+    if (this.redirect_url != null) {
+      return typeof this.redirect_url == 'function'
+        ? this.redirect_url(req, query)
+        : this.redirect_url
+    } else return this.compose_service_url(req, null, query)
   }
 
   /**
@@ -924,7 +939,10 @@ class StratisOAuth2Provider {
     const authorize_query = {
       redirect_uri:
         this.redirect_url ||
-        this.compose_service_url(req, 'authorize_response'),
+        // The default service is the authorize service
+        // Use this default since we want the auth redirect_uri
+        // to be simple. e.g. [protocol]://[host]/[this.basepath]
+        this.compose_redirect_uri(req).href,
       client_id: this.client_id,
       response_type: this.response_type,
       scope:
@@ -965,7 +983,7 @@ class StratisOAuth2Provider {
 
     const token_info = await this.get_token_from_code(
       req.query.code,
-      oauth_redirect_uri
+      this.compose_redirect_uri(req).href
     )
 
     switch (auth_state.login_result) {
@@ -988,8 +1006,8 @@ class StratisOAuth2Provider {
           Object.assign(
             {
               client_id: this.encrypt(this.client_id),
-              api_url: this.compose_service_url(req),
-              api_refresh_url: this.compose_service_url(req, 'refresh'),
+              api_url: this.compose_service_url(req).href,
+              api_refresh_url: this.compose_service_url(req, 'refresh').href,
             },
             token_info
           )
@@ -1001,7 +1019,7 @@ class StratisOAuth2Provider {
         return res.end(
           this.compose_service_url(req, 'decrypt', {
             value: this.encrypt(encrypted_token_info),
-          })
+          }).href
         )
     }
   }
@@ -1064,25 +1082,54 @@ class StratisOAuth2Provider {
       Object.getPrototypeOf(this)
     ).filter((v) => v.startsWith('svc_') && typeof this[v] == 'function')
 
-    service_bind_names.forEach((function_name) => {
-      const type = function_name.substring('svc_'.length)
-      app.use([path, type].join('/'), async (req, res, next) => {
-        try {
-          let next_called = false
+    const services = {}
 
-          const intern_next = (...args) => {
-            next_called = true
-            return next(...args)
-          }
+    const invoke_service = async (invoke, req, res, next) => {
+      try {
+        let next_called = false
 
-          await this.prepare_oauth2_service_request(req, res, intern_next)
-          if (res.writableEnded || next_called) return
-
-          return await this[function_name](req, res, intern_next, req.query)
-        } catch (err) {
-          next(err)
+        const intern_next = (...args) => {
+          next_called = true
+          return next(...args)
         }
+
+        await this.prepare_oauth2_service_request(req, res, intern_next)
+        if (res.writableEnded || next_called) return
+
+        return await invoke(req, res, intern_next, req.query)
+      } catch (err) {
+        next(err)
+      }
+    }
+
+    for (let function_name of service_bind_names) {
+      const type = function_name.substring('svc_'.length)
+      const service = {
+        type,
+        function_name,
+        invoke: async (...args) => {
+          return await this[function_name](...args)
+        },
+        path: [path, type].join('/'),
+      }
+
+      services[type] = service
+
+      app.use(service.path, async (req, res, next) => {
+        await invoke_service(service.invoke, req, res, next)
       })
+    }
+
+    /** @type {StratisOAuth2ProviderServiceType} */
+    const default_service = 'authorize_response'
+
+    app.use(this.basepath, async (req, res, next) => {
+      const service_type = req.query.service_type || default_service
+      assert(
+        typeof service_type == 'string' && services[service_type] != null,
+        new StratisNoEmitError('No such service type: ' + service_type)
+      )
+      await invoke_service(services[service_type].invoke, req, res, next)
     })
   }
 
