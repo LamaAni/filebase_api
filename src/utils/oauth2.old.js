@@ -80,7 +80,7 @@ const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
  * @property {string} authentication_host The hostname for the authentication. e.g. https://accounts.google.com/o/oauth2/v2/auth
  * @property {string|URL} token_url The token service url, e.g. https://accounts.google.com/o/oauth2/v2/auth
  * @property {string|URL} authorize_url The authorize service url, defaults to token_url
- * @property {string|URL} token_introspect_url The token info url, returning the state of the token.
+ * @property {string|URL} introspect_url The token info url, returning the state of the token.
  * @property {string|URL} user_info_url The user info url, returning the user information. If null, no user info added.
  * @property {string|URL} revoke_url The revoke url, revoking the current token. If null operation not permitted.
  * @property {stirng} basepath The path to use for the apply command (serves the oauth2 login and redirect)
@@ -92,7 +92,7 @@ const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
  * @property {string} session_key The session key to use when recording the oauth token
  * @property {string} encryption_key The encryption key for session encryption. Defaults to client_secret.
  * @property {string} encryption_expiration The time, in ms, for the encryption expiration. Defaults to 5 minutes.
- * @property {[string]} encryption_token_keys The keys in the token to encrypt, when using as oauth2 proxy.
+ * @property {[string]} oidc_encrypted_keys The keys in the token to encrypt, when using as oauth2 proxy.
  * @property {(req:Request)=>{}} state_generator The oauth state generator.
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} expires_in The number of milliseconds before forcing the session to expire. If null then ignored.
@@ -315,7 +315,7 @@ class StratisOAuth2ProviderSession {
     // nothing to do. No access token.
     if (this.access_token == null) return false
     if (this.needs_access_token_validation()) {
-      this.params.token_info = this.provider.token_introspect_url
+      this.params.token_info = this.provider.introspect_url
         ? await this.provider.get_token_info(this.access_token)
         : {
             active: true,
@@ -374,7 +374,7 @@ class StratisOAuth2Provider {
     client_secret,
     token_url,
     authorize_url,
-    token_introspect_url = null,
+    introspect_url = null,
     user_info_url = null,
     revoke_url = null,
     redirect_url = null,
@@ -383,7 +383,7 @@ class StratisOAuth2Provider {
     session_key = 'stratis:oauth2:token',
     encryption_key = null,
     encryption_expiration = 1000 * 60 * 5,
-    encryption_token_keys = ['token_id', 'refresh_token'],
+    oidc_encrypted_keys = ['token_id', 'refresh_token'],
     response_type = 'code',
     recheck_interval = 1000 * 60,
     expires_in = null,
@@ -423,7 +423,7 @@ class StratisOAuth2Provider {
       redirect_url,
       user_info_url,
       revoke_url,
-      token_introspect_url,
+      introspect_url,
     })
 
     assert(
@@ -438,7 +438,7 @@ class StratisOAuth2Provider {
 
     this.token_url = as_url(token_url)
     this.authorize_url = as_url(authorize_url)
-    this.token_introspect_url = as_url(token_introspect_url)
+    this.introspect_url = as_url(introspect_url)
     this.user_info_url = as_url(user_info_url)
     this.revoke_url = as_url(revoke_url)
     this.redirect_url = as_url(redirect_url)
@@ -451,7 +451,7 @@ class StratisOAuth2Provider {
     this.session_key = session_key
     this.encryption_key = encryption_key || client_secret
     this.encryption_expiration = encryption_expiration
-    this.encryption_token_keys = encryption_token_keys || ENCRYPT_TOKEN_KEYS
+    this.oidc_encrypted_keys = oidc_encrypted_keys || ENCRYPT_TOKEN_KEYS
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.expires_in = expires_in
@@ -466,7 +466,7 @@ class StratisOAuth2Provider {
       : [username_from_token_info_path]
 
     assert(
-      this.token_introspect_url != null || this.expires_in != null,
+      this.introspect_url != null || this.expires_in != null,
       'If token introspect url was not provided a session expires_in must be provided'
     )
 
@@ -600,7 +600,7 @@ class StratisOAuth2Provider {
       token_info
     )
 
-    this.encryption_token_keys.forEach((key) => {
+    this.oidc_encrypted_keys.forEach((key) => {
       e_token_info[key] = this.encrypt(e_token_info[key], -1)
     })
 
@@ -618,7 +618,7 @@ class StratisOAuth2Provider {
       this.client_id == client_id,
       'Invalid client id when decrypting token info'
     )
-    this.encryption_token_keys.forEach((key) => {
+    this.oidc_encrypted_keys.forEach((key) => {
       token_info[key] = this.decrypt(token_info[key], -1)
     })
     return token_info
@@ -749,7 +749,7 @@ class StratisOAuth2Provider {
    * @param {string} token_type The token type.
    */
   async get_token_info(token, token_type = 'access_token') {
-    const url = this.compose_url(this.token_introspect_url, {
+    const url = this.compose_url(this.introspect_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       token,

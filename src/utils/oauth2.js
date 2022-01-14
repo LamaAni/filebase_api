@@ -19,7 +19,7 @@ const {
   create_uuid,
 } = require('../common')
 
-const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
+const OIDC_ENCRYPT_KEYS = ['client_secret', 'refresh_token']
 
 /**
  * @typedef {import('./requests').StratisRequestOptions} StratisRequestOptions
@@ -34,7 +34,7 @@ const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
 
 /**
  * @typedef {'session'|'token'|'token_decrypt_url'} StratisOAuth2ProviderLoginResult
- * @typedef {'login'|'decrypt'|'authorize_response'|'token'|'refresh'|'introspect'|'revoke'} StratisOAuth2ProviderServiceType
+ * @typedef {'login'|'logout'|'decrypt'|'authorize_response'|'oidc'} StratisOAuth2ProviderServiceType
  */
 
 /**
@@ -59,23 +59,18 @@ const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
  * @typedef {Object} StratisOAuth2ProviderOptions
  * @property {string} client_id
  * @property {string} client_secret
- * @property {string} authentication_host The hostname for the authentication. e.g. https://accounts.google.com/o/oauth2/v2/auth
- * @property {string|URL} token_url The token service url, e.g. https://accounts.google.com/o/oauth2/v2/auth
- * @property {string|URL} authorize_url The authorize service url, defaults to token_url
- * @property {string|URL} token_introspect_url The token info url, returning the state of the token.
- * @property {string|URL} user_info_url The user info url, returning the user information. If null, no user info added.
- * @property {string|URL} revoke_url The revoke url, revoking the current token. If null operation not permitted.
+ * @property {string|URL} service_url The base service url (the service root)
+ * @property {string|URL} token_url Get token url. Based on service if partial path.
+ * @property {string|URL} authorize_url authorize url. Based on service if partial path.
+ * @property {string|URL} introspect_url introspect url. Based on service if partial path.
+ * @property {string|URL} revoke_url revoke url. Based on service if partial path.
+ * @property {string|URL|(req:Request, query: {})=>string|URL} redirect_url Overrides the oauth redirect call back url.
  * @property {stirng} basepath The path to use for the apply command (serves the oauth2 login and redirect)
- * @property {string} authorize_path The path for authorization, overrides authorize_url path
- * @property {string} revoke_path The path for revoke, overrides token_url path
- * @property {string} token_path The path for a token, overrides token_url path
- * @property {string|URL} redirect_url The server response redirect url. If null takes the current request url as redirect url.
  * @property {[string]} scope the scope to use.
  * @property {string} session_key The session key to use when recording the oauth token
  * @property {string} encryption_key The encryption key for session encryption. Defaults to client_secret.
  * @property {string} encryption_expiration The time, in ms, for the encryption expiration. Defaults to 5 minutes.
- * @property {[string]} encryption_token_keys The keys in the token to encrypt, when using as oauth2 proxy.
- * @property {(req:Request)=>{}} state_generator The oauth state generator.
+ * @property {[string]} oidc_encrypted_keys The keys in the token to encrypt, when using as oauth2 proxy.
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} expires_in The number of milliseconds before forcing the session to expire. If null then ignored.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
@@ -297,7 +292,7 @@ class StratisOAuth2ProviderSession {
     // nothing to do. No access token.
     if (this.access_token == null) return false
     if (this.needs_access_token_validation()) {
-      this.params.token_info = this.provider.token_introspect_url
+      this.params.token_info = this.provider.introspect_url
         ? await this.provider.get_token_info(this.access_token)
         : {
             active: true,
@@ -354,18 +349,18 @@ class StratisOAuth2Provider {
   constructor({
     client_id,
     client_secret,
-    token_url,
-    authorize_url,
-    token_introspect_url = null,
-    user_info_url = null,
-    revoke_url = null,
+    service_url,
+    token_url = 'token',
+    authorize_url = 'authorize',
+    introspect_url = 'introspect',
+    revoke_url = 'revoke',
     redirect_url = null,
     basepath = '/oauth2',
     scope = [],
     session_key = 'stratis:oauth2:token',
     encryption_key = null,
     encryption_expiration = 1000 * 60 * 5,
-    encryption_token_keys = ['token_id', 'refresh_token'],
+    oidc_encrypted_keys = ['token_id', 'refresh_token'],
     response_type = 'code',
     recheck_interval = 1000 * 60,
     expires_in = null,
@@ -376,6 +371,10 @@ class StratisOAuth2Provider {
     use_proxies = true,
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
   } = {}) {
+    assert(
+      service_url instanceof URL || is_non_empty_string(service_url),
+      'You must provide a root service url where .well-known/... can be found.'
+    )
     assert_non_empty_string(client_id, 'client_id must be a non empty string')
     assert_non_empty_string(
       client_secret,
@@ -392,22 +391,6 @@ class StratisOAuth2Provider {
       'session_key must be a non empty string'
     )
 
-    const validate_urls = (urls, can_be_null = true) => {
-      for (const k of Object.keys(urls))
-        assert(
-          (urls[k] == null && can_be_null) || is_valid_url(urls[k]),
-          `${k} must be a URL or a non empty string`
-        )
-    }
-
-    validate_urls({ token_url, authorize_url }, false)
-    validate_urls({
-      redirect_url,
-      user_info_url,
-      revoke_url,
-      token_introspect_url,
-    })
-
     assert(
       typeof encryption_expiration == 'number' && encryption_expiration > 0,
       'The encryption_expiration must be a number > 0'
@@ -415,15 +398,31 @@ class StratisOAuth2Provider {
 
     assert(typeof basepath == 'string', 'basepath must be a string')
 
-    let as_url = (v) => (v == null ? null : new URL(v))
+    /**
+     * @param {string} url
+     * @param {boolean} use_service_url_base
+     * @returns {URL}
+     */
+    const as_url = (url, use_service_url_base = true) => {
+      if (url == null) return null
+      if (url instanceof URL) return url
+      assert(typeof url == 'string', 'Invalid url ' + url)
+      if (!use_service_url_base) return new URL(url)
+
+      let base_url = this.service_url.origin
+      if (!url.startsWith('/')) base_url += this.service_url.pathname
+      if (!base_url.endsWith('/')) base_url += '/'
+
+      return new URL(url, base_url)
+    }
 
     this.client_id = client_id
     this.client_secret = client_secret
 
+    this.service_url = as_url(service_url, false)
     this.token_url = as_url(token_url)
     this.authorize_url = as_url(authorize_url)
-    this.token_introspect_url = as_url(token_introspect_url)
-    this.user_info_url = as_url(user_info_url)
+    this.introspect_url = as_url(introspect_url)
     this.revoke_url = as_url(revoke_url)
     this.redirect_url = as_url(redirect_url)
 
@@ -435,7 +434,7 @@ class StratisOAuth2Provider {
     this.session_key = session_key
     this.encryption_key = encryption_key || client_secret
     this.encryption_expiration = encryption_expiration
-    this.encryption_token_keys = encryption_token_keys || ENCRYPT_TOKEN_KEYS
+    this.oidc_encrypted_keys = oidc_encrypted_keys || OIDC_ENCRYPT_KEYS
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.expires_in = expires_in
@@ -450,7 +449,7 @@ class StratisOAuth2Provider {
       : [username_from_token_info_path]
 
     assert(
-      this.token_introspect_url != null || this.expires_in != null,
+      this.introspect_url != null || this.expires_in != null,
       'If token introspect url was not provided a session expires_in must be provided'
     )
 
@@ -528,7 +527,7 @@ class StratisOAuth2Provider {
       )
     } catch (err) {
       throw new Error(
-        'Could not decrypt state using the provided encryption key. Decode error: ' +
+        'Could not decrypt value using the provided encryption key. Decode error: ' +
           (err.message || `${err}`)
       )
     }
@@ -660,7 +659,7 @@ class StratisOAuth2Provider {
    * @param {string} token_type The token type.
    */
   async get_token_info(token, token_type = 'access_token') {
-    const url = this.compose_url(this.token_introspect_url, {
+    const url = this.compose_url(this.introspect_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       token,
@@ -733,55 +732,14 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Encrypts parts of the token info to allow for stratis token
-   * redirect.
-   * @param {{}} token_info
-   * @returns {{}} The encrypted token info.
-   */
-  encrypt_token_info(token_info) {
-    const e_token_info = Object.assign(
-      {
-        client_id: this.encrypt(this.client_id),
-      },
-      token_info
-    )
-
-    this.encryption_token_keys.forEach((key) => {
-      e_token_info[key] = this.encrypt(e_token_info[key], -1)
-    })
-
-    return e_token_info
-  }
-
-  /**
-   * Decrypts the token info.
-   * @param {{}} token_info
-   * @returns {{}} The decrypted token info.
-   */
-  decrypt_token_info(token_info) {
-    token_info.client_id = this.decrypt(token_info.client_id)
-    assert(
-      this.client_id == client_id,
-      'Invalid client id when decrypting token info'
-    )
-    this.encryption_token_keys.forEach((key) => {
-      if (token_info[key] != null)
-        token_info[key] = this.decrypt(token_info[key], -1)
-    })
-    return token_info
-  }
-
-  /**
    * @param {Request} req the express request
    * @param {StratisOAuth2ProviderServiceType} type
    * @param {{}} query The query arguments
    */
   compose_service_url(req, type = null, query = null) {
     return this.compose_url(
-      this.basepath,
-      Object.assign({}, query || {}, {
-        service_type: type,
-      }),
+      [this.basepath, type].filter((v) => v != null).join('/'),
+      query,
       `${req.protocol}://${req.get('host')}`
     )
   }
@@ -810,6 +768,36 @@ class StratisOAuth2Provider {
       state,
       extend_with || {}
     )
+  }
+
+  /**
+   * Decrypt oidc service keys.
+   * @param {{}} dict
+   */
+  decrypt_oidc_service_keys(dict) {
+    assert(typeof dict == 'object', 'oidc key dict must be an object.')
+
+    this.oidc_encrypted_keys.forEach((k) => {
+      if (dict[k] == null) return
+      dict[k] = this.decrypt(dict[k], -1)
+    })
+
+    return dict
+  }
+
+  /**
+   * Decrypt oidc service keys.
+   * @param {{}} dict
+   */
+  encrypt_oidc_service_keys(dict) {
+    assert(typeof dict == 'object', 'oidc key dict must be an object.')
+
+    this.oidc_encrypted_keys.forEach((k) => {
+      if (dict[k] == null) return
+      dict[k] = this.encrypt(dict[k])
+    })
+
+    return dict
   }
 
   /**
@@ -967,6 +955,29 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Session logout
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   * @param {Object} query The query arguments
+   */
+  async svc_logout(req, res, next, { redirect_uri = null, no_revoke = null }) {
+    /** @type {StratisOAuth2ProviderSession} */
+    const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+
+    if (no_revoke != 'true' && oauth_session.is_authenticated) {
+      if (oauth_session.refresh_token != null)
+        await this.revoke(oauth_session.refresh_token, 'refresh_token')
+      if (oauth_session.access_token != null)
+        await this.revoke(oauth_session.access_token, 'access_token')
+    }
+
+    await oauth_session.clear()
+
+    return res.redirect(redirect_uri || '/F')
+  }
+
+  /**
    * Called to handle the authorize response.
    * @param {Request} req
    * @param {Response} res
@@ -1002,60 +1013,56 @@ class StratisOAuth2Provider {
         // need to encrypt the authentication keys for the token response
         // to not allow direct interaction with the authentication
         // service.
-        const encrypted_token_info = this.encrypt_token_info(
-          Object.assign(
-            {
-              client_id: this.encrypt(this.client_id),
-              api_url: this.compose_service_url(req).href,
-              api_refresh_url: this.compose_service_url(req, 'refresh').href,
-            },
-            token_info
-          )
-        )
+
+        const service_token = {}
+
+        Object.entries({
+          client_id: this.client_id,
+          client_secret: this.client_secret,
+          id_token: token_info.id_token,
+          access_token: token_info.access_token,
+          refresh_token: token_info.refresh_token,
+          // use the encrypted gateway.
+          idp_issuer_url: this.compose_service_url(req, 'oidc'),
+        }).forEach((e) => {
+          if (e[1] == null) return
+          if (e[1] instanceof URL) e[1] = e[1].href
+          return (service_token[e[0]] = e[1])
+        })
+
+        this.encrypt_oidc_service_keys(service_token)
 
         if (auth_state.login_result == 'token')
-          return res.end(JSON.stringify(encrypted_token_info))
+          return res.end(JSON.stringify(service_token))
 
         return res.end(
           this.compose_service_url(req, 'decrypt', {
-            value: this.encrypt(encrypted_token_info),
+            value: this.encrypt(service_token),
           }).href
         )
     }
   }
 
   /**
-   * Called to refresh a token.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
-   * @param {string} query.state The query state
-   */
-  async svc_refresh(req, res, next, query) {
-    throw Error(JSON.stringify(query))
-  }
-
-  /**
-   * Call to return the introspection info for the token.
+   * Encrypted gateway to the remote oidc response.
    * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
    * @param {Object} query The query arguments
    */
-  async svc_introspect(req, res, next, query) {
-    throw Error(JSON.stringify(query))
-  }
-
-  /**
-   * Revoke an access_token or a refresh_token.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
-   */
-  async svc_revoke(req, res, next, query) {
-    throw Error(JSON.stringify(query))
+  async svc_oidc(req, res, next, query) {
+    query = this.decrypt_oidc_service_keys(query)
+    const proxy_req = await this.requests.request(
+      this.compose_url(this.service_url, query),
+      {
+        headers: req.headers,
+      }
+    )
+    proxy_req.pipe(res)
+    return await new Promise((resolve, reject) => {
+      proxy_req.on('end', () => resolve(res.end()))
+      proxy_req.on('error', (err) => reject(err))
+    })
   }
 
   /**
@@ -1082,12 +1089,34 @@ class StratisOAuth2Provider {
       Object.getPrototypeOf(this)
     ).filter((v) => v.startsWith('svc_') && typeof this[v] == 'function')
 
+    /**
+     * @type {Object<string,{
+     * type: string,
+     * function_name: string,
+     * invoke: (req:Request, res:Response,next:NextFunction, query:{})=>{}
+     * path: string
+     * }>}
+     */
     const services = {}
 
-    const invoke_service = async (invoke, req, res, next) => {
+    /**
+     * @param {StratisOAuth2ProviderServiceType} service_type
+     * @param {Request} req
+     * @param {Response} res
+     * @param {NextFunction} next
+     */
+    const invoke_service = async (service_type, req, res, next) => {
       try {
-        let next_called = false
+        assert(
+          typeof service_type == 'string',
+          'Service type unknown: ' + service_type
+        )
 
+        const service = services[service_type]
+        assert(service != null, 'Service not found ' + service_type)
+
+        // override next
+        let next_called = false
         const intern_next = (...args) => {
           next_called = true
           return next(...args)
@@ -1096,27 +1125,27 @@ class StratisOAuth2Provider {
         await this.prepare_oauth2_service_request(req, res, intern_next)
         if (res.writableEnded || next_called) return
 
-        return await invoke(req, res, intern_next, req.query)
+        return await service.invoke(req, res, intern_next, req.query)
       } catch (err) {
         next(err)
       }
     }
 
     for (let function_name of service_bind_names) {
-      const type = function_name.substring('svc_'.length)
+      const service_type = function_name.substring('svc_'.length)
       const service = {
-        type,
+        type: service_type,
         function_name,
         invoke: async (...args) => {
           return await this[function_name](...args)
         },
-        path: [path, type].join('/'),
+        path: [path, service_type].join('/'),
       }
 
-      services[type] = service
+      services[service_type] = service
 
       app.use(service.path, async (req, res, next) => {
-        await invoke_service(service.invoke, req, res, next)
+        await invoke_service(service.type, req, res, next)
       })
     }
 
@@ -1124,12 +1153,12 @@ class StratisOAuth2Provider {
     const default_service = 'authorize_response'
 
     app.use(this.basepath, async (req, res, next) => {
-      const service_type = req.query.service_type || default_service
-      assert(
-        typeof service_type == 'string' && services[service_type] != null,
-        new StratisNoEmitError('No such service type: ' + service_type)
+      return await invoke_service(
+        req.query.state != null ? 'authorize_response' : 'login',
+        req,
+        res,
+        next
       )
-      await invoke_service(services[service_type].invoke, req, res, next)
     })
   }
 

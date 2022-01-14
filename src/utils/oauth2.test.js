@@ -25,7 +25,7 @@ app.use(
 new StratisOAuth2Provider({
   token_url: process.env['TEST_OAUTH2_TOKEN_URL'],
   authorize_url: process.env['TEST_OAUTH2_AUTH_URL'],
-  token_introspect_url: process.env['TEST_OAUTH2_TOKEN_INTROSPECT_URL'],
+  introspect_url: process.env['TEST_OAUTH2_TOKEN_INTROSPECT_URL'],
   user_info_url: process.env['TEST_OAUTH2_USER_INFO_URL'],
   revoke_url: process.env['TEST_OAUTH2_REVOKE_URL'],
   client_id: TEST_CLIENT_ID,

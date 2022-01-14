@@ -1,6 +1,6 @@
 <% 
   if (req.query.get_token_url == null) { 
-      res.redirect('/oauth2?service_type=new_token&redirect_to=public/new_token.html')
+      res.redirect('/oauth2/login?login_result=token_decrypt_url')
   }
 %>
 <!DOCTYPE html>
