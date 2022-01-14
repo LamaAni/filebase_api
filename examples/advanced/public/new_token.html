@@ -1,0 +1,17 @@
+<% 
+  if (req.query.get_token_url == null) { 
+      res.redirect('/oauth2?service_type=new_token&redirect_to=public/new_token.html')
+  }
+%>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Token decrypt example</title>
+  </head>
+  <body>
+    <a href="<%- req.query.get_token_url %>">Decrypt token</a>
+  </body>
+</html>

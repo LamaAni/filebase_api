@@ -32,6 +32,15 @@ class StratisError extends Error {
   handle_error(req, res, next) {}
 }
 
+class StratisNoEmitError extends StratisError {
+  /**
+   * If true then emit error event
+   */
+  get emit_error() {
+    return false
+  }
+}
+
 class StratisNotFoundError extends StratisError {
   get http_response_code() {
     return 404
@@ -60,7 +69,7 @@ class StratisTimeOutError extends StratisError {
   }
 }
 
-class StratisParseError extends StratisError {
+class StratisParseError extends StratisNoEmitError {
   constructor(source, ...args) {
     super(...args)
     this.source = source
@@ -76,14 +85,11 @@ class StratisParseError extends StratisError {
       `Parse error: ${this.message}. Source:  \n${this.source}`
     )
   }
-
-  get emit_error() {
-    return false
-  }
 }
 
 module.exports = {
   StratisError,
+  StratisNoEmitError,
   StratisNotFoundError,
   StratisTimeOutError,
   StratisNotAuthorizedError,

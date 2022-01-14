@@ -65,7 +65,7 @@ const {
  * @property {string} serve_path The path to serve.
  * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} filter Path filter, if next
  * function is called then skips the middleware.
- * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction)=>{}} authenticate Secure resources validation filter.
+ * @property {(req:StratisExpressRequest,res:StratisExpressResponse,next:NextFunction, authenticate:boolean)=>{}} authenticate Secure resources validation filter.
  * return false or throw error when not accesable. Defaults to allow all.
  * @property {boolean} next_on_private Call the next express handler if the current
  * filepath request is private.
@@ -373,7 +373,7 @@ class Stratis extends events.EventEmitter {
             new StratisTimeOutError('Websocket request timed out')
           )
 
-          if (rsp_data instanceof ReadableStream)
+          if (rsp_data instanceof Readable)
             rsp_data = await stream_to_buffer(rsp_data)
 
           ws.send(
@@ -691,7 +691,12 @@ class Stratis extends events.EventEmitter {
             if (args[0] instanceof Error) sf_next_error = args[0]
           }
 
-          await authenticate(req, res, sf_next)
+          await authenticate(
+            req,
+            res,
+            sf_next,
+            stratis_request.access_mode == 'secure'
+          )
 
           // checking for errors.
           if (sf_next_error != null) {

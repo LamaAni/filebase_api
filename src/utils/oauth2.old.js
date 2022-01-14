@@ -32,9 +32,26 @@ const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
  * @typedef {import('express/index').NextFunction} NextFunction
  */
 
+/*
+/authorize	Interact with the resource owner and obtain an authorization grant.
+/device/authorize	Obtain an activation code for the resource owner.  Early Access
+/token	Obtain an access and/or ID token by presenting an authorization grant or refresh token.
+/introspect	Return information about a token.
+/revoke	Revoke an access or refresh token.
+/logout	End the session associated with the given ID token.
+/keys	Return public keys used to sign responses.
+/userinfo	Return claims about the authenticated end user.
+/.well-known/oauth-authorization-server	Return OAuth 2.0 metadata related to the specified authorization server.
+/.well-known/openid-configuration	Return OpenID Connect metadata related to the specified authorization server.
+*/
+
 /**
  * @typedef {'session'|'token'|'token_decrypt_url'} StratisOAuth2ProviderLoginResult
  * @typedef {'login'|'decrypt'|'authorize_response'|'token'|'refresh'|'introspect'|'revoke'} StratisOAuth2ProviderServiceType
+ */
+
+/**
+ * @typedef {'authenticate'|'authentication_response'|'revoke'|'new_token'|'decrypt'|'refresh'|'unknown'} StratisOAuth2ProviderServiceRequestType
  */
 
 /**
@@ -46,6 +63,7 @@ const ENCRYPT_TOKEN_KEYS = ['token_id', 'refresh_token']
 
 /**
  * @typedef {Object} StratisOAuth2ProviderSessionParams
+ * @property {StratisOAuth2ProviderAuthorizeState} state
  * @property {string} access_token
  * @property {string} token_type
  * @property {string} scope
@@ -413,8 +431,6 @@ class StratisOAuth2Provider {
       'The encryption_expiration must be a number > 0'
     )
 
-    assert(typeof basepath == 'string', 'basepath must be a string')
-
     let as_url = (v) => (v == null ? null : new URL(v))
 
     this.client_id = client_id
@@ -427,7 +443,7 @@ class StratisOAuth2Provider {
     this.revoke_url = as_url(revoke_url)
     this.redirect_url = as_url(redirect_url)
 
-    this.basepath = this._clean_service_path(basepath)
+    this.basepath = basepath
     this.response_type = response_type
 
     this.allow_login = allow_login
@@ -484,6 +500,25 @@ class StratisOAuth2Provider {
     if (!accetps.includes('text/html')) return false
 
     return true
+  }
+
+  /**
+   * Redirect the response to login page.
+   * @param {Request} req The request
+   * @param {StratisOAuth2ProviderServiceRequestType} type
+   * @param {string} redirect_to Once logged in, redirect to.
+   * @returns
+   */
+  compose_oauth2_redirect(req, type, redirect_to = null) {
+    const url = this.compose_url(
+      this.basepath,
+      {
+        origin: redirect_to || req.originalUrl,
+        service_type: type,
+      },
+      req.protocol + '://' + req.get('host')
+    )
+    return url.pathname + url.search
   }
 
   /**
@@ -552,6 +587,44 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Encrypts parts of the token info to allow for stratis token
+   * redirect.
+   * @param {{}} token_info
+   * @returns {{}} The encrypted token info.
+   */
+  encrypt_token_info(token_info) {
+    const e_token_info = Object.assign(
+      {
+        client_id: this.encrypt(this.client_id),
+      },
+      token_info
+    )
+
+    this.encryption_token_keys.forEach((key) => {
+      e_token_info[key] = this.encrypt(e_token_info[key], -1)
+    })
+
+    return e_token_info
+  }
+
+  /**
+   * Decrypts the token info.
+   * @param {{}} token_info
+   * @returns {{}} The decrypted token info.
+   */
+  decrypt_token_info(token_info) {
+    token_info.client_id = this.decrypt(token_info.client_id)
+    assert(
+      this.client_id == client_id,
+      'Invalid client id when decrypting token info'
+    )
+    this.encryption_token_keys.forEach((key) => {
+      token_info[key] = this.decrypt(token_info[key], -1)
+    })
+    return token_info
+  }
+
+  /**
    * Updates and returns the request options for the oauth client.
    * @param {StratisRequestOptions} options
    * @param {boolean} use_proxies If true, attempt to use proxy agent.
@@ -572,18 +645,34 @@ class StratisOAuth2Provider {
    * @param {{}} query The query arguments to compose from
    * @param {string|URL} base_url The base url to compose from
    */
-  compose_url(url, query = null, base_url = null) {
+  compose_url(url, query = {}, base_url = null) {
     if (base_url != null) url = new URL(url, base_url)
     else url = new URL(url)
-
-    query = query || {}
-    assert(typeof query == 'object', 'Query must be a dictionary')
 
     Object.entries(query)
       .filter((entry) => entry[1] != null)
       .forEach((entry) => url.searchParams.set(entry[0], entry[1]))
 
     return url
+  }
+
+  /**
+   * Composes a url for authorization.
+   * @param {string} redirect_uri The redirect url.
+   * @param {{}} state The oauth request state.
+   * @returns
+   */
+  compose_authorize_url(redirect_uri, state = null) {
+    return this.compose_url(this.authorize_url, {
+      redirect_uri: redirect_uri,
+      client_id: this.client_id,
+      response_type: this.response_type,
+      scope:
+        this.scope == null || this.scope.length == 0
+          ? null
+          : this.scope.join(' '),
+      state: this.encrypt(state),
+    })
   }
 
   /**
@@ -725,6 +814,251 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Implements the authentication check middleware. If called request
+   * must be authenticated against OAuth2 to proceed. Uses services_middleware
+   * to create a login page redirect if needed.
+   * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
+   */
+  auth_middleware() {
+    /**
+     * @param {StratisExpressRequest} req The express request. If a stratis express request then
+     * uses the stratis request to check access mode to be secure.
+     * @param {StratisExpressResponse} res The express response.
+     * @param {NextFunction} next
+     */
+    const intercrept = async (req, res, next) => {
+      // check if this request is an auth login request
+      if (req.path == this.basepath) return next()
+
+      try {
+        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+        req.stratis_oauth2_session = oauth_session
+
+        // only run authentication in the case where we have a need.
+        // for the case of a stratis request, if its secure.
+        if (
+          req.stratis_request == null ||
+          req.stratis_request.access_mode == 'secure'
+        ) {
+          // check for token updates.
+          if (await oauth_session.update()) {
+            this.logger.debug(
+              `Authentication info updated for ${
+                oauth_session.username
+              }. (TID: ${oauth_session.token_id}, Access ${
+                oauth_session.is_access_granted ? 'GRANTED' : 'DENIED'
+              })`
+            )
+          }
+
+          if (!oauth_session.is_access_granted) {
+            if (this.allow_login != null && !(await this.allow_login(req)))
+              throw new StratisNotAuthorizedReloadError('Access denied')
+
+            // check if needs clearing.
+            if (
+              oauth_session.is_authenticated &&
+              (!oauth_session.is_active || oauth_session.is_elapsed == true)
+            )
+              await oauth_session.clear()
+
+            // redirect to authenticate.
+            return res.redirect(
+              this.compose_oauth2_redirect(req, 'authenticate')
+            )
+          }
+        }
+
+        // updating the user object.
+        this._update_request_user_object(req, oauth_session)
+
+        next()
+      } catch (err) {
+        return next(err)
+      }
+    }
+
+    return intercrept
+  }
+
+  /**
+   * @param {Request} req
+   * @returns {StratisOAuth2ProviderServiceRequestType}
+   */
+  get_auth_services_request_type(req) {
+    if (req.query.service_type != null) return req.query.service_type
+    if (req.query.code == null && req.query.origin != null)
+      return 'authenticate'
+    if (req.query.state != null) return 'authentication_response'
+    return 'unknown'
+  }
+
+  /**
+   * A general services middleware, with a specific request path. Handles auth operations
+   * and redirects and allows for authentication commands to execute.
+   * @returns {(req:Request,res:Response, next:NextFunction)=>{}} Auth middleware
+   */
+  services_middleware() {
+    /**
+     * @param {Request} req
+     * @param {Response} res
+     * @param {NextFunction} next
+     */
+    const intercept = async (req, res, next) => {
+      const request_url = get_express_request_url(req)
+      const oauth_redirect_uri =
+        this.redirect_url ||
+        `${request_url.protocol}//${request_url.host}${request_url.pathname}`
+
+      const query = Object.assign(
+        {},
+        req.query || {},
+        JSON.parse(req.body || '{}')
+      )
+
+      try {
+        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+        const query_type = this.get_auth_services_request_type(req)
+
+        switch (query_type) {
+          case 'new_token':
+          case 'authenticate': {
+            const origin = query.origin || '/'
+
+            const authorize_url = this.compose_authorize_url(
+              oauth_redirect_uri,
+              {
+                created_at: milliseconds_utc_since_epoc(),
+                uuid: create_uuid(),
+                redirect_to: query.redirect_to,
+                auth_type: query_type,
+                origin,
+              }
+            )
+
+            this.logger.debug(
+              `Auth redirect when requesting origin: ${origin}. Redirect -> ${authorize_url}`
+            )
+
+            return res.redirect(authorize_url)
+          }
+          case 'authentication_response': {
+            // Case we already authenticated and we need to get the token.
+            /** @type {StratisOAuth2ProviderAuthorizeState} */
+            const state = this.decrypt(req.query.state) || {}
+            const origin_url = state.origin || oauth_session.state.origin
+
+            if (query.error != null) {
+              // try to redirect to origin.
+              if (origin_url) {
+                this.logger.debug(
+                  `Authentication failed, redirecting to origin: ${origin_url}`
+                )
+                return res.redirect(origin_url)
+              }
+
+              // Otherwise error
+              throw new StratisNotAuthorizedReloadError(
+                `Unauthorized: ${query.error}`
+              )
+            }
+
+            let token_info = await this.get_token_from_code(
+              req.query.code,
+              oauth_redirect_uri
+            )
+
+            switch (state.auth_type || 'authenticate') {
+              case 'new_token':
+                token_info = this.encrypt_token_info(token_info)
+
+                const decrypt_url = this.compose_url(
+                  this.basepath,
+                  {
+                    service_type: 'decrypt',
+                    // has expiration
+                    value: this.encrypt(token_info),
+                  },
+                  req.protocol + '://' + req.get('host')
+                ).href
+
+                if (state.redirect_to == null) return res.end(decrypt_url)
+
+                return res.redirect(
+                  this.compose_url(
+                    state.redirect_to,
+                    { get_token_url: decrypt_url },
+                    req.protocol + '://' + req.get('host')
+                  )
+                )
+              case 'authenticate':
+                await oauth_session.authenticate(token_info)
+
+                this.logger.debug(
+                  `Authentication successfull for token ${oauth_session.token_id}, redirecting to: ${origin_url}`
+                )
+
+                return res.redirect(origin_url)
+              default:
+                throw new Error(
+                  'Invalid authentication type on authentication response: ' +
+                    auth_type
+                )
+            }
+          }
+          case 'revoke': {
+            try {
+              if (oauth_session.access_token)
+                await this.revoke(oauth_session.access_token)
+            } catch (err) {
+              this.logger.warn(
+                `Unable to revoke token ${oauth_session.token_id}. Clearing session but token is still active.`
+              )
+            }
+
+            await oauth_session.clear()
+
+            return res.redirect(
+              req.query.redirect_to ||
+                `${request_url.protocol}//${request_url.host}`
+            )
+          }
+          case 'decrypt': {
+            const value = this.decrypt(req.query.value)
+            return res.end(
+              typeof value == 'string' ? value : JSON.stringify(value)
+            )
+          }
+          case 'refresh': {
+            assert(
+              typeof refresh_token == 'string',
+              new StratisNoEmitError(
+                'Invalid request, missing query argument: refresh_token'
+              )
+            )
+
+            const token_info = await this.get_token_from_refresh_token(
+              refresh_token
+            )
+
+            return res.end(JSON.stringify(token_info))
+          }
+          default:
+            if (query.error != null) throw new Error(`${JSON.stringify(query)}`)
+            else
+              throw new Error(
+                'Unknown authentication request type: ' + request_url.href
+              )
+        }
+      } catch (err) {
+        return next(err)
+      }
+    }
+
+    return intercept
+  }
+
+  /**
    * @param {string} state
    * @returns {StratisOAuth2ProviderAuthorizeState}
    */
@@ -733,54 +1067,13 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Encrypts parts of the token info to allow for stratis token
-   * redirect.
-   * @param {{}} token_info
-   * @returns {{}} The encrypted token info.
-   */
-  encrypt_token_info(token_info) {
-    const e_token_info = Object.assign(
-      {
-        client_id: this.encrypt(this.client_id),
-      },
-      token_info
-    )
-
-    this.encryption_token_keys.forEach((key) => {
-      e_token_info[key] = this.encrypt(e_token_info[key], -1)
-    })
-
-    return e_token_info
-  }
-
-  /**
-   * Decrypts the token info.
-   * @param {{}} token_info
-   * @returns {{}} The decrypted token info.
-   */
-  decrypt_token_info(token_info) {
-    token_info.client_id = this.decrypt(token_info.client_id)
-    assert(
-      this.client_id == client_id,
-      'Invalid client id when decrypting token info'
-    )
-    this.encryption_token_keys.forEach((key) => {
-      if (token_info[key] != null)
-        token_info[key] = this.decrypt(token_info[key], -1)
-    })
-    return token_info
-  }
-
-  /**
    * @param {Request} req the express request
    * @param {StratisOAuth2ProviderServiceType} type
-   * @param {{}} query The query arguments
    */
-  compose_service_url(req, type = null, query = null) {
-    return this.compose_url(
-      [this.basepath, type].filter((v) => v != null).join('/'),
-      query,
-      `${req.protocol}://${req.get('host')}`
+  compose_service_url(req, type) {
+    return new URL(
+      [this.basepath, type].join('/'),
+      `${request_url.protocol}//${request_url.host}`
     )
   }
 
@@ -798,75 +1091,26 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Implements the authentication check middleware. If called request
-   * must be authenticated against OAuth2 to proceed. Uses services_middleware
-   * to create a login page redirect if needed.
-   * @returns {(req:Request,res:Response, next:NextFunction, authenticate:boolean)=>{}} Auth middleware
-   */
-  auth_middleware() {
-    /**
-     * @param {StratisExpressRequest} req The express request. If a stratis express request then
-     * uses the stratis request to check access mode to be secure.
-     * @param {StratisExpressResponse} res The express response.
-     * @param {NextFunction} next
-     * @param {boolean} authenticate
-     */
-    const intercrept = async (req, res, next, authenticate = true) => {
-      try {
-        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
-        req.stratis_oauth2_session = oauth_session
-
-        authenticate = authenticate == null ? true : authenticate
-
-        // only run authentication in the case where we have a need.
-        // for the case of a stratis request, if its secure.
-        if (authenticate) {
-          // check for token updates.
-          if (await oauth_session.update()) {
-            this.logger.debug(
-              `Authentication info updated for ${
-                oauth_session.username
-              }. (TID: ${oauth_session.token_id}, Access ${
-                oauth_session.is_access_granted ? 'GRANTED' : 'DENIED'
-              })`
-            )
-          }
-
-          if (!oauth_session.is_access_granted) {
-            // check if needs clearing.
-            if (
-              oauth_session.is_authenticated &&
-              (!oauth_session.is_active || oauth_session.is_elapsed == true)
-            )
-              await oauth_session.clear()
-
-            return await this.svc_login(req, res, next, {
-              redirect_uri: get_express_request_url(req),
-              login_result: 'session',
-            })
-          }
-        }
-
-        // updating the user object.
-        this._update_request_user_object(req, oauth_session)
-
-        next()
-      } catch (err) {
-        return next(err)
-      }
-    }
-
-    return intercrept
-  }
-
-  /**
    * Called before oauth request to authenticate.
    * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
    */
-  async prepare_oauth2_service_request(req, res, next) {
+  async prepare_oauth2_request(req, res, next) {
     if (req.query.error != null) {
+      // if (req.query.state != null)
+      //   try {
+      //     const state = this.decrypt_state(req.query.state)
+      //     if (state.redirect_uri != null)
+      //       // redirect back to the original request uri
+      //       // with the error.
+      //       return res.redirect(
+      //         this.compose_url(state.redirect_uri, {
+      //           error: req.query.error,
+      //         }).href
+      //       )
+      //   } catch (err) {}
+
       // Otherwise error
       throw new StratisNotAuthorizedReloadError(
         `Unauthorized: ${req.query.error}`
@@ -910,10 +1154,8 @@ class StratisOAuth2Provider {
     { redirect_uri = null, state = null, login_result = 'session' }
   ) {
     assert(
-      this.allow_login == null || (await this.allow_login(req)),
-      new StratisNoEmitError(
-        'Login is not allowed for this type of request. Are you loging in from a browser?'
-      )
+      this.allow_login == null || this.allow_login(req),
+      'Login is not allowed for this type of request. Are you loging in from a browser?'
     )
 
     if (state != null) {
@@ -923,8 +1165,7 @@ class StratisOAuth2Provider {
 
     const authorize_query = {
       redirect_uri:
-        this.redirect_url ||
-        this.compose_service_url(req, 'authorize_response'),
+        this.redirect_url || this.compose_service_url(req, 'authorize'),
       client_id: this.client_id,
       response_type: this.response_type,
       scope:
@@ -968,77 +1209,42 @@ class StratisOAuth2Provider {
       oauth_redirect_uri
     )
 
-    switch (auth_state.login_result) {
+    switch (auth_state.login_result){
       case 'session':
-        // session login
-        /** @type {StratisOAuth2ProviderSession} */
-        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+        break
 
-        // write the authentication info.
-        await oauth_session.authenticate(token_info)
-
-        return res.redirect(auth_state.redirect_uri || '/')
-
-      case 'token_decrypt_url':
-      case 'token':
-        // need to encrypt the authentication keys for the token response
-        // to not allow direct interaction with the authentication
-        // service.
-        const encrypted_token_info = this.encrypt_token_info(
-          Object.assign(
-            {
-              client_id: this.encrypt(this.client_id),
-              api_url: this.compose_service_url(req),
-              api_refresh_url: this.compose_service_url(req, 'refresh'),
-            },
-            token_info
-          )
-        )
-
-        if (auth_state.login_result == 'token')
-          return res.end(JSON.stringify(encrypted_token_info))
-
-        return res.end(
-          this.compose_service_url(req, 'decrypt', {
-            value: this.encrypt(encrypted_token_info),
-          })
-        )
+      case "token_decrypt_url":
+      case "token":
+        break
     }
   }
 
   /**
-   * Called to refresh a token.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
-   * @param {string} query.state The query state
+   * Returns the access_token info for token code.
+   * If query introspect is true, the request will also call
+   * introspect for info.
+   * @param {*} req
+   * @param {*} res
+   * @param {*} next
    */
-  async svc_refresh(req, res, next, query) {
-    throw Error(JSON.stringify(query))
-  }
+  async token(req, res, next) {}
 
   /**
-   * Call to return the introspection info for the token.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
+   * Call to return the access_token introspection and info, including the
+   * token active flag.
+   * @param {*} req
+   * @param {*} res
+   * @param {*} next
    */
-  async svc_introspect(req, res, next, query) {
-    throw Error(JSON.stringify(query))
-  }
+  async introspect(req, res, next) {}
 
   /**
    * Revoke an access_token or a refresh_token.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
+   * @param {} req
+   * @param {*} res
+   * @param {*} next
    */
-  async svc_revoke(req, res, next, query) {
-    throw Error(JSON.stringify(query))
-  }
+  async revoke(req, res, next) {}
 
   /**
    * INTERNAL
@@ -1056,34 +1262,36 @@ class StratisOAuth2Provider {
    * Binds the oauth service paths to the express app.
    * @param {import('express').Express} app
    * @param {string} path The oauth serve path (must start with /), defaults to this.basepath
+   * @param {[StratisOAuth2ProviderServiceType]} services
    */
-  bind_services(app, path = null) {
+  bind_services(app, path = null, services = ALL_SERVICE_TYPES) {
     path = this._clean_service_path(path)
+    services.forEach((type) => {
+      app.use([path, type].join('/'), (req, res, next) => {
+        let next_called = false
 
-    const service_bind_names = Object.getOwnPropertyNames(
-      Object.getPrototypeOf(this)
-    ).filter((v) => v.startsWith('svc_') && typeof this[v] == 'function')
-
-    service_bind_names.forEach((function_name) => {
-      const type = function_name.substring('svc_'.length)
-      app.use([path, type].join('/'), async (req, res, next) => {
-        try {
-          let next_called = false
-
-          const intern_next = (...args) => {
-            next_called = true
-            return next(...args)
-          }
-
-          await this.prepare_oauth2_service_request(req, res, intern_next)
-          if (res.writableEnded || next_called) return
-
-          return await this[function_name](req, res, intern_next, req.query)
-        } catch (err) {
-          next(err)
+        const intern_next = (...args) => {
+          next_called = true
+          return next(...args)
         }
+
+        await this.prepare_oauth2_request(req, res, intern_next)
+        if (res.writableEnded || next_called) return
+
+        return await this[type](req, res, intern_next, req.query)
       })
     })
+  }
+
+  /**
+   * Apply the security authenticator to the express app.
+   * @param {import('express').Express} app
+   * @param {string} path The oauth serve path (must start with /), defaults to this.basepath
+   */
+  apply(app, path = null) {
+    path = this._clean_service_path(path)
+    app.all(path, this.services_middleware())
+    app.use(this.auth_middleware(path))
   }
 
   /**
@@ -1091,8 +1299,8 @@ class StratisOAuth2Provider {
    * @param {Express} app
    */
   bind(app) {
-    this.bind_services(app)
     app.use(this.auth_middleware())
+    app.use(this.basepath, this.services_middleware())
   }
 
   /**
