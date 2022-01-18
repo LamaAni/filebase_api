@@ -6,6 +6,7 @@ function get_oauth2_test_config() {
     recheck_interval: 10 * 1000,
     session_key: 'test_oauth_session',
     scope: ['okta.users.read.self'],
+    enable_oidc_token: true,
   }
 }
 

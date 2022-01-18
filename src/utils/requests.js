@@ -53,13 +53,16 @@ function get_stream_content_type(encoding) {
  * @typedef {http.RequestOptions & https.RequestOptions & StratisRequestOptionsExtension} StratisRequestOptions
  */
 
+/**
+ * @typedef {Object} StratisRequestsClientOptions
+ * @property {boolean} use_proxies If true, check for proxies and use them (proxy-agent package)
+ * @property {number} timeout The timeout for requests.
+ * @property {boolean} follow_redirects If true, follow http redirects.
+ */
+
 class StratisRequestsClient {
   /**
-   *
-   * @param {Object} param0
-   * @param {boolean} param0.use_proxies If true, check for proxies and use them (proxy-agent package)
-   * @param {number} param0.timeout The timeout for requests.
-   * @param {boolean} param0.follow_redirects If true, follow http redirects.
+   * @param {StratisRequestsClientOptions} param0
    */
   constructor({
     use_proxies = true,

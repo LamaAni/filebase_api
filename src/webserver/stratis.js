@@ -72,7 +72,7 @@ const {
  * @property {boolean} next_on_not_found Call the next express handler if the current
  * filepath request is not found.
  * @property {boolean} ignore_empty_path If true, next handler on empty path.
- * @property {string} request_user_object_key The request object key for retrieving user info.
+ * @property {string} user_key The request object key for retrieving user info.
  */
 
 /**
@@ -611,7 +611,7 @@ class Stratis extends events.EventEmitter {
     next_on_private = false,
     next_on_not_found = true,
     ignore_empty_path = true,
-    request_user_object_key = 'user',
+    user_key = 'user',
   }) {
     assert(serve_path != null, 'Serve path must be defined!')
 
@@ -649,7 +649,7 @@ class Stratis extends events.EventEmitter {
         return_stack_trace_to_client:
           this.logging_options.return_stack_trace_to_client,
         log_errors: this.logging_options.log_errors,
-        request_user_object_key,
+        user_key,
       })
 
       var { req, res } = await this._bind_stratis_request_elements(
