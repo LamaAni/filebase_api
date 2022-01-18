@@ -176,6 +176,15 @@ function create_uuid() {
   )
 }
 
+/**
+ *
+ * @param {string} path
+ */
+function remove_path_folder_ender(path) {
+  if (path.endsWith('/')) return path.substring(0, path.length - 1)
+  return path
+}
+
 class StringEncryptor {
   /**
    * @param {string|Buffer} encryptionKey
@@ -235,6 +244,7 @@ module.exports = {
   value_from_object_path,
   create_uuid,
   escape_regex,
+  remove_path_folder_ender,
   encrypt_string,
   decrypt_string,
   StringEncryptor,

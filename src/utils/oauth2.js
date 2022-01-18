@@ -16,6 +16,7 @@ const {
   encrypt_string,
   decrypt_string,
   escape_regex,
+  remove_path_folder_ender,
 } = require('../common')
 const { stream_to_buffer } = require('./streams')
 
@@ -1045,24 +1046,23 @@ class StratisOAuth2Provider {
     remote_url = this.compose_url(
       remote_url,
       query,
-      this.service_url.href.endsWith('/')
-        ? this.service_url.href
-        : this.service_url.href + '/'
+      remove_path_folder_ender(this.service_url.href)
     )
 
     // requests are sent where the method is
-    const proxy_req = await this.requests.request(remote_url, {
+    const proxy_req = await this.requests.get(remote_url, {
       headers: req.headers,
     })
 
     let as_string = await proxy_req.to_string()
 
-    let redirect_service_override_url =
+    const redirect_service_override_url = remove_path_folder_ender(
       this.service_url.origin + this.service_url.pathname
+    )
 
     as_string = as_string.replace(
       new RegExp(escape_regex(redirect_service_override_url), 'g'),
-      this.compose_service_url(req, 'oidc')
+      this.compose_service_url(req, 'secure_proxy')
     )
 
     return res.end(as_string)
@@ -1152,7 +1152,20 @@ class StratisOAuth2Provider {
         case 'GET':
           break
         case 'POST':
-          data_query = JSON.parse(stream_to_buffer(req))
+          data_query = (await stream_to_buffer(req)).toString('utf-8')
+          // Two options here. JSON or URL search.
+          if (data_query.trim().startsWith('{'))
+            data_query = JSON.parse(data_query)
+          else {
+            // assume url args.
+            const data_entries = Array.from(
+              new URLSearchParams(data_query).entries()
+            )
+            data_query = {}
+            data_entries.forEach((e) => {
+              data_query[e[0]] = e[1]
+            })
+          }
           break
         default:
           throw new StratisNoEmitError('OAuth2 requests can only be GET/POST')
