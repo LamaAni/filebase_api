@@ -152,6 +152,10 @@ function value_from_object_path(o, path) {
   return value_from_object_path(o, path)
 }
 
+function escape_regex(val) {
+  return val.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+}
+
 function create_uuid() {
   const S4 = function () {
     return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1)
@@ -230,6 +234,7 @@ module.exports = {
   milliseconds_utc_since_epoc,
   value_from_object_path,
   create_uuid,
+  escape_regex,
   encrypt_string,
   decrypt_string,
   StringEncryptor,

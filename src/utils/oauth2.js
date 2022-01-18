@@ -10,14 +10,14 @@ const {
   assert,
   assert_non_empty_string,
   is_non_empty_string,
-  is_valid_url,
   get_express_request_url,
   milliseconds_utc_since_epoc,
   value_from_object_path,
   encrypt_string,
   decrypt_string,
-  create_uuid,
+  escape_regex,
 } = require('../common')
+const { stream_to_buffer } = require('./streams')
 
 const OIDC_ENCRYPT_KEYS = ['client_secret', 'refresh_token']
 
@@ -33,8 +33,8 @@ const OIDC_ENCRYPT_KEYS = ['client_secret', 'refresh_token']
  */
 
 /**
- * @typedef {'session'|'token'|'token_decrypt_url'} StratisOAuth2ProviderLoginResult
- * @typedef {'login'|'logout'|'decrypt'|'authorize_response'|'oidc'} StratisOAuth2ProviderServiceType
+ * @typedef {'session'|'oidc_token'|'oidc_token_decrypt_url'} StratisOAuth2ProviderLoginResult
+ * @typedef {'login'|'logout'|'decrypt'|'authorize_response'} StratisOAuth2ProviderServiceType
  */
 
 /**
@@ -70,7 +70,6 @@ const OIDC_ENCRYPT_KEYS = ['client_secret', 'refresh_token']
  * @property {string} session_key The session key to use when recording the oauth token
  * @property {string} encryption_key The encryption key for session encryption. Defaults to client_secret.
  * @property {string} encryption_expiration The time, in ms, for the encryption expiration. Defaults to 5 minutes.
- * @property {[string]} oidc_encrypted_keys The keys in the token to encrypt, when using as oauth2 proxy.
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
  * @property {number} expires_in The number of milliseconds before forcing the session to expire. If null then ignored.
  * @property {number} request_timeout The number of milliseconds for requests timeout.
@@ -80,6 +79,8 @@ const OIDC_ENCRYPT_KEYS = ['client_secret', 'refresh_token']
  * @property {string} response_type The authentication type. Currently supports only code.
  * @property {StratisOAuth2Provider.allow_login} allow_login Check if the current request source allows redirect to login.
  * @property {boolean} use_proxies If true, and proxies are detected use them.
+ * @property {boolean} enable_oidc_token If true, allows the download of a service token. WARNING! exposes the client_secret.
+ * @property {string} oidc_key_seperator If true, allows the download of a service token. WARNING! exposes the client_secret.
  */
 
 /**
@@ -360,7 +361,6 @@ class StratisOAuth2Provider {
     session_key = 'stratis:oauth2:token',
     encryption_key = null,
     encryption_expiration = 1000 * 60 * 5,
-    oidc_encrypted_keys = ['token_id', 'refresh_token'],
     response_type = 'code',
     recheck_interval = 1000 * 60,
     expires_in = null,
@@ -369,6 +369,8 @@ class StratisOAuth2Provider {
     request_user_object_key = 'user',
     allow_login = StratisOAuth2Provider.allow_login,
     use_proxies = true,
+    enable_oidc_token = false,
+    oidc_key_seperator = '-',
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
   } = {}) {
     assert(
@@ -434,7 +436,8 @@ class StratisOAuth2Provider {
     this.session_key = session_key
     this.encryption_key = encryption_key || client_secret
     this.encryption_expiration = encryption_expiration
-    this.oidc_encrypted_keys = oidc_encrypted_keys || OIDC_ENCRYPT_KEYS
+    this.enable_oidc_token = enable_oidc_token
+    this.oidc_key_seperator = oidc_key_seperator
     this.recheck_interval = recheck_interval
     this.request_timeout = request_timeout
     this.expires_in = expires_in
@@ -771,36 +774,6 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Decrypt oidc service keys.
-   * @param {{}} dict
-   */
-  decrypt_oidc_service_keys(dict) {
-    assert(typeof dict == 'object', 'oidc key dict must be an object.')
-
-    this.oidc_encrypted_keys.forEach((k) => {
-      if (dict[k] == null) return
-      dict[k] = this.decrypt(dict[k], -1)
-    })
-
-    return dict
-  }
-
-  /**
-   * Decrypt oidc service keys.
-   * @param {{}} dict
-   */
-  encrypt_oidc_service_keys(dict) {
-    assert(typeof dict == 'object', 'oidc key dict must be an object.')
-
-    this.oidc_encrypted_keys.forEach((k) => {
-      if (dict[k] == null) return
-      dict[k] = this.encrypt(dict[k])
-    })
-
-    return dict
-  }
-
-  /**
    * Implements the authentication check middleware. If called request
    * must be authenticated against OAuth2 to proceed. Uses services_middleware
    * to create a login page redirect if needed.
@@ -1008,13 +981,20 @@ class StratisOAuth2Provider {
 
         return res.redirect(auth_state.redirect_uri || '/')
 
-      case 'token_decrypt_url':
-      case 'token':
+      case 'oidc_token_decrypt_url':
+      case 'oidc_token':
         // need to encrypt the authentication keys for the token response
         // to not allow direct interaction with the authentication
         // service.
 
-        const service_token = {}
+        assert(
+          this.enable_oidc_token,
+          new StratisNotAuthorizedError(
+            'Access to odic tokens is denied. The service is disabled'
+          )
+        )
+
+        const oidc_token = {}
 
         Object.entries({
           client_id: this.client_id,
@@ -1022,47 +1002,40 @@ class StratisOAuth2Provider {
           id_token: token_info.id_token,
           access_token: token_info.access_token,
           refresh_token: token_info.refresh_token,
-          // use the encrypted gateway.
-          idp_issuer_url: this.compose_service_url(req, 'oidc'),
+          idp_issuer_url: this.service_url.href,
         }).forEach((e) => {
-          if (e[1] == null) return
-          if (e[1] instanceof URL) e[1] = e[1].href
-          return (service_token[e[0]] = e[1])
+          let key = e[0]
+          let val = e[1]
+          if (val == null) return
+          if (val instanceof URL) val = val.href
+          key = key.replace(/[_]/g, this.oidc_key_seperator || '-')
+          oidc_token[key] = val
         })
 
-        this.encrypt_oidc_service_keys(service_token)
-
-        if (auth_state.login_result == 'token')
-          return res.end(JSON.stringify(service_token))
+        if (auth_state.login_result == 'oidc_token')
+          return res.end(JSON.stringify(oidc_token))
 
         return res.end(
           this.compose_service_url(req, 'decrypt', {
-            value: this.encrypt(service_token),
+            value: this.encrypt(oidc_token),
           }).href
+        )
+      default:
+        throw new StratisNoEmitError(
+          'Unknown login result: ' + auth_state.login_result
         )
     }
   }
 
   /**
-   * Encrypted gateway to the remote oidc response.
+   * Uses the secure service to read the request response and query.
    * @param {Request} req
    * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
+   * @param {Next} next
+   * @param {{}} query
    */
-  async svc_oidc(req, res, next, query) {
-    query = this.decrypt_oidc_service_keys(query)
-    const proxy_req = await this.requests.request(
-      this.compose_url(this.service_url, query),
-      {
-        headers: req.headers,
-      }
-    )
-    proxy_req.pipe(res)
-    return await new Promise((resolve, reject) => {
-      proxy_req.on('end', () => resolve(res.end()))
-      proxy_req.on('error', (err) => reject(err))
-    })
+  async svc_secure_proxy(req, res, next, query) {
+    const secure_proxy_url = this.compose_service_url(req, 'secure_proxy')
   }
 
   /**
@@ -1100,6 +1073,25 @@ class StratisOAuth2Provider {
     const services = {}
 
     /**
+     * @param {Request} req
+     */
+    const parse_request_query = async (req) => {
+      let data_query = null
+
+      switch (req.method) {
+        case 'GET':
+          break
+        case 'POST':
+          data_query = JSON.parse(stream_to_buffer(req))
+          break
+        default:
+          throw new StratisNoEmitError('OAuth2 requests can only be GET/POST')
+      }
+
+      return Object.assign(data_query || {}, req.query)
+    }
+
+    /**
      * @param {StratisOAuth2ProviderServiceType} service_type
      * @param {Request} req
      * @param {Response} res
@@ -1125,7 +1117,12 @@ class StratisOAuth2Provider {
         await this.prepare_oauth2_service_request(req, res, intern_next)
         if (res.writableEnded || next_called) return
 
-        return await service.invoke(req, res, intern_next, req.query)
+        return await service.invoke(
+          req,
+          res,
+          intern_next,
+          await parse_request_query(req)
+        )
       } catch (err) {
         next(err)
       }
