@@ -1036,6 +1036,76 @@ class StratisOAuth2Provider {
    */
   async svc_secure_proxy(req, res, next, query) {
     const secure_proxy_url = this.compose_service_url(req, 'secure_proxy')
+    // compose remote url.
+    let remote_url = null
+    if (req.path != null && req.path.trim().length > 0)
+      remote_url = req.path.startsWith('/') ? req.path.substring(1) : req.path
+    else remote_url = this.service_url.href
+
+    remote_url = this.compose_url(
+      remote_url,
+      query,
+      this.service_url.href.endsWith('/')
+        ? this.service_url.href
+        : this.service_url.href + '/'
+    )
+
+    // requests are sent where the method is
+    const proxy_req = await this.requests.request(remote_url, {
+      headers: req.headers,
+    })
+
+    let as_string = await proxy_req.to_string()
+
+    let redirect_service_override_url =
+      this.service_url.origin + this.service_url.pathname
+
+    as_string = as_string.replace(
+      new RegExp(escape_regex(redirect_service_override_url), 'g'),
+      this.compose_service_url(req, 'oidc')
+    )
+
+    return res.end(as_string)
+  }
+
+  /**
+   * Encrypted gateway to the remote oidc response.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   * @param {Object} query The query arguments
+   */
+  async svc_oidc(req, res, next, query) {
+    query = this.decrypt_oidc_service_keys(query)
+    let oidc_url = null
+    if (req.path != null && req.path.trim().length > 0)
+      oidc_url = this.compose_url(
+        req.path.startsWith('/') ? req.path.substring(1) : req.path,
+        query,
+        this.service_url.href.endsWith('/')
+          ? this.service_url.href
+          : this.service_url.href + '/'
+      )
+    else oidc_url = this.service_url.href
+
+    const proxy_req = await this.requests.request(oidc_url, {
+      headers: req.headers,
+    })
+
+    let as_string = await proxy_req.to_string()
+
+    let redirect_service_override_url =
+      this.service_url.origin + this.service_url.pathname
+    redirect_service_override_url
+    as_string = as_string.replace(
+      new RegExp(
+        escape_regex(this.service_url.origin + this.service_url.pathname),
+        'g'
+      ),
+      this.compose_service_url(req, 'oidc')
+    )
+
+    return res.end(as_string)
   }
 
   /**
