@@ -616,6 +616,7 @@ class StratisOAuth2Provider {
         {
           client_id: this.client_id,
           client_secret: this.client_secret,
+          scope: 'openid',
           grant_type,
         },
         token_flow_args
@@ -660,7 +661,7 @@ class StratisOAuth2Provider {
   /**
    * Returns the token info using the introspect url. Sends a request to the server.
    * @param {string} token The token to get info about.
-   * @param {string} token_type The token type.
+   * @param {'access_token','refresh_token','id_token'} token_type The token type.
    */
   async get_token_info(token, token_type = 'access_token') {
     const url = this.compose_url(this.introspect_url, {
@@ -772,6 +773,36 @@ class StratisOAuth2Provider {
       state,
       extend_with || {}
     )
+  }
+
+  /**
+   * Compose open ID configuration for the request.
+   * @param {Request} req
+   * @returns
+   */
+  compose_well_known_open_id_config(req) {
+    return {
+      token_endpoint: this.compose_service_url(req, 'token'),
+      scopes_supported: this.scope,
+      // Unsupported
+      authorization_endpoint: null,
+      device_authorization_endpoint: null,
+      claims_supported: null,
+      code_challenge_methods_supported: null,
+      end_session_endpoint: null,
+      grant_types_supported: null,
+      introspection_endpoint: null,
+      introspection_endpoint_auth_methods_supported: null,
+      issuer: null,
+      request_object_signing_alg_values_supported: null,
+      request_parameter_supported: null,
+      response_modes_supported: null,
+      response_types_supported: null,
+      revocation_endpoint: null,
+      revocation_endpoint_auth_methods_supported: null,
+      subject_types_supported: null,
+      token_endpoint_auth_methods_supported: null,
+    }
   }
 
   /**
@@ -1033,9 +1064,37 @@ class StratisOAuth2Provider {
    * @param {Request} req
    * @param {Response} res
    * @param {Next} next
+   * @param {{refresh_token: string}} query
+   */
+  async svc_token(req, res, next, { refresh_token = null, id_token = null }) {
+    assert(
+      refresh_token != null,
+      'Only refresh tokens are allowed in oauth2 proxy.'
+    )
+
+    const refresh_token_response = await this.get_token_from_refresh_token(
+      refresh_token
+    )
+
+    const default_token =
+      refresh_token_response.id_token || refresh_token_response.access_token
+
+    refresh_token_response.id_token =
+      refresh_token_response.id_token || default_token
+    refresh_token_response.access_token =
+      refresh_token_response.access_token || refresh_token_response.id_token
+
+    return res.end(JSON.stringify(refresh_token_response))
+  }
+
+  /**
+   * Uses the secure service to read the request response and query.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {Next} next
    * @param {{}} query
    */
-  async svc_secure_proxy(req, res, next, query) {
+  async old_svc_secure_proxy(req, res, next, query) {
     const secure_proxy_url = this.compose_service_url(req, 'secure_proxy')
     // compose remote url.
     let remote_url = null
@@ -1050,62 +1109,26 @@ class StratisOAuth2Provider {
     )
 
     // requests are sent where the method is
-    const proxy_req = await this.requests.get(remote_url, {
-      headers: req.headers,
-    })
+    try {
+      const proxy_req = await this.requests.request(remote_url, {
+        method: req.method,
+      })
 
-    let as_string = await proxy_req.to_string()
+      let as_string = await proxy_req.to_string()
 
-    const redirect_service_override_url = remove_path_folder_ender(
-      this.service_url.origin + this.service_url.pathname
-    )
-
-    as_string = as_string.replace(
-      new RegExp(escape_regex(redirect_service_override_url), 'g'),
-      this.compose_service_url(req, 'secure_proxy')
-    )
-
-    return res.end(as_string)
-  }
-
-  /**
-   * Encrypted gateway to the remote oidc response.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
-   */
-  async svc_oidc(req, res, next, query) {
-    query = this.decrypt_oidc_service_keys(query)
-    let oidc_url = null
-    if (req.path != null && req.path.trim().length > 0)
-      oidc_url = this.compose_url(
-        req.path.startsWith('/') ? req.path.substring(1) : req.path,
-        query,
-        this.service_url.href.endsWith('/')
-          ? this.service_url.href
-          : this.service_url.href + '/'
+      const redirect_service_override_url = remove_path_folder_ender(
+        this.service_url.origin + this.service_url.pathname
       )
-    else oidc_url = this.service_url.href
 
-    const proxy_req = await this.requests.request(oidc_url, {
-      headers: req.headers,
-    })
+      as_string = as_string.replace(
+        new RegExp(escape_regex(redirect_service_override_url), 'g'),
+        this.compose_service_url(req, 'secure_proxy')
+      )
 
-    let as_string = await proxy_req.to_string()
-
-    let redirect_service_override_url =
-      this.service_url.origin + this.service_url.pathname
-    redirect_service_override_url
-    as_string = as_string.replace(
-      new RegExp(
-        escape_regex(this.service_url.origin + this.service_url.pathname),
-        'g'
-      ),
-      this.compose_service_url(req, 'oidc')
-    )
-
-    return res.end(as_string)
+      return res.end(as_string)
+    } catch (err) {
+      throw err
+    }
   }
 
   /**
@@ -1123,10 +1146,10 @@ class StratisOAuth2Provider {
   /**
    * Binds the oauth service paths to the express app.
    * @param {import('express').Express} app
-   * @param {string} path The oauth serve path (must start with /), defaults to this.basepath
+   * @param {string} serve_path The oauth serve path (must start with /), defaults to this.basepath
    */
-  bind_services(app, path = null) {
-    path = this._clean_service_path(path)
+  bind_services(app, serve_path = null) {
+    serve_path = this._clean_service_path(serve_path)
 
     const service_bind_names = Object.getOwnPropertyNames(
       Object.getPrototypeOf(this)
@@ -1219,7 +1242,7 @@ class StratisOAuth2Provider {
         invoke: async (...args) => {
           return await this[function_name](...args)
         },
-        path: [path, service_type].join('/'),
+        path: [serve_path, service_type].join('/'),
       }
 
       services[service_type] = service
@@ -1229,8 +1252,12 @@ class StratisOAuth2Provider {
       })
     }
 
-    /** @type {StratisOAuth2ProviderServiceType} */
-    const default_service = 'authorize_response'
+    app.use(
+      path.join(this.basepath, '.well-known/openid-configuration'),
+      async (req, res, next) => {
+        res.end(JSON.stringify(this.compose_well_known_open_id_config(req)))
+      }
+    )
 
     app.use(this.basepath, async (req, res, next) => {
       return await invoke_service(
