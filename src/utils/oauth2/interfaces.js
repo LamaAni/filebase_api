@@ -1,6 +1,6 @@
 /**
  * @typedef {'session'|'oidc_token'|'oidc_token_decrypt_url'} StratisOAuth2ProviderLoginResult
- * @typedef {'login'|'logout'|'decrypt'|'token'|'authorize_response'} StratisOAuth2ProviderServiceType
+ * @typedef {'login'|'logout'|'decrypt'|'token'|'token_oidc'|'authorize_response'} StratisOAuth2ProviderServiceType
  */
 
 /**

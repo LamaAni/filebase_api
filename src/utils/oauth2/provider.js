@@ -26,6 +26,7 @@ const { StratisOAuth2ProviderSession } = require('./session')
  * @typedef {Object} StratisOAuth2ProviderOptionsExtend
  * @property {string|URL|(req:Request, query: {})=>string|URL} redirect_url Overrides the oauth redirect call back url.
  * @property {stirng} basepath The path to use for the apply command (serves the oauth2 login and redirect)
+ * @property {'access_token' | 'id_token'} token_type The (remote service) token type to use when refreshing a token.
  * @property {string} session_key The session key to use when recording the oauth token
  * @property {string} encryption_key The encryption key for session encryption. Defaults to client_secret.
  * @property {string} encryption_expiration The time, in ms, for the encryption expiration. Defaults to 5 minutes.
@@ -54,6 +55,7 @@ class StratisOAuth2Provider {
     redirect_url = null,
     basepath = '/oauth2',
     scope = [],
+    token_type = 'access_token',
     session_key = 'stratis:oauth2:token',
     encryption_key = null,
     encryption_expiration = 1000 * 60 * 5,
@@ -105,6 +107,7 @@ class StratisOAuth2Provider {
     this.expires_in = expires_in
     this.logger = logger
     this.user_key = user_key
+    this.token_type = token_type
     /** @type {[string]} */
     this.username_from_token_info_path = Array.isArray(
       username_from_token_info_path
@@ -262,7 +265,9 @@ class StratisOAuth2Provider {
    */
   compose_well_known_metadata(req) {
     return {
-      token_endpoint: this.compose_service_url(req, 'token'),
+      token_endpoint: this.compose_service_url(req, 'token', {
+        token_type: this.token_type,
+      }),
       scopes_supported: this.scope,
       // Unsupported
       authorization_endpoint: null,
@@ -369,6 +374,7 @@ class StratisOAuth2Provider {
       redirect_uri: auth_redirect = null,
       state = null,
       login_result = 'session',
+      encrypt_token = true,
     }
   ) {
     assert(
@@ -503,19 +509,35 @@ class StratisOAuth2Provider {
    * @param {Request} req
    * @param {Response} res
    * @param {Next} next
-   * @param {{refresh_token: string, auto_id: boolean}} query
+   * @param {{refresh_token: string, token_type: 'access_token' | 'id_token'}} query
    */
-  async svc_token(req, res, next, { refresh_token = null, auto_id = true }) {
+  async svc_token(req, res, next, { refresh_token = null, token_type = null }) {
+    token_type = token_type || this.token_type || 'access_token'
     assert(
       refresh_token != null,
       'Only refresh tokens are allowed in oauth2 proxy.'
     )
 
+    // decrypting the refresh tokenß
     refresh_token = this.decrypt(refresh_token)
+
     const info = await this.requests.get_token_from_refresh_token(refresh_token)
-    if (auto_id) {
-      info.id_token = info.id_token || info.access_token
+
+    switch (token_type) {
+      case 'access_token':
+        info.id_token = info.access_token
+        break
+      case 'id_token':
+        break
     }
+
+    assert(
+      info.id_token != null,
+      new StratisNoEmitError(
+        'Refresh token return did not provide a token of tyoe: ' + token_type
+      )
+    )
+
     return res.end(JSON.stringify(info))
   }
 
