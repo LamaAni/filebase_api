@@ -1,48 +1,15 @@
-const { StratisOAuth2Provider } = require('./oauth2.js')
-const express = require('express')
-const cookie_session = require('cookie-session')
-const path = require('path')
+const { StratisOAuth2Provider } = require('./oauth2/provider')
 
-const TEST_CLIENT_ID = process.env['TEST_OAUTH2_CLIENT_ID']
-const TEST_CLIENT_SECRET = process.env['TEST_OAUTH2_CLIENT_SECRET']
-
-const app = express()
-
-app.use((req, res, next) => {
-  res.set('Cache-Control', 'no-store')
-  console.log(req.url)
-  return next()
+const provider = new StratisOAuth2Provider({
+  client_id: 'test-id',
+  client_secret: 'not-a-secret',
+  service_url: 'http://not-a-service',
 })
 
-app.use(
-  cookie_session({
-    secure: false,
-    name: path.basename(__filename),
-    keys: [path.basename(__filename)],
-  })
-)
-
-new StratisOAuth2Provider({
-  token_url: process.env['TEST_OAUTH2_TOKEN_URL'],
-  authorize_url: process.env['TEST_OAUTH2_AUTH_URL'],
-  introspect_url: process.env['TEST_OAUTH2_TOKEN_INTROSPECT_URL'],
-  user_info_url: process.env['TEST_OAUTH2_USER_INFO_URL'],
-  revoke_url: process.env['TEST_OAUTH2_REVOKE_URL'],
-  client_id: TEST_CLIENT_ID,
-  client_secret: TEST_CLIENT_SECRET,
-  recheck_interval: 1,
-  scope: ['okta.users.read.self'],
-}).apply(app)
-
-app.use((req, res, next) => {
-  res.sendFile(path.join(__dirname, 'oauth2.test.html'))
-})
-
-app.use((err, req, res, next) => {
-  console.error(err)
-  res.status(500).send(JSON.stringify(err))
-})
-
-app.listen(8080, () => {
-  console.log('listening on port 8080')
-})
+if (require.main == module) {
+  const val = 'asdasd023101321ad'
+  const decrypted = provider.decrypt(provider.encrypt(val, -1))
+  console.log(val)
+  console.log(decrypted)
+  console.log(val == decrypted)
+}

@@ -301,7 +301,7 @@ class StratisOAuth2Provider {
     { id_token = null, access_token = null, refresh_token = null }
   ) {
     return {
-      client_id: this.encrypt(this.client_id, -1),
+      client_id: this.encrypt(this.client_id),
       id_token,
       access_token,
       refresh_token: this.encrypt(refresh_token, -1),
@@ -526,27 +526,29 @@ class StratisOAuth2Provider {
       'Only refresh tokens are allowed in oauth2 proxy.'
     )
 
-    // decrypting the refresh tokenß
+    // decrypting the refresh token
     refresh_token = this.decrypt(refresh_token)
 
     const info = await this.requests.get_token_from_refresh_token(refresh_token)
 
+    const token = this.compose_encrypted_token(req, info)
+
     switch (token_type) {
       case 'access_token':
-        info.id_token = info.access_token
+        token.id_token = info.access_token
         break
       case 'id_token':
         break
     }
 
     assert(
-      info.id_token != null,
+      token.id_token != null,
       new StratisNoEmitError(
         'Refresh token return did not provide a token of tyoe: ' + token_type
       )
     )
 
-    return res.end(JSON.stringify(info))
+    return res.end(JSON.stringify(token))
   }
 
   /**

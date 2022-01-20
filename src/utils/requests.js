@@ -79,7 +79,7 @@ class StratisRequestsClient {
    * @param {string | (response: StratisRequestResponse)=>string} message The message to show. Can be null
    * @param {[number]} valid_status_codes
    */
-  raise_status_errors(response, message = null, valid_status_codes = null) {
+  async raise_status_errors(response, message = null, valid_status_codes = null) {
     if (valid_status_codes && valid_status_codes.includes(response.statusCode))
       return
 
@@ -94,6 +94,7 @@ class StratisRequestsClient {
     const msg_compose = [
       `Http/s invalid response (${response.statusCode}): ${response.statusMessage}`,
       message,
+      (await stream_to_buffer(response)).toString(response.headers['content-encoding']),
     ]
       .filter((v) => v != null)
       .map((v) => `${v}`)
@@ -105,7 +106,7 @@ class StratisRequestsClient {
    * @param {StratisRequestResponse} response The server response.
    */
   async to_buffer(response) {
-    response.raise_status_errors()
+    await response.raise_status_errors()
     return await stream_to_buffer(response)
   }
 
