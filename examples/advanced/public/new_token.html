@@ -1,8 +1,6 @@
-<% 
-  if (req.query.get_token_url == null) { 
-      res.redirect('/oauth2/login?login_result=oidc_token_decrypt_url')
-  }
-%>
+<% if (req.query.token == null) {
+res.redirect('/oauth2/login?login_result=token&redirect_uri=public/new_token.html')
+} %>
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -12,6 +10,6 @@
     <title>Token decrypt example</title>
   </head>
   <body>
-    <a href="<%- req.query.get_token_url %>">Decrypt token</a>
+    <a href='<%- req.query.token %>'>Decrypt token</a>
   </body>
 </html>

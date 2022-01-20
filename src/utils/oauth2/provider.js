@@ -13,6 +13,7 @@ const {
   encrypt_string,
   decrypt_string,
 } = require('../../common')
+const { concat_url_args } = require('./common')
 const { stream_to_buffer } = require('../streams')
 
 const { StratisOAuth2RequestClient } = require('./requests')
@@ -295,7 +296,7 @@ class StratisOAuth2Provider {
    * @param {*} token_info
    * @returns
    */
-  compose_encrypted_oidc_token(
+  compose_encrypted_token(
     req,
     { id_token = null, access_token = null, refresh_token = null }
   ) {
@@ -304,7 +305,7 @@ class StratisOAuth2Provider {
       id_token,
       access_token,
       refresh_token: this.encrypt(refresh_token, -1),
-      idp_issuer_url: this.compose_service_url(req),
+      issuer: this.compose_service_url(req),
     }
   }
 
@@ -365,6 +366,7 @@ class StratisOAuth2Provider {
    * @param {string} query.redirect_uri Where to redirect the oauth2 service response
    * @param {string} query.state Extra state args
    * @param {'token'|'session'} query.login_result The login type
+   * @param {boolean|string} query.token_as_link If true, return a token login result as link.
    */
   async svc_login(
     req,
@@ -374,7 +376,7 @@ class StratisOAuth2Provider {
       redirect_uri: auth_redirect = null,
       state = null,
       login_result = 'session',
-      encrypt_token = true,
+      token_as_link = true,
     }
   ) {
     assert(
@@ -389,6 +391,9 @@ class StratisOAuth2Provider {
       assert(typeof state == 'object', 'State must be a json string or null')
     }
 
+    token_as_link =
+      token_as_link == true || token_as_link.trim().toLowerCase() == 'true'
+
     state = this.encrypt(
       Object.assign(
         this.compose_state(
@@ -396,6 +401,7 @@ class StratisOAuth2Provider {
             created_at: milliseconds_utc_since_epoc(),
             redirect_uri: auth_redirect,
             login_result,
+            token_as_link,
           },
           state || {}
         )
@@ -470,8 +476,7 @@ class StratisOAuth2Provider {
 
         return res.redirect(auth_state.redirect_uri || '/')
 
-      case 'oidc_token_decrypt_url':
-      case 'oidc_token':
+      case 'token':
         // need to encrypt the authentication keys for the token response
         // to not allow direct interaction with the authentication
         // service.
@@ -483,20 +488,23 @@ class StratisOAuth2Provider {
           )
         )
 
-        const oidc_token = this.compose_encrypted_oidc_token(req, {
+        const token = this.compose_encrypted_token(req, {
           id_token: token_info.id_token,
           access_token: token_info.access_token,
           refresh_token: token_info.refresh_token,
         })
 
-        if (auth_state.login_result == 'oidc_token')
-          return res.end(JSON.stringify(oidc_token))
+        let response_string = auth_state.token_as_link
+          ? this.compose_service_url(req, 'decrypt', {
+              value: this.encrypt(token),
+            }).href
+          : JSON.stringify(token)
 
-        return res.end(
-          this.compose_service_url(req, 'decrypt', {
-            value: this.encrypt(oidc_token),
-          }).href
-        )
+        if (auth_state.redirect_uri == null) return res.end(response_string)
+        else
+          return res.redirect(
+            concat_url_args(auth_state.redirect_uri, { token: response_string })
+          )
       default:
         throw new StratisNoEmitError(
           'Unknown login result: ' + auth_state.login_result

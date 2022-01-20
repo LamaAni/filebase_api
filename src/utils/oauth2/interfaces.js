@@ -1,13 +1,14 @@
 /**
- * @typedef {'session'|'oidc_token'|'oidc_token_decrypt_url'} StratisOAuth2ProviderLoginResult
- * @typedef {'login'|'logout'|'decrypt'|'token'|'token_oidc'|'authorize_response'} StratisOAuth2ProviderServiceType
+ * @typedef {'session'|'token'} StratisOAuth2ProviderLoginResult
+ * @typedef {'login'|'logout'|'decrypt'|'token'|'authorize_response'} StratisOAuth2ProviderServiceType
  */
 
 /**
  * @typedef {Object} StratisOAuth2ProviderAuthorizeState
- * @property {number} created_at
- * @property {string} redirect_uri
- * @property {StratisOAuth2ProviderLoginResult} login_result
+ * @property {number} created_at // the time where the state was create (UTC milliseconds)
+ * @property {string} redirect_uri The successful login redirect uri.
+ * @property {boolean|string} token_as_link If true ('true') returns a token login as link.
+ * @property {StratisOAuth2ProviderLoginResult} login_result What is the login result.
  **/
 
 /**
