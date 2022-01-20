@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 
-/**F
+/**
  * @typedef {import('@lamaani/stratis').StratisApiHandler} StratisApiHandler
  */
 
@@ -16,6 +16,14 @@ async function print_something({ to_print = '[undefined]' }, context) {
  * */
 async function get_page({ url = 'https://www.google.com' }, context) {
   return await (await context.requests.get(url)).to_string()
+}
+
+/**
+ * Executes a request to another server on serverside.
+ * @type {StratisApiHandler}
+ * */
+async function get_page_binary({ url = 'https://www.google.com' }, context) {
+  return await context.requests.get(url)
 }
 
 /**
@@ -50,4 +58,5 @@ module.exports = {
   print_something,
   get_page,
   upload_file,
+  get_page_binary,
 }

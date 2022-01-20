@@ -1,15 +1,12 @@
 function get_oauth2_test_config() {
   return {
-    token_url: process.env['TEST_OAUTH2_TOKEN_URL'],
-    authorize_url: process.env['TEST_OAUTH2_AUTH_URL'],
-    token_introspect_url: process.env['TEST_OAUTH2_TOKEN_INTROSPECT_URL'],
-    user_info_url: process.env['TEST_OAUTH2_USER_INFO_URL'],
-    revoke_url: process.env['TEST_OAUTH2_REVOKE_URL'],
+    service_url: process.env['TEST_OAUTH2_SERVICE_URL'],
     client_id: process.env['TEST_OAUTH2_CLIENT_ID'],
     client_secret: process.env['TEST_OAUTH2_CLIENT_SECRET'],
     recheck_interval: 10 * 1000,
     session_key: 'test_oauth_session',
     scope: ['okta.users.read.self'],
+    enable_oidc_token: true,
   }
 }
 

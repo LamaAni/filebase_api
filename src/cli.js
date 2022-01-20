@@ -629,11 +629,7 @@ class StratisCli {
     })
 
     // set the login path
-    this.app.use(
-      security_provider.basepath,
-      security_provider.login_middleware()
-    )
-
+    security_provider.bind_services(this.app)
     security_provider.bind_stratis_api(this.api)
 
     this.logger.info('Enabled OAuth2 security provider')

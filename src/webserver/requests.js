@@ -29,7 +29,7 @@ class StratisRequest {
    * @param {StratisFileAccessMode} param0.access_mode
    * @param {boolean} param0.log_errors
    * @param {boolean} param0.return_stack_trace_to_client
-   * @param {string} param0.request_user_object_key
+   * @param {string} param0.user_key
    * @param {StratisPageCallContext} param0.context
    */
   constructor({
@@ -40,7 +40,7 @@ class StratisRequest {
     access_modifiers_match_regex = ACCESS_MODIFIERS_MATCH_REGEX,
     log_errors = true,
     return_stack_trace_to_client = null,
-    request_user_object_key = 'user',
+    user_key = 'user',
     context = null,
   } = {}) {
     // Validate input
@@ -58,7 +58,7 @@ class StratisRequest {
     this._request = request
     this._log_errors = log_errors
     this._return_stack_trace_to_client = return_stack_trace_to_client
-    this._request_user_object_key = request_user_object_key
+    this._user_key = user_key
     this._url = new URL(request.url, `http://${request.headers.host}`)
 
     /** @type {StratisFileAccessMode} */

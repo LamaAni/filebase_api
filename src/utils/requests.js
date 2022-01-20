@@ -53,13 +53,16 @@ function get_stream_content_type(encoding) {
  * @typedef {http.RequestOptions & https.RequestOptions & StratisRequestOptionsExtension} StratisRequestOptions
  */
 
+/**
+ * @typedef {Object} StratisRequestsClientOptions
+ * @property {boolean} use_proxies If true, check for proxies and use them (proxy-agent package)
+ * @property {number} timeout The timeout for requests.
+ * @property {boolean} follow_redirects If true, follow http redirects.
+ */
+
 class StratisRequestsClient {
   /**
-   *
-   * @param {Object} param0
-   * @param {boolean} param0.use_proxies If true, check for proxies and use them (proxy-agent package)
-   * @param {number} param0.timeout The timeout for requests.
-   * @param {boolean} param0.follow_redirects If true, follow http redirects.
+   * @param {StratisRequestsClientOptions} param0
    */
   constructor({
     use_proxies = true,
@@ -76,7 +79,7 @@ class StratisRequestsClient {
    * @param {string | (response: StratisRequestResponse)=>string} message The message to show. Can be null
    * @param {[number]} valid_status_codes
    */
-  raise_status_errors(response, message = null, valid_status_codes = null) {
+  async raise_status_errors(response, message = null, valid_status_codes = null) {
     if (valid_status_codes && valid_status_codes.includes(response.statusCode))
       return
 
@@ -91,6 +94,7 @@ class StratisRequestsClient {
     const msg_compose = [
       `Http/s invalid response (${response.statusCode}): ${response.statusMessage}`,
       message,
+      (await stream_to_buffer(response)).toString(response.headers['content-encoding']),
     ]
       .filter((v) => v != null)
       .map((v) => `${v}`)
@@ -102,7 +106,7 @@ class StratisRequestsClient {
    * @param {StratisRequestResponse} response The server response.
    */
   async to_buffer(response) {
-    response.raise_status_errors()
+    await response.raise_status_errors()
     return await stream_to_buffer(response)
   }
 

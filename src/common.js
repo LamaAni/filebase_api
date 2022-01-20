@@ -1,4 +1,5 @@
 const fs = require('fs')
+const crypto = require('crypto')
 
 async function sleep(ms) {
   assert(typeof ms == 'number')
@@ -151,6 +152,10 @@ function value_from_object_path(o, path) {
   return value_from_object_path(o, path)
 }
 
+function escape_regex(val) {
+  return val.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+}
+
 function create_uuid() {
   const S4 = function () {
     return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1)
@@ -171,6 +176,55 @@ function create_uuid() {
   )
 }
 
+/**
+ *
+ * @param {string} path
+ */
+function remove_path_folder_ender(path) {
+  if (path.endsWith('/')) return path.substring(0, path.length - 1)
+  return path
+}
+
+class StringEncryptor {
+  /**
+   * @param {string|Buffer} encryptionKey
+   */
+  constructor(encryptionKey) {
+    this.algorithm = 'aes-192-cbc'
+    this.key = crypto.scryptSync(encryptionKey, 'salt', 24)
+    this.seperator = '-'
+  }
+
+  encrypt(clearText) {
+    const iv = crypto.randomBytes(16)
+    const cipher = crypto.createCipheriv(this.algorithm, this.key, iv)
+    const encrypted = cipher.update(clearText, 'utf8', 'hex')
+    return [
+      encrypted + cipher.final('hex'),
+      Buffer.from(iv).toString('hex'),
+    ].join(this.seperator)
+  }
+
+  decrypt(encryptedText) {
+    const [encrypted, iv] = encryptedText.split(this.seperator)
+    if (!iv) throw new Error('IV not found')
+    const decipher = crypto.createDecipheriv(
+      this.algorithm,
+      this.key,
+      Buffer.from(iv, 'hex')
+    )
+    return decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8')
+  }
+}
+
+function encrypt_string(val, key) {
+  return new StringEncryptor(key).encrypt(val)
+}
+
+function decrypt_string(encyrpted_val, key) {
+  return new StringEncryptor(key).decrypt(encyrpted_val)
+}
+
 module.exports = {
   /**
    * @param {boolean} condition
@@ -189,17 +243,9 @@ module.exports = {
   milliseconds_utc_since_epoc,
   value_from_object_path,
   create_uuid,
-}
-
-if (require.main == module) {
-  console.log(
-    value_from_object_path(
-      {
-        a: {
-          b: [{ c: 22 }],
-        },
-      },
-      'a.b[0].c'
-    )
-  )
+  escape_regex,
+  remove_path_folder_ender,
+  encrypt_string,
+  decrypt_string,
+  StringEncryptor,
 }
