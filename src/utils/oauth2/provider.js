@@ -20,6 +20,8 @@ const { StratisOAuth2RequestClient } = require('./requests')
 const { StratisOAuth2ProviderSession } = require('./session')
 
 /**
+ * @typedef {import('express').Request} Request
+ * @typedef {import('express').Response} Response
  * @typedef {import('./requests').StratisOAuth2RequestsClientOptions} StratisOAuth2RequestsClientOptions
  * @typedef {import('./interfaces').StratisOAuth2ProviderServiceType} StratisOAuth2ProviderServiceType
  * @typedef {import('./interfaces').StratisOAuth2ProviderAuthorizeState} StratisOAuth2ProviderAuthorizeState
@@ -39,6 +41,7 @@ const { StratisOAuth2ProviderSession } = require('./session')
  * @property {StratisOAuth2Provider.allow_login} allow_login Check if the current request source allows redirect to login.
  * @property {boolean} use_proxies If true, and proxies are detected use them.
  * @property {boolean} enable_oidc_token If true, allows the download of a service token. WARNING! exposes the client_secret.
+ * @property {boolean} enable_introspect If true, enables the introspect service.
  *
  * @typedef {StratisOAuth2RequestsClientOptions & StratisOAuth2ProviderOptionsExtend} StratisOAuth2ProviderOptions
  */
@@ -69,6 +72,7 @@ class StratisOAuth2Provider {
     allow_login = StratisOAuth2Provider.allow_login,
     use_proxies = true,
     enable_oidc_token = false,
+    enable_introspect = false,
     username_from_token_info_path = ['username', 'email', 'user', 'name'],
   } = {}) {
     this.requests = new StratisOAuth2RequestClient({
@@ -104,6 +108,7 @@ class StratisOAuth2Provider {
     this.encryption_key = encryption_key || client_secret
     this.encryption_expiration = encryption_expiration
     this.enable_oidc_token = enable_oidc_token
+    this.enable_introspect = enable_introspect
     this.recheck_interval = recheck_interval
     this.expires_in = expires_in
     this.logger = logger
@@ -501,10 +506,13 @@ class StratisOAuth2Provider {
           : JSON.stringify(token)
 
         if (auth_state.redirect_uri == null) return res.end(response_string)
-        else
-          return res.redirect(
-            concat_url_args(auth_state.redirect_uri, { token: response_string })
-          )
+        else {
+          const redirect_uri = concat_url_args(auth_state.redirect_uri, {
+            token: response_string,
+          })
+          this.logger.debug('OAuth2 redirect with token -> ' + redirect_uri)
+          return res.redirect(redirect_uri)
+        }
       default:
         throw new StratisNoEmitError(
           'Unknown login result: ' + auth_state.login_result
@@ -549,6 +557,71 @@ class StratisOAuth2Provider {
     )
 
     return res.end(JSON.stringify(token))
+  }
+
+  /**
+   * Returns response ok (200) if the token can be validated, otherwise unauthorized 404.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {Next} next
+   * @param {{access_token:string, id_token:string}} query
+   */
+  async svc_validate(req, res, next, { access_token = null, id_token = null }) {
+    assert(
+      access_token != null || id_token != null,
+      new StratisNoEmitError(
+        'You must provide either an access_token or an id_token'
+      )
+    )
+    /** @type {'access_token' | 'id_token'} */
+    const token_type = access_token != null ? 'access_token' : 'id_token'
+    const token = access_token != null ? access_token : id_token
+
+    const token_info = await this.requests.introspect(token, token_type)
+    if (token_info.active != true)
+      throw new StratisNotAuthorizedError('Token not authorized.')
+    res.status(200)
+    res.end('valid')
+  }
+
+  /**
+   * Returns the token info for the token.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {Next} next
+   * @param {{access_token:string, id_token:string}} query
+   */
+  async svc_introspect(
+    req,
+    res,
+    next,
+    { access_token = null, id_token = null }
+  ) {
+    assert(
+      this.enable_introspect === true,
+      new StratisNoEmitError('Introspect service is not enabled. Access denied')
+    )
+
+    assert(
+      access_token != null || id_token != null,
+      new StratisNoEmitError(
+        'You must provide either an access_token or an id_token'
+      )
+    )
+
+    token_info = await this.requests.introspect(token)
+    return res.end(token_info)
+  }
+
+  /**
+   * Returns echo command. Validates the service is active and ready.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {Next} next
+   * @param {{}} query
+   */
+  async svc_echo(req, res, next, query) {
+    return res.end(JSON.stringify(query))
   }
 
   /**
