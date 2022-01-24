@@ -502,8 +502,11 @@ class StratisOAuth2Provider {
 
         if (auth_state.redirect_uri == null) return res.end(response_string)
         else
+
+          const redirect_uri=concat_url_args(auth_state.redirect_uri, { token: response_string })
+          this.logger.debug("OAuth2 redirect with token -> " +redirect_uri)
           return res.redirect(
-            concat_url_args(auth_state.redirect_uri, { token: response_string })
+            redirect_uri
           )
       default:
         throw new StratisNoEmitError(
