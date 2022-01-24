@@ -10,7 +10,6 @@ const { parse_barer_token } = require('./common')
  * @typedef {import('./interfaces').StratisOAuth2ProviderSessionParams} StratisOAuth2ProviderSessionParams
  */
 
-
 class StratisOAuth2ProviderSession {
   /**
    * The current session for the stratis authentication provider.
@@ -204,7 +203,7 @@ class StratisOAuth2ProviderSession {
     if (this.provider.requests.introspect_url == null) return false
 
     if (this.needs_access_token_validation()) {
-      this.params.token_info = await this.provider.requests.get_token_info(
+      this.params.token_info = await this.provider.requests.introspect(
         this.access_token
       )
 

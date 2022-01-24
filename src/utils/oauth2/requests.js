@@ -207,7 +207,7 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
    * @param {string} token The token to get info about.
    * @param {'access_token','refresh_token','id_token'} token_type The token type.
    */
-  async get_token_info(token, token_type = 'access_token') {
+  async introspect(token, token_type = 'access_token') {
     const url = this.compose_url(this.introspect_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,

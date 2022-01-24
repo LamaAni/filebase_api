@@ -1,6 +1,6 @@
 /**
  * @typedef {'session'|'token'} StratisOAuth2ProviderLoginResult
- * @typedef {'login'|'logout'|'decrypt'|'token'|'authorize_response'} StratisOAuth2ProviderServiceType
+ * @typedef {'echo'|'login'|'logout'|'decrypt'|'token'|'authorize_response'|'validate'|'introspect'} StratisOAuth2ProviderServiceType
  */
 
 /**
