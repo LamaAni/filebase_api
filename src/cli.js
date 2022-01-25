@@ -35,6 +35,7 @@ const { assert, get_express_request_url } = require('./common')
  * @property {boolean} httpOnly boolean indicating whether the cookie is only to be sent over HTTP(S), and not made available to client JavaScript (true by default).
  * @property {boolean} signed boolean indicating whether the cookie is to be signed (true by default).
  * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
+ * @property {'strict'|'lax'} sameSite If true indicates this cookie should not be shared. Empty is lax.
  */
 
 /** @type {CookieSessionOptions} */
@@ -135,7 +136,7 @@ class StratisCli {
     }
 
     /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
-    this.session_options = DEFAULT_COOKIE_SESSION_OPTIONS
+    this.session_options = Object.assign({}, DEFAULT_COOKIE_SESSION_OPTIONS)
     /** @type {CliArgument} */
     this.__$session_options = {
       type: 'named',
@@ -146,7 +147,7 @@ class StratisCli {
       parse: (val) => {
         return Object.assign(
           {},
-          DEFAULT_COOKIE_SESSION_OPTIONS,
+          this.session_options || DEFAULT_COOKIE_SESSION_OPTIONS,
           val == null ? {} : JSON.parse(val)
         )
       },
@@ -593,13 +594,12 @@ class StratisCli {
       keys: this.session_key == null ? null : [this.session_key],
     }
 
-    run_session_options = Object.assign(
-      {},
+    this.session_options = Object.assign(
       this.session_options,
       run_session_options
     )
 
-    const session_generator = cookie_session(run_session_options)
+    const session_generator = cookie_session(this.session_options)
 
     this.app.use(async (req, res, next) => {
       return session_generator(req, res, next)

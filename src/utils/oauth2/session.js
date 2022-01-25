@@ -238,11 +238,12 @@ class StratisOAuth2ProviderSession {
   /**
    * Returns the bearer token session given the access token.
    * (Allows for third party bearer token to be directly accessed for validation)
-   * @param {string} token The bearer token
+   * @param {Request} req The express request.
+   * @param {string} token The bearer token. (Null if read from request)
    * @returns {StratisOAuth2ProviderSession} The bearer token session.
    */
-  async get_bearer_token_session(token) {
-    return await this.provider.get_bearer_token_session(token, this.req)
+  async get_session(token = null) {
+    return await this.provider.get_session(this.req, token)
   }
 
   /**
