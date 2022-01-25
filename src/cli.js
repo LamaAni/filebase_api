@@ -10,35 +10,21 @@ const cookie_session = require('cookie-session')
 const { Request, Response, NextFunction } = require('express/index')
 const { Cli, CliArgument } = require('@lamaani/infer')
 
+const {
+  StratisSessionProvider,
+  StratisSessionCookieStorageProvider,
+} = require('./utils/session')
 const { StratisOAuth2Provider } = require('./utils/oauth2')
 const { Stratis } = require('./webserver/stratis.js')
 const { assert, get_express_request_url } = require('./common')
 
 /**
+ * @typedef {import('./utils/session').StratisSessionCookieStorageProviderOptions} StratisSessionCookieStorageProviderOptions
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
  * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
  */
 
-/**
- * @typedef {Object} StratisSessionOptions
- * /**
- * Create a new cookie session middleware.
- * @typedef {object} CookieSessionOptions
- * @property {string} name The session cookie name
- * @property {[string]} keys The signature keys.
- * @property {number} maxAge number representing the milliseconds from Date.now() for expiry
- * @property {Date} expires Date indicating the cookie's expiration date (expires at the end of session by default).
- * @property {string} path string indicating the path of the cookie (/ by default).
- * @property {string} domain string indicating the domain of the cookie (no default).
- * @property {boolean} secure boolean indicating whether the cookie is only to be sent over HTTPS (false by default for HTTP, true by default for HTTPS).
- * @property {boolean} secureProxy boolean indicating whether the cookie is only to be sent over HTTPS (use this if you handle SSL not in your node process).
- * @property {boolean} httpOnly boolean indicating whether the cookie is only to be sent over HTTP(S), and not made available to client JavaScript (true by default).
- * @property {boolean} signed boolean indicating whether the cookie is to be signed (true by default).
- * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
- * @property {'strict'|'lax'} sameSite If true indicates this cookie should not be shared. Empty is lax.
- */
-
-/** @type {CookieSessionOptions} */
+/** @type {StratisSessionCookieStorageProviderOptions} */
 const DEFAULT_COOKIE_SESSION_OPTIONS = {
   name: 'stratis:session',
   maxAge: 1000 * 60 * 60 * 12,
@@ -141,7 +127,7 @@ class StratisCli {
      */
     this.session_provider = null
 
-    /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
+    /** @type {StratisSessionCookieStorageProviderOptions} The cookie session options as json*/
     this.cookie_session_options = Object.assign(
       {},
       DEFAULT_COOKIE_SESSION_OPTIONS
@@ -149,10 +135,9 @@ class StratisCli {
     /** @type {CliArgument} */
     this.__$cookie_session_options = {
       type: 'named',
-      environmentVariable: 'STRATIS_SESSION_OPTIONS',
+      environmentVariable: 'STRATIS_COOKIE_SESSION_OPTIONS',
       default: this.cookie_session_options,
-      description:
-        'The session options (https://www.npmjs.com/package/cookie-session) as json.',
+      description: 'The cookie session options as json',
       parse: (val) => {
         return Object.assign(
           {},
@@ -585,8 +570,19 @@ class StratisCli {
    * @param {CookieSessionOptions} options
    */
   _create_cookie_session_provider(options = null) {
-    if (options == null) options = this.cookie_session_options
-    return cookie_session(options)
+    options = Object.assign(
+      { name: 'stratis:session' },
+      this.cookie_session_options,
+      options
+    )
+    const storage_provider = new StratisSessionCookieStorageProvider(options)
+    const session_provider = new StratisSessionProvider({
+      storage_provider,
+      encryption_key: this.session_key,
+      logger: this.logger,
+    })
+
+    return (req, res, next) => session_provider.middleware(req, res, next)
   }
 
   _enable_cookies_parser() {

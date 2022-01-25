@@ -90,6 +90,10 @@ class StratisPageCallContext {
     return this.stratis_request.stratis
   }
 
+  get logger() {
+    return this.stratis.logger
+  }
+
   /** @type {Object<string,any>} */
   get cookies() {
     return this.req.cookies

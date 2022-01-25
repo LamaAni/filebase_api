@@ -20,6 +20,11 @@ function assert_non_empty_string(value, ...data) {
   return assert(is_non_empty_string(value), ...data)
 }
 
+function assert_non_empty_string_or_null(value, ...data) {
+  if (value == null) return true
+  return assert(is_non_empty_string(value), ...data)
+}
+
 function is_non_empty_string(value) {
   return typeof value == 'string' && value.trim().length > 0
 }
@@ -233,6 +238,7 @@ module.exports = {
   assert,
   sleep,
   assert_non_empty_string,
+  assert_non_empty_string_or_null,
   is_non_empty_string,
   is_valid_url,
   path_exists,
