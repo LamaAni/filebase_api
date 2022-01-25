@@ -35,6 +35,7 @@ const { assert, get_express_request_url } = require('./common')
  * @property {boolean} httpOnly boolean indicating whether the cookie is only to be sent over HTTP(S), and not made available to client JavaScript (true by default).
  * @property {boolean} signed boolean indicating whether the cookie is to be signed (true by default).
  * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
+ * @property {'strict'|'lax'} sameSite If true indicates this cookie should not be shared. Empty is lax.
  */
 
 /** @type {CookieSessionOptions} */
@@ -134,19 +135,28 @@ class StratisCli {
       },
     }
 
+    /**
+     * @type {(req:Request,res:Response,next:NextFunction)=>any} The cookie session provider override.
+     * Defaults to cookie-session.
+     */
+    this.session_provider = null
+
     /** @type {CookieSessionOptions} The session options (https://www.npmjs.com/package/cookie-session) as json. */
-    this.session_options = DEFAULT_COOKIE_SESSION_OPTIONS
+    this.cookie_session_options = Object.assign(
+      {},
+      DEFAULT_COOKIE_SESSION_OPTIONS
+    )
     /** @type {CliArgument} */
-    this.__$session_options = {
+    this.__$cookie_session_options = {
       type: 'named',
       environmentVariable: 'STRATIS_SESSION_OPTIONS',
-      default: this.session_options,
+      default: this.cookie_session_options,
       description:
         'The session options (https://www.npmjs.com/package/cookie-session) as json.',
       parse: (val) => {
         return Object.assign(
           {},
-          DEFAULT_COOKIE_SESSION_OPTIONS,
+          this.cookie_session_options || DEFAULT_COOKIE_SESSION_OPTIONS,
           val == null ? {} : JSON.parse(val)
         )
       },
@@ -571,6 +581,14 @@ class StratisCli {
     this.logger.info('Enabled http/https redirection')
   }
 
+  /**
+   * @param {CookieSessionOptions} options
+   */
+  _create_cookie_session_provider(options = null) {
+    if (options == null) options = this.cookie_session_options
+    return cookie_session(options)
+  }
+
   _enable_cookies_parser() {
     this.app.use(
       cookie_parser(this.cookies_key, {
@@ -586,23 +604,11 @@ class StratisCli {
       'Cannot enable cookie sessions without enabling cookies'
     )
 
-    /** @type {CookieSessionOptions} */
-    let run_session_options = {
-      secure: this.enable_https,
-      signed: this.session_key != null,
-      keys: this.session_key == null ? null : [this.session_key],
-    }
-
-    run_session_options = Object.assign(
-      {},
-      this.session_options,
-      run_session_options
-    )
-
-    const session_generator = cookie_session(run_session_options)
+    this.session_provider =
+      this.session_provider || this._create_cookie_session_provider()
 
     this.app.use(async (req, res, next) => {
-      return session_generator(req, res, next)
+      return this.session_provider(req, res, next)
     })
 
     if (this.session_key == null) {
@@ -664,6 +670,17 @@ class StratisCli {
     this._initialized = true
     this.api.logging_options.return_stack_trace_to_client = this.show_app_errors
 
+    // composing the default middleware options.
+    this.api.middleware_options = Object.assign(
+      {},
+      this.api.middleware_options || {},
+      {
+        serve_path: this.serve_path,
+        next_on_private: false,
+        next_on_not_found: true,
+      }
+    )
+
     if (typeof this.default_redirect != 'string') {
       const redirect_basepath = fs.existsSync(
         path.join(this.serve_path, 'public')
@@ -679,13 +696,6 @@ class StratisCli {
           break
         }
       }
-    }
-
-    // composing the default middleware options.
-    this.api.middleware_options = {
-      serve_path: this.serve_path,
-      next_on_private: false,
-      next_on_not_found: true,
     }
 
     let stat = null
@@ -728,6 +738,21 @@ class StratisCli {
     // will only print in debug mode.
     this.logger.debug('Debug mode ACTIVE'.yellow)
 
+    // updating configuration.
+
+    /** @type {CookieSessionOptions} */
+    let run_cookie_session_options = {
+      secure: this.enable_https,
+      signed: this.session_key != null,
+      keys: this.session_key == null ? null : [this.session_key],
+    }
+
+    this.cookie_session_options = Object.assign(
+      this.cookie_session_options || {},
+      run_cookie_session_options
+    )
+
+    // calling startup script
     await this.invoke_initialization_scripts(this.logger || console)
 
     // check call the server command (i.e. was initialized)
