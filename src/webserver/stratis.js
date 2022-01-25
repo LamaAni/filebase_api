@@ -94,7 +94,7 @@ const {
 
 /**
  * @typedef {Object} StratisLoggingOptions
- * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{}, debug(...args)=>{}}} logger The logger to use,
+ * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{},debug(...args)=>{},trace(...args)=>{}}} logger The logger to use,
  * must have logging methods (info, warn, error ...)
  * @property {boolean} log_errors If true, prints the application errors to the logger.
  * @property {boolean} next_on_error If true, errors on express request are sent to the next handler.
