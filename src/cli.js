@@ -748,7 +748,7 @@ class StratisCli {
     }
 
     this.cookie_session_options = Object.assign(
-      this.cookie_session_options,
+      this.cookie_session_options || {},
       run_cookie_session_options
     )
 
