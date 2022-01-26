@@ -5,27 +5,27 @@ name: Build and Run
 on:
   pull_request:
     branches:
-      - "*"
+      - '*'
   release:
     types:
       - prereleased
       - released
 jobs:
   publish-to-github-as-npm:
-    name: "(RE) Publish to github as npm package"
+    name: '(RE) Publish to github as npm package'
     runs-on: ubuntu-latest
     steps:
-      - name: "setup nodejs"
+      - name: 'setup nodejs'
         uses: actions/setup-node@v2
         with:
-          node-version: "16.x"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@lamaani"
+          node-version: '16.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@lamaani'
 
-      - name: "checkout the code"
+      - name: 'checkout the code'
         uses: actions/checkout@v2
 
-      - name: "Read commit args"
+      - name: 'Read commit args'
         id: args
         uses: LamaAni/parse-commit-args-action@master
         env:
@@ -38,11 +38,11 @@ jobs:
           fi
           npm version --no-git-tag-version "$VERSION"
         env:
-          DEBUG_VERSION: "0.0.0"
+          DEBUG_VERSION: '0.0.0'
           USE_DEBUG_VERSION: "${{steps.args.outputs.is_release!='true' && steps.args.outputs.is_prerelease!='true'}}"
-          VERSION: "${{ steps.args.outputs.version }}"
+          VERSION: '${{ steps.args.outputs.version }}'
 
-      - name: "Publish version to github"
+      - name: 'Publish version to github'
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
           echo "Publishing version ${{steps.args.outputs.version}}" &&
@@ -58,21 +58,21 @@ jobs:
 
   create_node_binaries:
     runs-on: ubuntu-latest
-    name: "Create nodejs binaries"
+    name: 'Create nodejs binaries'
     needs:
       - publish-to-github-as-npm
     steps:
-      - name: "setup nodejs"
+      - name: 'setup nodejs'
         uses: actions/setup-node@v2
         with:
-          node-version: "16.x"
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@lamaani"
+          node-version: '16.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@lamaani'
 
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: "Read commit args"
+      - name: 'Read commit args'
         id: args
         uses: LamaAni/parse-commit-args-action@master
         env:
@@ -85,35 +85,37 @@ jobs:
           fi
           npm version --no-git-tag-version "$VERSION"
         env:
-          DEBUG_VERSION: "0.0.0"
+          DEBUG_VERSION: '0.0.0'
           USE_DEBUG_VERSION: "${{steps.args.outputs.is_release!='true' && steps.args.outputs.is_prerelease!='true'}}"
-          VERSION: "${{ steps.args.outputs.version }}"
+          VERSION: '${{ steps.args.outputs.version }}'
 
       - name: Install required packages
         run: |
-          npm install pkg
-          npm install
+          npm install pkg || exit $?
+          npm install || exit $?
 
       - name: Compile & validate binaries
         run: |
           node_modules/.bin/pkg . || exit $?
           ./.local/bin/stratis-linux --version || exit $?
+        env:
+          PKG_CACHE_PATH: .local/pkg_cache
 
-      - name: "Release: upload binary files"
+      - name: 'Release: upload binary files'
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         uses: AButler/upload-release-assets@v2.0
         with:
-          files: ".local/bin/*"
-          release-tag: "${{steps.args.outputs.version}}"
+          files: '.local/bin/*'
+          release-tag: '${{steps.args.outputs.version}}'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   create_node_js_docker:
     runs-on: ubuntu-latest
-    name: "Create nodejs docker"
+    name: 'Create nodejs docker'
     needs:
       - publish-to-github-as-npm
     steps:
-      - name: "Read commit args"
+      - name: 'Read commit args'
         id: args
         uses: LamaAni/parse-commit-args-action@master
         env:
@@ -128,11 +130,11 @@ jobs:
           fi
           npm version --no-git-tag-version "$VERSION"
         env:
-          DEBUG_VERSION: "0.0.0"
+          DEBUG_VERSION: '0.0.0'
           USE_DEBUG_VERSION: "${{steps.args.outputs.is_release!='true' && steps.args.outputs.is_prerelease!='true'}}"
-          VERSION: "${{ steps.args.outputs.version }}"
+          VERSION: '${{ steps.args.outputs.version }}'
 
-      - name: "build & push"
+      - name: 'build & push'
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
         run: |
           docker/build
@@ -140,4 +142,4 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
           DOCKER_USERNAME: lamaani
           DOCKER_REPOSITORY: lamaani/stratis
-          IMAGE_TAGS: "${{ steps.args.outputs.versions }} latest"
+          IMAGE_TAGS: '${{ steps.args.outputs.versions }} latest'
