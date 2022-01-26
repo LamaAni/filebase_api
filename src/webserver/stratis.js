@@ -15,7 +15,7 @@ const {
   StratisError,
   StratisTimeOutError,
   StratisNotAuthorizedError,
-} = require('./errors')
+} = require('../errors')
 const { StratisRequest } = require('./requests.js')
 const { StratisCodeModuleBank } = require('./code.js')
 const { StratisEJSTemplateBank } = require('./templates')

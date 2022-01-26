@@ -1,6 +1,6 @@
 /**
- * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
- * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
+ * @typedef {import('./webserver/interfaces').StratisExpressRequest} StratisExpressRequest
+ * @typedef {import('./webserver/interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('express').NextFunction} NextFunction
  **/
 
@@ -87,11 +87,14 @@ class StratisParseError extends StratisNoEmitError {
   }
 }
 
+class StratisNotImplementedError extends StratisError {}
+
 module.exports = {
   StratisError,
   StratisNoEmitError,
   StratisNotFoundError,
   StratisTimeOutError,
+  StratisNotImplementedError,
   StratisNotAuthorizedError,
   StratisNotAuthorizedReloadError,
   StratisParseError,

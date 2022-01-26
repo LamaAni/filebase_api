@@ -1,7 +1,7 @@
 const ejs = require('ejs')
 const { assert, path_stat, deep_merge_objects } = require('../common')
-const { CacheDictionary } = require('./collections')
-const { StratisNotFoundError } = require('./errors')
+const { CacheDictionary } = require('../utils/collections')
+const { StratisNotFoundError } = require('../errors')
 const fs = require('fs')
 const path = require('path')
 
@@ -10,7 +10,7 @@ require('./templates.strings.js')
 
 /**
  * @typedef {import('./stratis').Stratis} Stratis
- * @typedef {import('./collections').CacheDictionaryOptions} CacheDictionaryOptions
+ * @typedef {import('../utils/collections').CacheDictionaryOptions} CacheDictionaryOptions
  */
 
 /**

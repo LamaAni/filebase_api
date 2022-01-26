@@ -1,4 +1,3 @@
-const on_headers = require('on-headers')
 const {
   encrypt_string,
   decrypt_string,
@@ -6,8 +5,10 @@ const {
   to_base64,
   from_base64,
   assert_non_empty_string_or_null,
+  milliseconds_utc_since_epoc,
 } = require('../../common')
 const { StratisSessionStorageProvider } = require('./storage')
+const Cookies = require('cookies')
 
 /**
  * @typedef {import('express').Request} Request
@@ -23,6 +24,126 @@ const { StratisSessionStorageProvider } = require('./storage')
  * @property {string} encryption_key The encryption key to use for the session state. If null no encryption.
  * @property {StratisLogger} logger The associated logger. Defaults to console.
  */
+
+class StratisSessionProviderContext {
+  /**
+   * @param {Request} req The express request
+   * @param {Response} res The express response
+   * @param {StratisSessionProvider} provider
+   * @param {{}} data The session data.
+   */
+  constructor(req, res, provider, data = null) {
+    this.req = req
+    this.res = res
+    this.data = data
+    this.provider = provider
+    this._source_session_json_value = null
+    this._session_json_value = null
+    this.accessed = false
+  }
+
+  has_changed() {
+    if (!this.accessed) return false
+    this.update_session_value()
+    return this._session_json_value != this._source_session_json_value
+  }
+
+  update_session_value() {
+    if (!this.accessed) return
+    this._session_json_value = JSON.stringify(this.data)
+  }
+
+  get_session_value() {
+    return this.provider.encode(this._session_json_value)
+  }
+
+  /**
+   * @param {string} name
+   * @param {string} value
+   * @param {Cookies.SetOption} options
+   */
+  write_cookie(name, value, options) {
+    assert(
+      value == null || typeof value == 'string',
+      'Value must be a string or null'
+    )
+    return new Cookies(this.req, this.res).set(name, value, options)
+  }
+
+  /**
+   * @param {string} name
+   * @param {Cookies.GetOption} options
+   * @returns {string} the value or null
+
+   */
+  read_cookie(name, options) {
+    return new Cookies(this.req, this.res).get(name, options)
+  }
+
+  /**
+   * @param {Request} req
+   * @param {Response} res
+   */
+  async initialize() {
+    if (this.req.session != null)
+      this.provider.logger.warn(
+        'Another session proprietor has already set the session value for the request. req.session was overwritten'
+      )
+
+    // sadly we cannot dynamically load the session value since
+    // the proxy callback may not be valid. Therefore the session state must be loaded every time.
+    // To allow for fast response, we may load the session value(s)
+    // inside the loader from cache.
+
+    this.req.stratis_session_provider_context = this
+    this._source_session_json_value = this.provider.decode(
+      await this.provider.storage_provider.load(this)
+    )
+
+    let parsed_data_object = {}
+    try {
+      parsed_data_object = JSON.parse(this._source_session_json_value)
+    } catch (err) {}
+
+    this.data = Object.assign({}, this.data || {}, parsed_data_object)
+
+    this.req.session = new Proxy(this.data, {
+      get: (obj, prop) => {
+        this.accessed = true
+        return obj[prop]
+      },
+      set: (obj, prop, value) => {
+        this.accessed = true
+        obj[prop] = value
+        return true
+      },
+    })
+
+    return this
+  }
+
+  /**
+   * Write the response headers (if any)
+   */
+  write_headers() {
+    this.provider.storage_provider.write_headers(this)
+  }
+
+  /**
+   * Commit the session changes (if any)
+   */
+  async commit() {
+    await this.provider.storage_provider.commit(this)
+  }
+
+  /**
+   * @param {Request} req
+   * @returns {StratisSessionProviderContext}
+   */
+  static from_request(req) {
+    return req.stratis_session_provider_context
+  }
+}
 
 class StratisSessionProvider {
   /**
@@ -81,12 +202,14 @@ class StratisSessionProvider {
   }
 
   encode(value) {
+    if (value == null) return null
     if (this.encryption_key != null)
       return encrypt_string(value, this.encryption_key)
     else return to_base64(value)
   }
 
   decode(value, throw_errors = false) {
+    if (value == null) return {}
     try {
       if (this.encryption_key != null)
         return decrypt_string(value, this.encryption_key)
@@ -106,55 +229,41 @@ class StratisSessionProvider {
    */
   async middleware(req, res, next) {
     try {
-      const request_session_value = this.decode(
-        await this.storage_provider.load(req, res)
-      )
+      // creating the context.
+      const context = await new StratisSessionProviderContext(
+        req,
+        res,
+        this
+      ).initialize()
 
-      const session_data = this.parse_session_data(request_session_value)
-      let accessed = false
-
-      req.session = new Proxy(session_data, {
-        get: (obj, prop) => {
-          accessed = true
-          return obj[prop]
-        },
-        set: (obj, prop, value) => {
-          accessed = true
-          obj[prop] = value
-          return true
-        },
-      })
-
-      const write_session_data = () => {
-        if (session_data.do_not_update === true) return
-        // if (!accessed) return
-        const response_session_value = this.stringify_session_data(session_data)
-        if (response_session_value == request_session_value) {
-          return
-        }
-
-        try {
-          const encoded_value = this.encode(response_session_value)
-          this.storage_provider.save(req, res, encoded_value)
-          this.logger.debug(
-            `Session state data updated (${
-              encoded_value.length
-            } bytes) starting with ${encoded_value.substring(0, 5)}`.blue
-          )
-        } catch (err) {
-          this.logger.error(
-            `Error while saving session state. ${err.stack || err}`
-          )
-          throw err
-        }
+      let _has_changed = null
+      const has_changed = () => {
+        if (_has_changed == null) _has_changed = context.has_changed()
+        return _has_changed
       }
 
-      // on_headers(res, write_session_data)
+      let session_has_error = false
 
       const original_write_head = res.writeHead
       res.writeHead = (...args) => {
-        write_session_data()
+        try {
+          if (!session_has_error && has_changed()) context.write_headers()
+        } catch (err) {
+          session_has_error = true
+          return next(err)
+        }
         return original_write_head.apply(res, args)
+      }
+
+      const original_res_end = res.end
+      res.end = async (...args) => {
+        try {
+          if (!session_has_error && has_changed()) await context.commit()
+        } catch (err) {
+          session_has_error = true
+          return next(err)
+        }
+        return original_res_end.apply(res, args)
       }
     } catch (err) {
       next(err)
@@ -165,4 +274,5 @@ class StratisSessionProvider {
 
 module.exports = {
   StratisSessionProvider,
+  StratisSessionProviderContext,
 }

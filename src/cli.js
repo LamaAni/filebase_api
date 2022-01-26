@@ -5,28 +5,30 @@ const http = require('http')
 const https = require('https')
 const express = require('express')
 const cookie_parser = require('cookie-parser')
-const cookie_session = require('cookie-session')
 
 const { Request, Response, NextFunction } = require('express/index')
 const { Cli, CliArgument } = require('@lamaani/infer')
 
 const {
   StratisSessionProvider,
-  StratisSessionCookieStorageProvider,
+  StratisSessionStorageProvider,
+  from_storage_type_name,
+  StratisSessionStorageProvidersByType,
 } = require('./utils/session')
 const { StratisOAuth2Provider } = require('./utils/oauth2')
 const { Stratis } = require('./webserver/stratis.js')
 const { assert, get_express_request_url } = require('./common')
 
 /**
- * @typedef {import('./utils/session').StratisSessionCookieStorageProviderOptions} StratisSessionCookieStorageProviderOptions
  * @typedef {import('./utils/session').StratisSessionProviderOptions} StratisSessionProviderOptions
+ * @typedef {import('./utils/session').StratisSessionStorageProviderOptions} StratisSessionStorageProviderOptions
+ * @typedef {import('./utils/session').StratisSessionStorageProviderName} StratisSessionStorageProviderName
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
  * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
  */
 
-/** @type {StratisSessionCookieStorageProviderOptions} */
-const DEFAULT_COOKIE_SESSION_OPTIONS = {
+/** @type {StratisSessionStorageProviderOptions} */
+const DEFAULT_SESSION_STORAGE_PROVIDER_OPTIONS = {
   name: 'stratis:session',
   maxAge: 1000 * 60 * 60 * 12,
   overwrite: true,
@@ -128,23 +130,48 @@ class StratisCli {
      */
     this.session_provider = null
 
-    /** @type {StratisSessionCookieStorageProviderOptions} The cookie session options as json*/
-    this.cookie_session_options = Object.assign(
+    /**
+     * The session provider options. Defaults core options, but may vary depending on
+     * the provider type. See storage providers in [repo]/utils/session/storage
+     * @type {StratisSessionStorageProviderOptions}*/
+    this.session_storage_options = Object.assign(
       {},
-      DEFAULT_COOKIE_SESSION_OPTIONS
+      DEFAULT_SESSION_STORAGE_PROVIDER_OPTIONS
     )
+
     /** @type {CliArgument} */
-    this.__$cookie_session_options = {
+    this.__$session_storage_options = {
       type: 'named',
-      environmentVariable: 'STRATIS_COOKIE_SESSION_OPTIONS',
-      default: this.cookie_session_options,
-      description: 'The cookie session options as json',
+      environmentVariable: 'STRATIS_SESSION_STORAGE_OPTIONS',
+      default: this.session_storage_options,
+      description:
+        'The session provider options. Defaults to core options, ' +
+        'but may vary depending on the provider type. ' +
+        'See storage providers in [repo]/utils/session/storage',
       parse: (val) => {
         return Object.assign(
           {},
-          this.cookie_session_options || DEFAULT_COOKIE_SESSION_OPTIONS,
+          this.session_storage_options ||
+            DEFAULT_SESSION_STORAGE_PROVIDER_OPTIONS,
           val == null ? {} : JSON.parse(val)
         )
+      },
+    }
+
+    /** The session storage type to use. */
+    /** @type {StratisSessionStorageProviderName} */
+    this.session_provider_type = 'cookie'
+
+    /** @type {CliArgument} */
+    this.__$session_storage_type = {
+      type: 'named',
+      environmentVariable: 'STRATIS_SESSION_STORAGE_TYPE',
+      default: this.session_provider_type,
+      description:
+        'The session storage type to use. May be one of ' +
+        Object.keys(StratisSessionStorageProvidersByType),
+      parse: (val) => {
+        if (val instanceof StratisSessionStorageProvider) return val
       },
     }
 
@@ -568,7 +595,7 @@ class StratisCli {
   }
 
   /**
-   * @param {StratisSessionCookieStorageProviderOptions & StratisSessionProviderOptions} options
+   * @param {StratisSessionStorageProviderOptions & StratisSessionProviderOptions} options
    */
   _create_session_provider(options = null) {
     options = Object.assign(
@@ -577,13 +604,13 @@ class StratisCli {
         encryption_key: this.session_key,
         logger: this.logger,
       },
-      this.cookie_session_options || {},
+      this.session_storage_options || {},
       options || {}
     )
 
     options.storage_provider =
       options.storage_provider ||
-      new StratisSessionCookieStorageProvider(options)
+      new (from_storage_type_name(this.session_provider_type))(options)
 
     const session_provider = new StratisSessionProvider(options)
 
@@ -742,15 +769,15 @@ class StratisCli {
     // updating configuration.
 
     /** @type {CookieSessionOptions} */
-    let run_cookie_session_options = {
+    let run_session_storage_options = {
       secure: this.enable_https,
       signed: this.session_key != null,
       keys: this.session_key == null ? null : [this.session_key],
     }
 
-    this.cookie_session_options = Object.assign(
-      this.cookie_session_options || {},
-      run_cookie_session_options
+    this.session_storage_options = Object.assign(
+      this.session_storage_options || {},
+      run_session_storage_options
     )
 
     // calling startup script

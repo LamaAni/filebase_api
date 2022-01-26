@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@lamaani/infer": "github:lamaani/infer#0.1.8",
+    "cookie-parser": "^1.4.6",
     "cookies": "^0.8.0",
     "ejs": "3.1.6",
     "etcd3": "^1.1.0",

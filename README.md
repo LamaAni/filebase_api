@@ -5,12 +5,13 @@
 A file based web template engine for fast APIs and websites. This repo favors very low memory and cpu that is tailored for docker containers and kubernetes pods. Stratis can run parallel/sidecar with your application.
 
 1. Command line server startup.
-1. Built-in REST API.
-1. Build-in WebSocket API.
-1. Live update (triggered by file changes).
 1. Templating.
+1. Built-in REST API.
+1. Built-in WebSocket API.
+1. Built-in Sessions (etcd/cookie).
+1. Built-in OAuth2 and user permissions (Including websocket)
+1. Live update (triggered by file changes).
 1. Client side (browser) javascript api.
-1. Built in OAuth2 and user permissions (Including websocket)
 1. Binary distributions.
 
 Implemented in,

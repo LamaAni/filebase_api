@@ -3,11 +3,11 @@ const path = require('path')
 const {
   StratisNotFoundError,
   StratisNotAuthorizedError,
-} = require('./errors.js')
+} = require('../errors.js')
 const { assert } = require('../common')
 const { stream_to_buffer } = require('../utils/streams.js')
 const { Request, Response } = require('express')
-const { StratisParseError } = require('./errors')
+const { StratisParseError } = require('../errors')
 const WebSocket = require('ws')
 
 /**

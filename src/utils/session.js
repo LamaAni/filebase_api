@@ -1,6 +1,7 @@
 /**
  * @typedef {import('./session/provider').StratisSessionProviderOptions} StratisSessionProviderOptions
- * @typedef {import('./session/storage').StratisSessionCookieStorageProviderOptions} StratisSessionCookieStorageProviderOptions
+ * @typedef {import('./session/storage').StratisSessionStorageProviderOptions} StratisSessionStorageProviderOptions
+ * @typedef {import('./session/storage').StratisSessionStorageProviderName} StratisSessionStorageProviderName
  */
 
 module.exports = {
