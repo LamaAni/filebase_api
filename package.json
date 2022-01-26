@@ -49,7 +49,6 @@
     "etcd3": "^1.1.0",
     "express": "4.17.1",
     "proxy-agent": "5.0.0",
-    "silly": "^0.2.0",
     "ws": "8.4.0"
   },
   "author": "Zav Shotan",
