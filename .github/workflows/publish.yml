@@ -100,7 +100,7 @@ jobs:
         env:
           PKG_CACHE_PATH: .local/pkg_cache
 
-      - mame: 'Test executable (print version)'
+      - name: 'Test executable (print version)'
         run: |
           ./.local/bin/stratis-linux --version || exit $?
 
