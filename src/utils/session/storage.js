@@ -39,6 +39,8 @@ class StratisSessionStorageProvider {
  * @property {[string]|string} sign_with_keys A single/list of keys to sign the cookie with. Errors if changed.
  * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
  * @property {'strict'|'lax'|'none'} sameSite  If 'strict' dose not allow to send cookie over the we to other locations. defaults to 'lax'
+ * @property {number} max_count The maximal number of part cookies (also size, n*max_size). Defaults to 25.
+ * @property {number} max_size The maximal size for one cookie. Defaults to 4096. Total session size = max_size*max_count
  */
 
 class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider {
@@ -56,6 +58,8 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
     httpOnly = false,
     overwrite = true,
     sign_with_keys = null,
+    max_count = 25,
+    max_size = 4096,
   }) {
     super()
 
@@ -86,9 +90,47 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
       overwrite,
     })
 
+    assert(
+      max_size > name.length + 5,
+      'max size must be larger then name.length + 5'
+    )
+
     this.sign_with_keys = sign_with_keys
     this.extra_config = extra_config
     this.name = name
+    this.max_count = max_count
+    this.max_size = max_size
+  }
+
+  __compose_cookie_name_by_index(idx) {
+    return idx == 0 ? this.name : `${this.name}:${idx}`
+  }
+
+  /**
+   * @param {string} value
+   */
+  __split_to_cookie_size(value) {
+    // size max 4096 - name length - 3 chars for index - 1 char for equal - 1 char for colunm
+    const max_char_count = this.max_size - this.name.length - 5
+    return value.match(new RegExp(`.{1,${max_char_count}}`, 'g'))
+  }
+
+  /**
+   * @param {Cookies} cookies
+   */
+  __get_exsiting_value_parts(cookies) {
+    let values = []
+    let idx = 0
+    while (true) {
+      const val = cookies.get(this.__compose_cookie_name_by_index(idx), {
+        signed: this.sign_with_keys.length > 0,
+        keys: this.sign_with_keys.length > 0 ? this.sign_with_keys : null,
+      })
+      if (val == null) break
+      values.push(val)
+      idx += 1
+    }
+    return values
   }
 
   /**
@@ -110,7 +152,17 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
     })
 
     const cookies = new Cookies(req, res)
-    cookies.set(this.name, value, options)
+    const value_parts = this.__split_to_cookie_size(value)
+    const existing_value_parts = this.__get_exsiting_value_parts(cookies)
+    const max_count =
+      value_parts.length > existing_value_parts.length
+        ? value_parts.length
+        : existing_value_parts.length
+
+    for (let i = 0; i < max_count; i++) {
+      const value = value_parts.length > i ? value_parts[i] : null
+      cookies.set(this.__compose_cookie_name_by_index(i), value, options)
+    }
   }
 
   /**
@@ -118,11 +170,7 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
    * @param {Response} res
    */
   load(req, res) {
-    const cookies = new Cookies(req, res)
-    return cookies.get(this.name, {
-      signed: this.sign_with_keys.length > 0,
-      keys: this.sign_with_keys.length > 0 ? this.sign_with_keys : null,
-    })
+    return this.__get_exsiting_value_parts(new Cookies(req, res)).join('')
   }
 }
 
