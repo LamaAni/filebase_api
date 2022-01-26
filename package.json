@@ -29,7 +29,7 @@
   "pkg": {
     "assets": [
       "version",
-      "node_modules/vm2/**/*",
+      "node_modules/**/*",
       "src/**/*"
     ],
     "targets": [

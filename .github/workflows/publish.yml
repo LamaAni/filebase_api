@@ -97,9 +97,12 @@ jobs:
       - name: Compile & validate binaries
         run: |
           node_modules/.bin/pkg . || exit $?
-          ./.local/bin/stratis-linux --version || exit $?
         env:
           PKG_CACHE_PATH: .local/pkg_cache
+
+      - mame: Test executable (print version)
+        run: |
+          ./.local/bin/stratis-linux --version || exit $?
 
       - name: 'Release: upload binary files'
         if: ${{ steps.args.outputs.is_release=='true' || steps.args.outputs.is_prerelease=='true'}}
