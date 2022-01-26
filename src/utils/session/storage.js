@@ -1,5 +1,5 @@
 const Cookies = require('cookies')
-const { assert, assert_non_empty_string } = require('../../common')
+const { assert, assert_non_empty_string, filter_null } = require('../../common')
 const { StratisNotImplementedError } = require('../../webserver/errors')
 
 /**
@@ -13,7 +13,7 @@ class StratisSessionStorageProvider {
    * @param {Request} req
    * @param {Response} res
    */
-  async save(req, res) {
+  save(req, res) {
     throw new StratisNotImplementedError('abstract method')
   }
 
@@ -21,7 +21,7 @@ class StratisSessionStorageProvider {
    * @param {Request} req
    * @param {Response} res
    */
-  async load(req, res) {
+  load(req, res) {
     throw new StratisNotImplementedError('abstract method')
   }
 }
@@ -35,7 +35,6 @@ class StratisSessionStorageProvider {
  * @property {string} path string indicating the path of the cookie (/ by default).
  * @property {string} domain string indicating the domain of the cookie (no default).
  * @property {boolean} secure boolean indicating whether the cookie is only to be sent over HTTPS (false by default for HTTP, true by default for HTTPS).
- * @property {boolean} secureProxy boolean indicating whether the cookie is only to be sent over HTTPS (use this if you handle SSL not in your node process).
  * @property {boolean} httpOnly boolean indicating whether the cookie is only to be sent over HTTP(S), and not made available to client JavaScript (true by default).
  * @property {[string]|string} sign_with_keys A single/list of keys to sign the cookie with. Errors if changed.
  * @property {boolean} overwrite boolean indicating whether to overwrite previously set cookies of the same name (true by default).
@@ -51,17 +50,17 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
     extra_config = null,
     maxAge = null,
     expires = null,
-    path = null,
+    path = '/',
     domain = null,
-    secure = null,
-    secureProxy = null,
-    httpOnly = null,
+    secure = false,
+    httpOnly = false,
+    overwrite = true,
     sign_with_keys = null,
-    overwrite = null,
   }) {
     super()
 
     assert_non_empty_string(name, 'Name must be a non empty string')
+    assert_non_empty_string(path, 'path must be a non empty string')
     assert(
       extra_config == null || typeof extra_config == 'object',
       'extra_config must be a dictionary or none'
@@ -75,16 +74,17 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
       'sign_with_keys must be an array, string or null'
     )
 
-    this.cookie_options = {
+    expires = expires || maxAge == null ? null : Date.now() + maxAge
+
+    this.cookie_options = filter_null({
       maxAge,
       expires,
       path,
       domain,
       secure,
-      secureProxy,
       httpOnly,
       overwrite,
-    }
+    })
 
     this.sign_with_keys = sign_with_keys
     this.extra_config = extra_config
@@ -96,8 +96,9 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
    * @param {Response} res
    * @param {string} value
    */
-  async save(req, res, value) {
+  save(req, res, value) {
     if (typeof value == 'object') value = JSON.stringify(value)
+
     assert(
       value == null || typeof value == 'string',
       'value must be an object, a string or null'
@@ -108,15 +109,17 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
       keys: this.sign_with_keys.length > 0 ? this.sign_with_keys : null,
     })
 
-    new Cookies(req, res).set(this.name, value, options)
+    const cookies = new Cookies(req, res)
+    cookies.set(this.name, value, options)
   }
 
   /**
    * @param {Request} req
    * @param {Response} res
    */
-  async load(req, res) {
-    return new Cookies(req, res).get(this.name, {
+  load(req, res) {
+    const cookies = new Cookies(req, res)
+    return cookies.get(this.name, {
       signed: this.sign_with_keys.length > 0,
       keys: this.sign_with_keys.length > 0 ? this.sign_with_keys : null,
     })

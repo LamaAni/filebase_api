@@ -3,7 +3,8 @@ const {
   encrypt_string,
   decrypt_string,
   assert,
-  assert_non_empty_string,
+  to_base64,
+  from_base64,
   assert_non_empty_string_or_null,
 } = require('../../common')
 const { StratisSessionStorageProvider } = require('./storage')
@@ -60,9 +61,6 @@ class StratisSessionProvider {
 
     let data = {}
     try {
-      if (this.encryption_key != null)
-        as_json = decrypt_string(as_json, this.encryption_key)
-
       data = JSON.parse(as_json)
     } catch (err) {}
 
@@ -79,9 +77,25 @@ class StratisSessionProvider {
     assert(typeof data == 'object', 'data myst be of type object')
 
     let as_json = JSON.stringify(data)
-    if (this.encryption_key != null)
-      as_json = encrypt_string(as_json, this.encryption_key)
     return as_json
+  }
+
+  encode(value) {
+    if (this.encryption_key != null)
+      return encrypt_string(value, this.encryption_key)
+    else return to_base64(value)
+  }
+
+  decode(value, throw_errors = false) {
+    try {
+      if (this.encryption_key != null)
+        return decrypt_string(value, this.encryption_key)
+      else return from_base64(value)
+    } catch (err) {
+      this.logger.debug(`Error decoding session state: ${err.state || err}`)
+      if (throw_errors) throw err
+      return null
+    }
   }
 
   /**
@@ -92,30 +106,40 @@ class StratisSessionProvider {
    */
   async middleware(req, res, next) {
     try {
-      const session_data = this.parse_session_data(
+      const request_session_value = this.decode(
         await this.storage_provider.load(req, res)
       )
 
-      let changed = false
+      const session_data = this.parse_session_data(request_session_value)
+      let accessed = false
 
-      const session_data_proxy = new Proxy(session_data, {
+      req.session = new Proxy(session_data, {
         get: (obj, prop) => {
+          accessed = true
           return obj[prop]
         },
         set: (obj, prop, value) => {
-          changed = true
+          accessed = true
           obj[prop] = value
+          return true
         },
       })
 
-      // bind proxy data write.
-      on_headers(res, () => {
-        if (!changed) return
+      const write_session_data = () => {
+        if (session_data.do_not_update === true) return
+        // if (!accessed) return
+        const response_session_value = this.stringify_session_data(session_data)
+        if (response_session_value == request_session_value) {
+          return
+        }
+
         try {
-          this.storage_provider.save(
-            req,
-            res,
-            this.stringify_session_data(session_data)
+          const encoded_value = this.encode(response_session_value)
+          this.storage_provider.save(req, res, encoded_value)
+          this.logger.debug(
+            `Session state data updated (${
+              encoded_value.length
+            } bytes) starting with ${encoded_value.substring(0, 5)}`.blue
           )
         } catch (err) {
           this.logger.error(
@@ -123,9 +147,15 @@ class StratisSessionProvider {
           )
           throw err
         }
-      })
+      }
 
-      req.session = session_data_proxy
+      // on_headers(res, write_session_data)
+
+      const original_write_head = res.writeHead
+      res.writeHead = (...args) => {
+        write_session_data()
+        return original_write_head.apply(res, args)
+      }
     } catch (err) {
       next(err)
     }

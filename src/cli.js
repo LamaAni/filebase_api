@@ -20,6 +20,7 @@ const { assert, get_express_request_url } = require('./common')
 
 /**
  * @typedef {import('./utils/session').StratisSessionCookieStorageProviderOptions} StratisSessionCookieStorageProviderOptions
+ * @typedef {import('./utils/session').StratisSessionProviderOptions} StratisSessionProviderOptions
  * @typedef {import('./index').StratisMiddlewareOptions} StratisMiddlewareOptions
  * @typedef {import('./utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
  */
@@ -567,20 +568,24 @@ class StratisCli {
   }
 
   /**
-   * @param {CookieSessionOptions} options
+   * @param {StratisSessionCookieStorageProviderOptions & StratisSessionProviderOptions} options
    */
-  _create_cookie_session_provider(options = null) {
+  _create_session_provider(options = null) {
     options = Object.assign(
-      { name: 'stratis:session' },
-      this.cookie_session_options,
-      options
+      {
+        name: 'stratis:session',
+        encryption_key: this.session_key,
+        logger: this.logger,
+      },
+      this.cookie_session_options || {},
+      options || {}
     )
-    const storage_provider = new StratisSessionCookieStorageProvider(options)
-    const session_provider = new StratisSessionProvider({
-      storage_provider,
-      encryption_key: this.session_key,
-      logger: this.logger,
-    })
+
+    options.storage_provider =
+      options.storage_provider ||
+      new StratisSessionCookieStorageProvider(options)
+
+    const session_provider = new StratisSessionProvider(options)
 
     return (req, res, next) => session_provider.middleware(req, res, next)
   }
@@ -601,7 +606,7 @@ class StratisCli {
     )
 
     this.session_provider =
-      this.session_provider || this._create_cookie_session_provider()
+      this.session_provider || this._create_session_provider()
 
     this.app.use(async (req, res, next) => {
       return this.session_provider(req, res, next)
