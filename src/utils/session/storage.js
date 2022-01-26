@@ -1,5 +1,6 @@
 const Cookies = require('cookies')
 const { assert, assert_non_empty_string, filter_null } = require('../../common')
+const { StratisError } = require('../../webserver/errors')
 const { StratisNotImplementedError } = require('../../webserver/errors')
 
 /**
@@ -153,6 +154,14 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
 
     const cookies = new Cookies(req, res)
     const value_parts = this.__split_to_cookie_size(value)
+
+    if (value_parts.length > this.max_count)
+      throw new StratisError(
+        `Session state size over max size of (including cookie name) ${
+          this.max_size * this.max_count
+        }`
+      )
+
     const existing_value_parts = this.__get_exsiting_value_parts(cookies)
     const max_count =
       value_parts.length > existing_value_parts.length
@@ -173,6 +182,8 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
     return this.__get_exsiting_value_parts(new Cookies(req, res)).join('')
   }
 }
+
+class StratisNodeEtdcStorageProvider {}
 
 module.exports = {
   StratisSessionStorageProvider,
