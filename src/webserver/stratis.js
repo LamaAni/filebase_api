@@ -15,7 +15,7 @@ const {
   StratisError,
   StratisTimeOutError,
   StratisNotAuthorizedError,
-} = require('./errors')
+} = require('../errors')
 const { StratisRequest } = require('./requests.js')
 const { StratisCodeModuleBank } = require('./code.js')
 const { StratisEJSTemplateBank } = require('./templates')
@@ -41,6 +41,7 @@ const {
  * @typedef {import('./interfaces').StratisEventListenRegister} StratisEventListenRegister
  * @typedef {import('./interfaces').Request} Request
  * @typedef {import('./interfaces').Response} Response
+ * @typedef {import('./interfaces').StratisLogger} StratisLogger
  * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
  * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('./interfaces').StratisEventEmitter} StratisEventEmitter
@@ -94,7 +95,7 @@ const {
 
 /**
  * @typedef {Object} StratisLoggingOptions
- * @property {{info(...args)=>{},warn(...args)=>{},error(...args)=>{},debug(...args)=>{},trace(...args)=>{}}} logger The logger to use,
+ * @property {StratisLogger} logger The logger to use,
  * must have logging methods (info, warn, error ...)
  * @property {boolean} log_errors If true, prints the application errors to the logger.
  * @property {boolean} next_on_error If true, errors on express request are sent to the next handler.

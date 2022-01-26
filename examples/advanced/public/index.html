@@ -18,6 +18,7 @@
     </script>
   </head>
   <body>
+    <div><a href="/secure/index.html">Go to secure</a><br /></div>
     <div>Loaded at: <%- context.session['loaded'] || 'first load' %></div>
     <div>
       <!-- Printing at server side -->
@@ -29,4 +30,4 @@
     <%- await include('view.html') %>
   </body>
 </html>
-<% context.session['loaded']=new Date()+'' %>
+<% context.session['loaded']=(context.session['loaded'] || (new Date()+'')) %>

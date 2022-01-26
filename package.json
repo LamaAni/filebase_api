@@ -29,7 +29,7 @@
   "pkg": {
     "assets": [
       "version",
-      "node_modules/vm2/**/*",
+      "node_modules/**/*",
       "src/**/*"
     ],
     "targets": [
@@ -43,10 +43,12 @@
   },
   "dependencies": {
     "@lamaani/infer": "github:lamaani/infer#0.1.8",
-    "cookie-parser": "1.4.5",
-    "cookie-session": "1.4.0",
+    "cookie-parser": "^1.4.6",
+    "cookies": "^0.8.0",
     "ejs": "3.1.6",
+    "etcd3": "^1.1.0",
     "express": "4.17.1",
+    "pkg": "^5.5.2",
     "proxy-agent": "5.0.0",
     "ws": "8.4.0"
   },

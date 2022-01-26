@@ -62,6 +62,10 @@
  * @typedef {(request: Request, )=>{}} StratisPermissionsFilter
  */
 
+/**
+ * @typedef {{info(...args)=>{},warn(...args)=>{},error(...args)=>{},debug(...args)=>{},trace(...args)=>{}}} StratisLogger
+ */
+
 module.exports = {
   /** @type {StratisEventEmitter} */
   StratisEventEmitter: () => {},
@@ -75,4 +79,6 @@ module.exports = {
   StratisExpressRequest: {},
   /** @type {StratisExpressResponse} **/
   StratisExpressResponse: {},
+  /** @type {StratisLogger} */
+  StratisLogger: console,
 }

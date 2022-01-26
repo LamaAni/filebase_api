@@ -1,10 +1,10 @@
 const { assert, path_stat } = require('../common')
-const { CacheDictionary } = require('./collections')
+const { CacheDictionary } = require('../utils/collections')
 
 /**
  * @typedef {import('./interfaces').StratisApiHandler} StratisApiHandler
  * @typedef {import('./stratis').Stratis} Stratis
- * @typedef {import('./collections').CacheDictionaryOptions} CacheDictionaryOptions
+ * @typedef {import('../utils/collections').CacheDictionaryOptions} CacheDictionaryOptions
  */
 
 /**
@@ -88,6 +88,7 @@ class StratisCodeModule {
   get module() {
     return this._module
   }
+
   /**
    * @returns {Object<string,StratisApiHandler>}
    */

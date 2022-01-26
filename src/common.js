@@ -20,6 +20,11 @@ function assert_non_empty_string(value, ...data) {
   return assert(is_non_empty_string(value), ...data)
 }
 
+function assert_non_empty_string_or_null(value, ...data) {
+  if (value == null) return true
+  return assert(is_non_empty_string(value), ...data)
+}
+
 function is_non_empty_string(value) {
   return typeof value == 'string' && value.trim().length > 0
 }
@@ -185,6 +190,19 @@ function remove_path_folder_ender(path) {
   return path
 }
 
+/**
+ * @param {Object} obj Filter null from this object.
+ */
+function filter_null(obj) {
+  assert(typeof obj == 'object')
+  for (let e of Object.entries(obj)) {
+    if (e[1] == null) {
+      delete obj[e[0]]
+    }
+  }
+  return obj
+}
+
 class StringEncryptor {
   /**
    * @param {string|Buffer} encryptionKey
@@ -225,6 +243,14 @@ function decrypt_string(encyrpted_val, key) {
   return new StringEncryptor(key).decrypt(encyrpted_val)
 }
 
+function to_base64(val, encoding = 'utf8') {
+  return Buffer.from(val, encoding).toString('base64')
+}
+
+function from_base64(val, encoding = 'utf8') {
+  Buffer.from(val, 'base64').toString(encoding)
+}
+
 module.exports = {
   /**
    * @param {boolean} condition
@@ -233,6 +259,7 @@ module.exports = {
   assert,
   sleep,
   assert_non_empty_string,
+  assert_non_empty_string_or_null,
   is_non_empty_string,
   is_valid_url,
   path_exists,
@@ -247,5 +274,8 @@ module.exports = {
   remove_path_folder_ender,
   encrypt_string,
   decrypt_string,
+  to_base64,
+  from_base64,
+  filter_null,
   StringEncryptor,
 }

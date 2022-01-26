@@ -1,10 +1,10 @@
 const path = require('path')
-const { CacheDictionary } = require('../../webserver/collections')
+const { CacheDictionary } = require('../collections')
 const {
   StratisNotAuthorizedReloadError,
   StratisNotAuthorizedError,
   StratisNoEmitError,
-} = require('../../webserver/errors')
+} = require('../../errors')
 const {
   assert,
   assert_non_empty_string,
