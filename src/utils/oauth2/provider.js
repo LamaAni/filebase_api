@@ -12,8 +12,8 @@ const {
   milliseconds_utc_since_epoc,
   encrypt_string,
   decrypt_string,
+  concat_url_args,
 } = require('../../common')
-const { concat_url_args } = require('./common')
 const { stream_to_buffer } = require('../streams')
 
 const { StratisOAuth2RequestClient } = require('./requests')
@@ -228,7 +228,6 @@ class StratisOAuth2Provider {
 
   /**
    * @param {Request} req the express request
-   * @param {StratisOAuth2ProviderServiceType} type
    * @param {{}} query The query arguments
    */
   compose_redirect_url(req, query = null) {
@@ -241,12 +240,12 @@ class StratisOAuth2Provider {
 
   /**
    * @param {Request} req the express request
-   * @param {StratisOAuth2ProviderServiceType} type
+   * @param {StratisOAuth2ProviderServiceType} svc_type
    * @param {{}} query The query arguments
    */
-  compose_service_url(req, type = null, query = null) {
+  compose_service_url(req, svc_type = null, query = null) {
     return this.requests.compose_url(
-      [this.basepath, type].filter((v) => v != null).join('/'),
+      [this.basepath, svc_type].filter((v) => v != null).join('/'),
       query,
       `${req.protocol}://${req.get('host')}`
     )
@@ -382,7 +381,7 @@ class StratisOAuth2Provider {
     res,
     next,
     {
-      redirect_uri: auth_redirect = null,
+      redirect_uri = null,
       state = null,
       login_result = 'session',
       token_as_link = true,
@@ -408,7 +407,7 @@ class StratisOAuth2Provider {
         this.compose_state(
           {
             created_at: milliseconds_utc_since_epoc(),
-            redirect_uri: auth_redirect,
+            redirect_uri,
             login_result,
             token_as_link,
           },
@@ -452,6 +451,28 @@ class StratisOAuth2Provider {
 
     return res.redirect(redirect_uri || '/')
   }
+  /**
+   * Session authorization flow.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   * @param {Object} query The query arguments
+   */
+  async svc_authorize_session(
+    req,
+    res,
+    next,
+    { redirect_uri = null, token = null }
+  ) {
+    const oauth_session = await this.get_session(req, token, true)
+    if (!oauth_session.is_access_granted)
+      return res.redirect(
+        this.compose_service_url(req, 'login', {
+          redirect_uri,
+        })
+      )
+    return res.redirect(redirect_uri || '/')
+  }
 
   /**
    * Called to handle the authorize response.
@@ -484,7 +505,10 @@ class StratisOAuth2Provider {
         await oauth_session.authenticate(token_info, false)
         await oauth_session.update()
 
-        return res.redirect(auth_state.redirect_uri || '/')
+        const redirect_uri = auth_state.redirect_uri || '/'
+
+        this.logger.debug('OAuth session redirect to ' + redirect_uri)
+        return res.redirect(redirect_uri)
 
       case 'token':
         // need to encrypt the authentication keys for the token response
@@ -768,22 +792,15 @@ class StratisOAuth2Provider {
     try {
       authenticate = authenticate == null ? true : authenticate
 
-      const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+      const oauth_session = await this.get_session(req, null, false)
       req.stratis_oauth2_session = oauth_session
 
       // only run authentication in the case where we have a need.
       // for the case of a stratis request, if its secure.
       if (authenticate) {
         // check for token updates.
-        if (await oauth_session.update()) {
-          this.logger.debug(
-            `Authentication info updated for ${oauth_session.username}. (TID: ${
-              oauth_session.token_id
-            }, Access ${
-              oauth_session.is_access_granted ? 'GRANTED' : 'DENIED'
-            })`
-          )
-        }
+
+        await oauth_session.update()
 
         if (!oauth_session.is_access_granted) {
           // check if needs clearing.
