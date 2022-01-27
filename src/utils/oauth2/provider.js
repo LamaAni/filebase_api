@@ -319,15 +319,16 @@ class StratisOAuth2Provider {
    * (Allows for third party bearer token to be directly accessed for validation)
    * @param {Request} req The express request.
    * @param {string} token The bearer token. (Null if read from request)
+   * @param {boolean} update Call to update the session.
    * @returns {StratisOAuth2ProviderSession} The bearer token session.
    */
-  async get_session(req, token = null) {
+  async get_session(req, token = null, update = false) {
     assert(
       token == null || typeof token == 'string',
       'Token must be a string value or null to auto read from request'
     )
     const session = await StratisOAuth2ProviderSession.load(this, req, token)
-    await session.update()
+    if (update) await session.update()
     return session
   }
 
