@@ -786,15 +786,16 @@ class StratisCli {
     // check call the server command (i.e. was initialized)
     if (!this.initialized) await this.initialize()
 
-    // handle errors.
-    this.app.use(
-      async (err, req, res, next) =>
-        await this.api.handle_errors(err, req, res, next)
-    )
-
     if (this.default_redirect != null) {
-      // check call redirect if needed.
+      /**
+       * check call redirect if needed.
+       * @param {Request} req
+       * @param {Response} res
+       * @param {NextFunction} next
+       * @returns
+       */
       const redirect = (req, res, next) => {
+        if (res.writableEnded) return next()
         return res.redirect(this.default_redirect)
       }
 
@@ -806,6 +807,12 @@ class StratisCli {
         } to ${this.default_redirect}`
       )
     }
+
+    // handle errors.
+    this.app.use(
+      async (err, req, res, next) =>
+        await this.api.handle_errors(err, req, res, next)
+    )
 
     this.logger.info('Initialized stratis service middleware and routes')
 
