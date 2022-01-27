@@ -235,6 +235,13 @@ class StratisOAuth2ProviderSession {
 
       // save the changes.
       await this.save()
+
+      this.provider.logger.debug(
+        `Authentication info updated for ${this.username}. (TID: ${
+          this.token_id
+        }, Access ${this.is_access_granted ? 'GRANTED' : 'DENIED'})`
+      )
+
       return true
     } else return false
   }

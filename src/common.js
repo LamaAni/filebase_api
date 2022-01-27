@@ -161,6 +161,38 @@ function escape_regex(val) {
   return val.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
 }
 
+/**
+ * Concat url args into the current url, and returns the new url.
+ * @param {URL|string} url
+ * @param {{}} args
+ */
+function concat_url_args(url, args) {
+  let is_relative = false
+  let org_url = url
+  args = args || {}
+  try {
+    url = new URL(url)
+  } catch (err) {
+    is_relative = true
+    url = new URL(url, 'http://is-relative.com/')
+  }
+
+  const params = url.searchParams
+
+  Object.entries(args).forEach((e) => {
+    if (e[1] == null) return
+    params.set(e[0], e[1])
+  })
+
+  if (!is_relative) return url.href
+
+  url = url.pathname + url.search
+  if (typeof org_url == 'string' && !org_url.startsWith('/'))
+    url = url.startsWith('/') ? url.substring(1) : url
+
+  return url
+}
+
 function create_uuid() {
   const S4 = function () {
     return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1)
@@ -277,5 +309,11 @@ module.exports = {
   to_base64,
   from_base64,
   filter_null,
+  concat_url_args,
   StringEncryptor,
+}
+
+if (require.main == module) {
+  console.log(concat_url_args('https://nope.com/lama?a=2', { b: 22 }))
+  console.log(concat_url_args('lama?a=2', { b: 22 }))
 }

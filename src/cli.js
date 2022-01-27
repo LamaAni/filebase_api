@@ -17,7 +17,7 @@ const {
 } = require('./utils/session')
 const { StratisOAuth2Provider } = require('./utils/oauth2')
 const { Stratis } = require('./webserver/stratis.js')
-const { assert, get_express_request_url } = require('./common')
+const { assert, get_express_request_url, concat_url_args } = require('./common')
 
 /**
  * @typedef {import('./utils/session').StratisSessionProviderOptions} StratisSessionProviderOptions
@@ -796,7 +796,8 @@ class StratisCli {
        */
       const redirect = (req, res, next) => {
         if (res.writableEnded) return next()
-        return res.redirect(this.default_redirect)
+        const redirect_to = concat_url_args(this.default_redirect, req.query)
+        return res.redirect(redirect_to)
       }
 
       if (this.redirect_all_unknown) this.app.use(redirect)

@@ -8,7 +8,6 @@ const {
   milliseconds_utc_since_epoc,
 } = require('../../common')
 const { concat_errors } = require('../../errors')
-
 const { StratisSessionStorageProvider } = require('./storage')
 const Cookies = require('cookies')
 
@@ -224,7 +223,9 @@ class StratisSessionProvider {
         return decrypt_string(value, this.encryption_key)
       else return from_base64(value)
     } catch (err) {
-      this.logger.debug(`Error decoding session state: ${err.state || err}`)
+      this.logger.error(
+        concat_errors('Error decoding session state', err).stack
+      )
       if (throw_errors) throw err
       return null
     }

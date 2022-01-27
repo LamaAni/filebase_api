@@ -5,7 +5,7 @@ function get_oauth2_test_config() {
     client_secret: process.env['TEST_OAUTH2_CLIENT_SECRET'],
     recheck_interval: 10 * 1000,
     session_key: 'test_oauth_session',
-    scope: ['okta.users.read.self'],
+    scope: ['okta.users.read.self', 'openid', 'offline_access'],
     enable_oidc_token: true,
   }
 }
