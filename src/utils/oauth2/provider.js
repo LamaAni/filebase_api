@@ -481,7 +481,8 @@ class StratisOAuth2Provider {
         const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
 
         // write the authentication info.
-        await oauth_session.authenticate(token_info)
+        await oauth_session.authenticate(token_info, false)
+        await oauth_session.update()
 
         return res.redirect(auth_state.redirect_uri || '/')
 

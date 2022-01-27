@@ -126,13 +126,16 @@ class StratisOAuth2ProviderSession {
    * Authenticate the current access token, and mark the authenticated timestamp.
    * @param {Object} token_response The authenticated access token
    */
-  async authenticate({
-    access_token,
-    scope = null,
-    refresh_token = null,
-    id_token = null,
-    token_type = null,
-  }) {
+  async authenticate(
+    {
+      access_token,
+      scope = null,
+      refresh_token = null,
+      id_token = null,
+      token_type = null,
+    },
+    save = true
+  ) {
     Object.entries({
       access_token,
       scope,
@@ -147,7 +150,7 @@ class StratisOAuth2ProviderSession {
 
     this.params.authenticated = milliseconds_utc_since_epoc()
 
-    await this.save()
+    if (save) await this.save()
   }
 
   /**
@@ -218,7 +221,7 @@ class StratisOAuth2ProviderSession {
         } catch (err) {}
 
         if (refresh_token_info) {
-          await this.authenticate(refresh_token_info)
+          await this.authenticate(refresh_token_info, false)
           return await this.update()
         }
       }
@@ -226,7 +229,8 @@ class StratisOAuth2ProviderSession {
       await this.authenticate(
         Object.assign({}, this.params.token_response, {
           access_token: this.access_token,
-        })
+        }),
+        false
       )
 
       // save the changes.
