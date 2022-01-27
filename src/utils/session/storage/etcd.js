@@ -2,7 +2,7 @@ const Cookies = require('cookies')
 const { Etcd3 } = require('etcd3')
 
 const { StratisSessionStorageProvider } = require('./core')
-const { StratisError } = require('../../../errors')
+const { concat_errors } = require('../../../errors')
 const { create_uuid } = require('../../../common')
 
 const {
@@ -110,11 +110,15 @@ class StratisSessionEtcdStorageProvider extends StratisSessionStorageProvider {
    * @returns {string} The initialize value
    */
   async load(context) {
-    const session_id = this.get_session_id(context, true)
-    const val = await this.client.get(session_id)
-    if (val == null) return null
+    try {
+      const session_id = this.get_session_id(context, true)
+      const val = await this.client.get(session_id)
+      if (val == null) return null
 
-    return await val.toString()
+      return await val.toString()
+    } catch (err) {
+      throw concat_errors(new Error('failed to load etcd session'), err)
+    }
   }
 
   /**
@@ -128,8 +132,14 @@ class StratisSessionEtcdStorageProvider extends StratisSessionStorageProvider {
    * @param {StratisSessionProviderContext} context
    */
   async commit(context) {
-    const session_id = this.get_session_id(context, false)
-    return await this.client.put(session_id).value(context.get_session_value())
+    try {
+      const session_id = this.get_session_id(context, false)
+      return await this.client
+        .put(session_id)
+        .value(context.get_session_value())
+    } catch (err) {
+      throw concat_errors(new Error('failed to commit etcd session'), err)
+    }
   }
 }
 

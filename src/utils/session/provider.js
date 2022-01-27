@@ -7,6 +7,8 @@ const {
   assert_non_empty_string_or_null,
   milliseconds_utc_since_epoc,
 } = require('../../common')
+const { concat_errors } = require('../../errors')
+
 const { StratisSessionStorageProvider } = require('./storage')
 const Cookies = require('cookies')
 
@@ -85,41 +87,48 @@ class StratisSessionProviderContext {
    * @param {Response} res
    */
   async initialize() {
-    if (this.req.session != null)
-      this.provider.logger.warn(
-        'Another session proprietor has already set the session value for the request. req.session was overwritten'
+    try {
+      if (this.req.session != null)
+        this.provider.logger.warn(
+          'Another session proprietor has already set the session value for the request. req.session was overwritten'
+        )
+
+      // sadly we cannot dynamically load the session value since
+      // the proxy callback may not be valid. Therefore the session state must be loaded every time.
+      // To allow for fast response, we may load the session value(s)
+      // inside the loader from cache.
+
+      this.req.stratis_session_provider_context = this
+      this._source_session_json_value = this.provider.decode(
+        await this.provider.storage_provider.load(this)
       )
 
-    // sadly we cannot dynamically load the session value since
-    // the proxy callback may not be valid. Therefore the session state must be loaded every time.
-    // To allow for fast response, we may load the session value(s)
-    // inside the loader from cache.
+      let parsed_data_object = {}
+      try {
+        parsed_data_object = JSON.parse(this._source_session_json_value)
+      } catch (err) {}
 
-    this.req.stratis_session_provider_context = this
-    this._source_session_json_value = this.provider.decode(
-      await this.provider.storage_provider.load(this)
-    )
+      this.data = Object.assign({}, this.data || {}, parsed_data_object)
 
-    let parsed_data_object = {}
-    try {
-      parsed_data_object = JSON.parse(this._source_session_json_value)
-    } catch (err) {}
+      this.req.session = new Proxy(this.data, {
+        get: (obj, prop) => {
+          this.accessed = true
+          return obj[prop]
+        },
+        set: (obj, prop, value) => {
+          this.accessed = true
+          obj[prop] = value
+          return true
+        },
+      })
 
-    this.data = Object.assign({}, this.data || {}, parsed_data_object)
-
-    this.req.session = new Proxy(this.data, {
-      get: (obj, prop) => {
-        this.accessed = true
-        return obj[prop]
-      },
-      set: (obj, prop, value) => {
-        this.accessed = true
-        obj[prop] = value
-        return true
-      },
-    })
-
-    return this
+      return this
+    } catch (err) {
+      throw concat_errors(
+        new Error('Failed to initialize session provider'),
+        err
+      )
+    }
   }
 
   /**

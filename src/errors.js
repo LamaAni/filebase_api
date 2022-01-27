@@ -89,7 +89,26 @@ class StratisParseError extends StratisNoEmitError {
 
 class StratisNotImplementedError extends StratisError {}
 
+/**
+ * @param {Error|string} exception
+ * @param {Error} inner_exception
+ * @param {string} sep
+ */
+function concat_errors(exception, inner_exception, sep = '. ') {
+  if (!(exception instanceof Error)) exception = new StratisError(exception)
+
+  if (!(inner_exception instanceof Error))
+    inner_exception = new Error(inner_exception)
+
+  exception.stack =
+    (exception.stack || '') + '\n' + (inner_exception.stack || '')
+  exception.message =
+    (exception.message || '') + sep + (inner_exception.message || '')
+  return exception
+}
+
 module.exports = {
+  concat_errors,
   StratisError,
   StratisNoEmitError,
   StratisNotFoundError,
