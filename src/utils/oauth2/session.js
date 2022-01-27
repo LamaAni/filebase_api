@@ -240,10 +240,11 @@ class StratisOAuth2ProviderSession {
    * (Allows for third party bearer token to be directly accessed for validation)
    * @param {Request} req The express request.
    * @param {string} token The bearer token. (Null if read from request)
+   * @param {boolean} update Call to update the session.
    * @returns {StratisOAuth2ProviderSession} The bearer token session.
    */
-  async get_session(token = null) {
-    return await this.provider.get_session(this.req, token)
+  async get_session(token = null, update = false) {
+    return await this.provider.get_session(this.req, token, update)
   }
 
   /**
