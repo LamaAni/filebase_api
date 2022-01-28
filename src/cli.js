@@ -768,11 +768,9 @@ class StratisCli {
 
     // updating configuration.
 
-    /** @type {CookieSessionOptions} */
+    /** @type {StratisSessionProviderOptions} */
     let run_session_storage_options = {
       secure: this.enable_https,
-      signed: this.session_key != null,
-      keys: this.session_key == null ? null : [this.session_key],
     }
 
     this.session_storage_options = Object.assign(

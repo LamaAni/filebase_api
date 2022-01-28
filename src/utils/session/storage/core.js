@@ -45,7 +45,7 @@ class StratisSessionStorageProvider {
     assert_non_empty_string(name, 'Name must be a non empty string')
     assert_non_empty_string(path, 'path must be a non empty string')
 
-    if (typeof keys == 'string') sign_with_keys = [keys]
+    if (typeof sign_with_keys == 'string') sign_with_keys = [sign_with_keys]
     sign_with_keys = sign_with_keys || []
 
     assert(
