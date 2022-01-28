@@ -548,7 +548,7 @@ class StratisOAuth2Provider {
     req,
     res,
     next,
-    { redirect_uri = null, token = null }
+    { redirect_uri = null, token = null, update }
   ) {
     const oauth_session = await this.get_session(req, token, true)
 
@@ -596,7 +596,42 @@ class StratisOAuth2Provider {
    */
   async svc_validate(req, res, next, { access_token = null }) {
     assert(
-      access_token != null,
+      typeof access_token == 'string',
+      new StratisNoEmitError('You must provide an access_token')
+    )
+
+    const token_id =
+      access_token.length < 5
+        ? 'OBSCURED'
+        : access_token.substring(access_token.length - 5)
+
+    this.logger.debug('Validating access token ending in ' + token_id)
+
+    let status = 200
+    if (this.requests.introspect_url == null) status = 401
+    else {
+      const token_info = await this.requests.introspect(
+        access_token,
+        'access_token'
+      )
+      if (token_info.active != true) status = 401
+    }
+
+    res.status(status)
+    res.end(status == 200 ? 'access granted' : 'access denied')
+  }
+
+  /**
+   * Validates the current session (bearer token or loaded from session state)
+   * Returns response ok (200) if the token can be validated, otherwise unauthorized 401.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {Next} next
+   * @param {{access_token:string}} query
+   */
+  async svc_validate_session(req, res, next, { access_token = null }) {
+    assert(
+      typeof access_token == 'string',
       new StratisNoEmitError('You must provide an access_token')
     )
 

@@ -30,10 +30,12 @@ const { StratisSessionProviderContext } = require('./context')
  * @property {StratisSessionStorageProviderOptions} storage_options Overrides for the storage provider options.
  * @property {string} encryption_key The encryption key to use for the session state. If null no encryption.
  * @property {number} cookie_subdomain_count  The number of subdomain elements to use for
+ * @property {boolean} ingore_errors Populate an empty state on error, and log out the error.
  * the session cookie domain (auto generated). If null or domain is already set, no auto domain.
  *  example: For a request from a.b.c.d.com, and cookie_subdomain_count=2,
  *    cookie domain=>".b.c.d.com.". Defaults to 0.
  * @property {StratisLogger} logger The associated logger. Defaults to console.
+ *
  */
 
 class StratisSessionProvider {
@@ -47,6 +49,7 @@ class StratisSessionProvider {
     encryption_key = null,
     cookie_subdomain_count = 0,
     logger = null,
+    ingore_errors = true,
   } = {}) {
     if (typeof storage_provider == 'string')
       storage_provider = new (from_storage_type_name(storage_provider))(
@@ -69,6 +72,7 @@ class StratisSessionProvider {
       storage_options || {}
     )
 
+    this.ingore_errors = ingore_errors
     this.encryption_key = encryption_key
     this.storage_provider = storage_provider
     this.cookie_subdomain_count =
@@ -118,7 +122,9 @@ class StratisSessionProvider {
     return value
   }
 
-  decode(value, throw_errors = false) {
+  decode(value, ingore_errors = null) {
+    ingore_errors = ingore_errors === null ? this.ingore_errors : ingore_errors
+
     if (value == null) return {}
     // return value
     try {
@@ -131,7 +137,7 @@ class StratisSessionProvider {
       this.logger.error(
         concat_errors('Error decoding session state', err).stack
       )
-      if (throw_errors) throw err
+      if (ingore_errors) throw err
       return null
     }
     return value
@@ -144,6 +150,19 @@ class StratisSessionProvider {
    * @param {NextFunction} next
    */
   async middleware(req, res, next) {
+    /**
+     * @param {Error} err
+     * @returns {boolean} True if error is to be thrown.
+     */
+    const handle_errors = (err, msg = 'Error processing session state') => {
+      err = concat_errors(msg, err)
+      if (this.ingore_errors === true) {
+        this.logger.error(err.stack || `${err}`)
+        return false
+      }
+      return true
+    }
+
     try {
       // creating the context.
       const context = await new StratisSessionProviderContext(
@@ -168,8 +187,8 @@ class StratisSessionProvider {
             this.logger.debug(`Session state response header data written`)
           }
         } catch (err) {
-          session_has_error = true
-          return next(err)
+          if (handle_errors(err, 'Error writing session state headers'))
+            throw err
         }
         return original_write_head.apply(res, args)
       }
@@ -182,13 +201,14 @@ class StratisSessionProvider {
             this.logger.debug(`Session state async data written`)
           }
         } catch (err) {
-          session_has_error = true
-          return next(err)
+          if (handle_errors(err, 'Error committing session state')) throw err
         }
         return original_res_end.apply(res, args)
       }
     } catch (err) {
-      next(err)
+      if (handle_errors(err)) next(err)
+
+      req.session = req.session || {}
     }
     next()
   }

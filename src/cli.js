@@ -131,6 +131,7 @@ class StratisCli {
      * @type {StratisSessionProvider|(req:Request,res:Response,next:NextFunction)=>any}
      */
     this.session_provider = null
+
     /**
      * The session provider options.
      * @type {StratisSessionProviderOptions}*/
@@ -154,23 +155,6 @@ class StratisCli {
           this.session_provider_options || DEFAULT_SESSION_PROVIDER_OPTIONS,
           val == null ? {} : JSON.parse(val)
         )
-      },
-    }
-
-    /** The session storage type to use. */
-    /** @type {StratisSessionStorageProviderType} */
-    this.session_provider_type = 'cookie'
-
-    /** @type {CliArgument} */
-    this.__$session_storage_type = {
-      type: 'named',
-      environmentVariable: 'STRATIS_SESSION_STORAGE_TYPE',
-      default: this.session_provider_type,
-      description:
-        'The session storage type to use. May be one of ' +
-        Object.keys(StratisSessionStorageProvidersByType),
-      parse: (val) => {
-        if (val instanceof StratisSessionStorageProvider) return val
       },
     }
 
@@ -612,6 +596,9 @@ class StratisCli {
     const session_provider_embed_options = {
       encryption_key: this.session_key,
       logger: this.logger,
+      storage_options: {
+        secure: this.enable_https,
+      },
     }
 
     this.session_provider =
@@ -760,18 +747,6 @@ class StratisCli {
 
     // will only print in debug mode.
     this.logger.debug('Debug mode ACTIVE'.yellow)
-
-    // updating configuration.
-
-    /** @type {StratisSessionProviderOptions} */
-    let run_session_storage_options = {
-      secure: this.enable_https,
-    }
-
-    this.session_storage_options = Object.assign(
-      this.session_storage_options || {},
-      run_session_storage_options
-    )
 
     // calling startup script
     await this.invoke_initialization_scripts(this.logger || console)

@@ -36,9 +36,11 @@ module.exports = async (stratis) => {
       }
   }
 
-  stratis.session_storage_options.hosts =
-    process.env['TEST_SESSION_STORAGE_ETCD_HOST']
-  stratis.session_provider_type = process.env['TEST_SESSION_TYPE'] || 'cookie'
+  stratis.session_provider_options.storage_provider =
+    process.env['TEST_SESSION_TYPE'] || 'cookie'
+  stratis.session_provider_options.storage_options = {
+    hosts: process.env['TEST_SESSION_STORAGE_ETCD_HOST'],
+  }
 
   // Call to initialize the service (if not called will be called by the stratis cli process)
   // This method can be sync if not called.
