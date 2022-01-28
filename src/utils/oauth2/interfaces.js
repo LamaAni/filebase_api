@@ -11,15 +11,4 @@
  * @property {StratisOAuth2ProviderLoginResult} login_result What is the login result.
  **/
 
-/**
- * @typedef {Object} StratisOAuth2ProviderSessionParams
- * @property {string} access_token
- * @property {string} token_type
- * @property {string} scope
- * @property {string} refresh_token
- * @property {number} authenticated The timestamp of creation (ms since epoc, utc)
- * @property {{}} token_info
- * @property {{}} token_response
- */
-
 module.exports = {}

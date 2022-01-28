@@ -20,10 +20,15 @@
   <body>
     <div>
       User:
-      <span style="color:<%- req.user != null ? 'green':'red'%>"
+      <span
+        style="color:<%- req.user != null && req.user.authenticated ? 'green':'red'%>"
         ><%- req.user != null ? req.user.username:'[no user]'%></span
       >
-      <% if (req.user != null){ %><a href="/oauth2/logout">Logout</a> <%}%>
+      <% if (req.user != null && req.user.authenticated==true) { %><a
+        href="/oauth2/logout"
+        >Logout</a
+      >
+      <%} else { %><a href="/oauth2/login">Login</a> <%}%>
     </div>
     <div><a href="/secure/index.html">Go to secure</a><br /></div>
     <div>Loaded at: <%- context.session['loaded'] || 'first load' %></div>

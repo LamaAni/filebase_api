@@ -7,6 +7,8 @@
  * @typedef {import('./requests').StratisRequest} StratisRequest
  * @typedef {import('./pages').StratisPageCallContext} StratisPageCallContext
  * @typedef {import('../utils/session').StratisSessionProviderContext} StratisSessionProviderContext
+ * @typedef {import('../utils/oauth2').StratisOAuth2Provider} StratisOAuth2Provider
+ * @typedef {import('../utils/oauth2').StratisOAuth2ProviderSession} StratisOAuth2ProviderSession
  */
 
 /**
@@ -44,6 +46,8 @@
  * @property {Stratis} stratis
  * @property {StratisRequest} stratis_request
  * @property {StratisSessionProviderContext} stratis_session_provider_context
+ * @property {StratisOAuth2Provider} stratis_security_provider
+ * @property {StratisOAuth2ProviderSession} stratis_oauth2_session
  */
 
 /**

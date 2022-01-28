@@ -1,9 +1,16 @@
+/**
+ * @typedef {import('../../src/utils/oauth2').StratisOAuth2ProviderOptions} StratisOAuth2ProviderOptions
+ */
+/**
+ * @returns {StratisOAuth2ProviderOptions}
+ */
 function get_oauth2_test_config() {
   return {
     service_url: process.env['TEST_OAUTH2_SERVICE_URL'],
     client_id: process.env['TEST_OAUTH2_CLIENT_ID'],
     client_secret: process.env['TEST_OAUTH2_CLIENT_SECRET'],
     recheck_interval: 10 * 1000,
+    refresh_interval: 20 * 1000, // usually this should be ~10 minutes, depends on provider. Testing...
     session_key: 'test_oauth_session',
     scope: ['okta.users.read.self', 'openid', 'offline_access'],
     enable_oidc_token: true,
