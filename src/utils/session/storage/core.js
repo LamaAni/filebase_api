@@ -1,9 +1,5 @@
 const Cookies = require('cookies')
-const {
-  assert,
-  assert_non_empty_string,
-  filter_null,
-} = require('../../../common')
+const { assert, assert_non_empty_string } = require('../../../common')
 const { StratisNotImplementedError } = require('../../../errors')
 
 /**
@@ -30,45 +26,65 @@ class StratisSessionStorageProvider {
   /**
    * @param {StratisSessionStorageProviderOptions} options
    */
-  constructor({
-    name = 'stratis:session',
-    maxAge = null,
-    expires = null,
-    path = '/',
-    domain = null,
-    secure = false,
-    httpOnly = false,
-    overwrite = true,
-    sameSite = null,
-    sign_with_keys = null,
-  }) {
-    assert_non_empty_string(name, 'Name must be a non empty string')
-    assert_non_empty_string(path, 'path must be a non empty string')
-
-    if (typeof sign_with_keys == 'string') sign_with_keys = [sign_with_keys]
-    sign_with_keys = sign_with_keys || []
-
-    assert(
-      Array.isArray(sign_with_keys),
-      'sign_with_keys must be an array, string or null'
+  constructor(options) {
+    assert_non_empty_string(
+      options.name,
+      'Name (cookie) must be a non empty string'
+    )
+    assert_non_empty_string(
+      options.path,
+      'path (cookie) must be a non empty string'
     )
 
-    expires = expires || maxAge == null ? null : Date.now() + maxAge
+    if (typeof options.sign_with_keys == 'string')
+      options.sign_with_keys = [options.sign_with_keys]
+    options.sign_with_keys = options.sign_with_keys || []
 
-    this.cookie_options = filter_null({
-      maxAge,
-      expires,
-      path,
-      domain,
-      secure,
-      httpOnly,
-      overwrite,
-      sameSite,
-      sign: sign_with_keys.length > 0,
-      keys: sign_with_keys.length > 0 ? this.sign_with_keys : null,
-    })
+    assert(
+      Array.isArray(options.sign_with_keys),
+      'sign_with_keys must be an array, string or null'
+    )
+    this.options = options
+  }
 
-    this.name = name
+  /**
+   * Returns a set of cookie options.
+   * @param {StratisSessionProviderContext} context
+   * @returns {Cookies.GetOption & Cookies.SetOption}
+   */
+  get_cookie_options(context) {
+    const options = Object.assign(
+      {},
+      this.options,
+      context.storage_options || {}
+    )
+    options.sign = options.sign_with_keys.length > 0
+    options.keys =
+      options.sign_with_keys.length > 0 ? options.sign_with_keys : null
+    return options
+  }
+
+  /**
+   * Writes a cookie to the response headers
+   * @param {StratisSessionProviderContext} context
+   */
+  write_cookie(context, name, value) {
+    return context.write_cookie(name, value, this.get_cookie_options(context))
+  }
+
+  /**
+   * Reads a cookie from the request headers.
+   * @param {StratisSessionProviderContext} context
+   */
+  read_cookie(context, name) {
+    return context.read_cookie(name, this.get_cookie_options(context))
+  }
+
+  /**
+   * The cookie name.
+   */
+  get name() {
+    return this.options.name
   }
 
   /**
