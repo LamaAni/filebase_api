@@ -72,13 +72,13 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
     this.revoke_url = this.to_url(revoke_url)
     this.scope = scope
     this.logger = logger
-
-    assert(
-      this.introspect_url != null || this.expires_in != null,
-      'If token introspect url was not provided a session expires_in must be provided'
-    )
   }
 
+  /**
+   * @param {string|URL} url The url to validate
+   * @param {string|URL} use_service_url_base The service base url
+   * @returns {URL}
+   */
   to_url(url, use_service_url_base = true) {
     if (url == null) return null
     if (url instanceof URL) return url

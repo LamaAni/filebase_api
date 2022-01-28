@@ -17,6 +17,11 @@ const { StratisRequestsClient } = require('./utils/requests')
  */
 
 /**
+ * @typedef {import('./webserver/interfaces').StratisExpressRequest} StratisExpressRequest
+ * @typedef {import('./webserver/interfaces').StratisExpressResponse} StratisExpressResponse
+ */
+
+/**
  * @typedef {import('./webserver/stratis').StratisOptions} StratisOptions
  * @typedef {import('./webserver/stratis').StratisEJSOptions} StratisEJSOptions
  * @typedef {import('./webserver/stratis').StratisMiddlewareOptions} StratisMiddlewareOptions

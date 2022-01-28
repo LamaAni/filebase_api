@@ -34,7 +34,10 @@ const { StratisOAuth2ProviderSession } = require('./session')
  * @property {string} encryption_key The encryption key for session encryption. Defaults to client_secret.
  * @property {string} encryption_expiration The time, in ms, for the encryption expiration. Defaults to 5 minutes.
  * @property {number} recheck_interval The number of milliseconds before revalidating the token.
- * @property {number} expires_in The number of milliseconds before forcing the session to expire. If null then ignored.
+ * If elapsed, then access is denied until the token is revalidated.
+ * @property {number} refresh_interval The number of milliseconds before forcing the refresh token reload.
+ * Active only when a refresh token is provided. If active, and elapsed, then access is denied until updated.
+ * @property {number} bearer_token_cache_interval The interval in which to clear the cache. Defaults to 10 second.
  * @property {string|[string]} username_from_token_info_path The path to the username to parse out of the user info.
  * @property {string} user_key The req[key] to save the user information. defaults to user.
  * @property {string} response_type The authentication type. Currently supports only code.
@@ -65,7 +68,8 @@ class StratisOAuth2Provider {
     encryption_expiration = 1000 * 60 * 5,
     response_type = 'code',
     recheck_interval = 1000 * 60,
-    expires_in = null,
+    refresh_interval = 1000 * 60 * 10,
+    bearer_token_cache_interval = 1000 * 10,
     timeout = 1000 * 10,
     logger = console,
     user_key = 'user',
@@ -110,7 +114,7 @@ class StratisOAuth2Provider {
     this.enable_oidc_token = enable_oidc_token
     this.enable_introspect = enable_introspect
     this.recheck_interval = recheck_interval
-    this.expires_in = expires_in
+    this.refresh_interval = refresh_interval
     this.logger = logger
     this.user_key = user_key
     this.token_type = token_type
@@ -124,13 +128,11 @@ class StratisOAuth2Provider {
     // build the redirect url.
     this.redirect_url = this.requests.to_url(redirect_url)
 
-    this._token_cache_bank = new CacheDictionary({
-      cleaning_interval: recheck_interval,
+    // cache bank for bearer token.
+    this._bearer_token_session_cache_bank = new CacheDictionary({
+      cleaning_interval: recheck_interval || 1000,
       reset_cache_timestamp_on_get: true,
-      interval:
-        expires_in != null && expires_in > recheck_interval
-          ? expires_in
-          : recheck_interval * 2,
+      interval: bearer_token_cache_interval || 10000,
     })
   }
 
@@ -162,16 +164,19 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * The cache token bank that allows the interface to preserve the cache
-   * refresh time for the token.
+   * A cache bank for bearer token session.
+   * This speedup is needed since the bearer token session
+   * cannot be reloaded from one request to the other.
    */
-  get token_cache_bank() {
-    return this._token_cache_bank
+  get bearer_token_session_cache_bank() {
+    return this._bearer_token_session_cache_bank
   }
 
   /**
+   * Encrypt an auth service value.
+   * May expire.
    * @param {*} value
-   * @param {number} expires_in If -1 then infinity.
+   * @param {number} expires_in If <=0 then infinity
    * @returns {string}
    */
   encrypt(value, expires_in = null) {
@@ -186,8 +191,9 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Decrypt an auth service value.
    * @param {string} encrypted_value
-   * @returns {*}
+   * @returns {any}
    */
   decrypt(encrypted_value) {
     /**
@@ -252,19 +258,6 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * @param {StratisOAuth2ProviderAuthorizeState} state The state to update.
-   * @param {{}} extend_with
-   * @returns {StratisOAuth2ProviderAuthorizeState}
-   */
-  compose_state(state, extend_with = null) {
-    return Object.assign(
-      { created_at: milliseconds_utc_since_epoc() },
-      state,
-      extend_with || {}
-    )
-  }
-
-  /**
    * Compose open ID configuration for the request.
    * @param {Request} req
    */
@@ -296,11 +289,14 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Compose an encrypted version of the OAuth token to
+   * be used in external oauth commands.
+   * Encrypts the refresh_token and client_id.
    * @param {Request} req
    * @param {*} token_info
    * @returns
    */
-  compose_encrypted_token(
+  compose_encrypted_token_info(
     req,
     { id_token = null, access_token = null, refresh_token = null }
   ) {
@@ -311,6 +307,15 @@ class StratisOAuth2Provider {
       refresh_token: this.encrypt(refresh_token, -1),
       issuer: this.compose_service_url(req),
     }
+  }
+
+  /**
+   * Updates/augments the state before being sent to the oauth provider.
+   * @param {StratisOAuth2ProviderAuthorizeState} state The state to update.
+   * @returns {StratisOAuth2ProviderAuthorizeState}
+   */
+  update_state(state) {
+    return Object.assign({ created_at: milliseconds_utc_since_epoc() }, state)
   }
 
   /**
@@ -332,7 +337,7 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Called before oauth request to authenticate.
+   * Called before all oauth requests
    * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
@@ -366,7 +371,8 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Called to redirect to the remote server login.
+   * Login flow. Redirects to the OAuth provider for login and then
+   * redirects back to the redirect_uri (or /)
    * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
@@ -387,6 +393,7 @@ class StratisOAuth2Provider {
       token_as_link = true,
     }
   ) {
+    // check the source request is allowd.
     assert(
       this.allow_login == null || (await this.allow_login(req)),
       new StratisNoEmitError(
@@ -394,6 +401,7 @@ class StratisOAuth2Provider {
       )
     )
 
+    // Augmentation of the state object.
     if (state != null) {
       state = typeof state == 'string' ? JSON.parse(state) : state
       assert(typeof state == 'object', 'State must be a json string or null')
@@ -404,15 +412,13 @@ class StratisOAuth2Provider {
 
     state = this.encrypt(
       Object.assign(
-        this.compose_state(
-          {
-            created_at: milliseconds_utc_since_epoc(),
-            redirect_uri,
-            login_result,
-            token_as_link,
-          },
-          state || {}
-        )
+        this.update_state({
+          created_at: milliseconds_utc_since_epoc(),
+          redirect_uri,
+          login_result,
+          token_as_link,
+        }),
+        state || {}
       )
     )
 
@@ -430,17 +436,17 @@ class StratisOAuth2Provider {
   }
 
   /**
-   * Session logout
+   * Session logout and redirect to target.
    * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
    * @param {Object} query The query arguments
    */
   async svc_logout(req, res, next, { redirect_uri = null, no_revoke = null }) {
-    /** @type {StratisOAuth2ProviderSession} */
-    const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+    const oauth_session = await this.get_session(req, null, true)
 
-    if (no_revoke != 'true' && oauth_session.is_authenticated) {
+    if (no_revoke != 'true') {
+      // can only revoke access tokens or refresh tokens
       if (oauth_session.refresh_token != null)
         await this.requests.revoke(oauth_session.refresh_token, 'refresh_token')
       if (oauth_session.access_token != null)
@@ -449,28 +455,6 @@ class StratisOAuth2Provider {
 
     await oauth_session.clear()
 
-    return res.redirect(redirect_uri || '/')
-  }
-  /**
-   * Session authorization flow.
-   * @param {Request} req
-   * @param {Response} res
-   * @param {NextFunction} next
-   * @param {Object} query The query arguments
-   */
-  async svc_authorize_session(
-    req,
-    res,
-    next,
-    { redirect_uri = null, token = null }
-  ) {
-    const oauth_session = await this.get_session(req, token, true)
-    if (!oauth_session.is_access_granted)
-      return res.redirect(
-        this.compose_service_url(req, 'login', {
-          redirect_uri,
-        })
-      )
     return res.redirect(redirect_uri || '/')
   }
 
@@ -499,10 +483,14 @@ class StratisOAuth2Provider {
       case 'session':
         // session login
         /** @type {StratisOAuth2ProviderSession} */
-        const oauth_session = await StratisOAuth2ProviderSession.load(this, req)
+        const oauth_session = await this.get_session(req, null, false)
+        // clear the prev session
+        await oauth_session.clear()
 
         // write the authentication info.
-        await oauth_session.authenticate(token_info, false)
+        await oauth_session.update_session_data(token_info, false)
+
+        // updating the token info and other configs.
         await oauth_session.update()
 
         const redirect_uri = auth_state.redirect_uri || '/'
@@ -522,7 +510,7 @@ class StratisOAuth2Provider {
           )
         )
 
-        const token = this.compose_encrypted_token(req, {
+        const token = this.compose_encrypted_token_info(req, {
           id_token: token_info.id_token,
           access_token: token_info.access_token,
           refresh_token: token_info.refresh_token,
@@ -550,67 +538,87 @@ class StratisOAuth2Provider {
   }
 
   /**
+   * Session authorization flow.
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   * @param {Object} query The query arguments
+   */
+  async svc_authorize_session(
+    req,
+    res,
+    next,
+    { redirect_uri = null, token = null }
+  ) {
+    const oauth_session = await this.get_session(req, token, true)
+
+    if (!oauth_session.is_authenticated)
+      return res.redirect(
+        this.compose_service_url(req, 'login', {
+          redirect_uri,
+        })
+      )
+
+    return res.redirect(redirect_uri || '/')
+  }
+
+  /**
    * Uses the secure service to read the request response and query.
    * @param {Request} req
    * @param {Response} res
    * @param {Next} next
-   * @param {{refresh_token: string, token_type: 'access_token' | 'id_token'}} query
+   * @param {{refresh_token: string}} query
    */
-  async svc_token(req, res, next, { refresh_token = null, token_type = null }) {
-    token_type = token_type || this.token_type || 'access_token'
+  async svc_token(req, res, next, { refresh_token = null }) {
     assert(
       refresh_token != null,
-      'Only refresh tokens are allowed in oauth2 proxy.'
+      'Only grants of type refresh_token are allowed in this api. (Only accepts refresh tokens)'
     )
 
     // decrypting the refresh token
     refresh_token = this.decrypt(refresh_token)
 
-    const info = await this.requests.get_token_from_refresh_token(refresh_token)
-
-    const token = this.compose_encrypted_token(req, info)
-
-    switch (token_type) {
-      case 'access_token':
-        token.id_token = info.access_token
-        break
-      case 'id_token':
-        break
-    }
-
-    assert(
-      token.id_token != null,
-      new StratisNoEmitError(
-        'Refresh token return did not provide a token of tyoe: ' + token_type
-      )
+    const info = this.compose_encrypted_token_info(
+      req,
+      await this.requests.get_token_from_refresh_token(refresh_token)
     )
 
-    return res.end(JSON.stringify(token))
+    return res.end(JSON.stringify(info))
   }
 
   /**
-   * Returns response ok (200) if the token can be validated, otherwise unauthorized 404.
+   * Validates an access token.
+   * Returns response ok (200) if the token can be validated, otherwise unauthorized 401.
    * @param {Request} req
    * @param {Response} res
    * @param {Next} next
-   * @param {{access_token:string, id_token:string}} query
+   * @param {{access_token:string}} query
    */
-  async svc_validate(req, res, next, { access_token = null, id_token = null }) {
+  async svc_validate(req, res, next, { access_token = null }) {
     assert(
-      access_token != null || id_token != null,
-      new StratisNoEmitError(
-        'You must provide either an access_token or an id_token'
-      )
+      access_token != null,
+      new StratisNoEmitError('You must provide an access_token')
     )
-    /** @type {'access_token' | 'id_token'} */
-    const token_type = access_token != null ? 'access_token' : 'id_token'
-    const token = access_token != null ? access_token : id_token
 
-    const token_info = await this.requests.introspect(token, token_type)
-    if (token_info.active != true)
-      throw new StratisNotAuthorizedError('Token not authorized.')
-    res.status(200)
-    res.end('valid')
+    const token_id =
+      access_token.length < 5
+        ? 'OBSCURED'
+        : access_token.substring(access_token.length - 5)
+
+    this.logger.debug('Validating access token ending in ' + token_id)
+
+    let status = 200
+    if (this.requests.introspect_url == null) status = 401
+    else {
+      const token_info = await this.requests.introspect(
+        access_token,
+        'access_token'
+      )
+      if (token_info.active != true) status = 401
+    }
+
+    res.status(status)
+    res.end(status == 200 ? 'access granted' : 'access denied')
   }
 
   /**
@@ -637,6 +645,9 @@ class StratisOAuth2Provider {
         'You must provide either an access_token or an id_token'
       )
     )
+
+    if (this.requests.introspect_url == null)
+      throw new StratisNoEmitError('Invalid. Cannot introspect')
 
     token_info = await this.requests.introspect(token)
     return res.end(token_info)
@@ -788,28 +799,19 @@ class StratisOAuth2Provider {
    * @param {NextFunction} next
    * @param {boolean} authenticate
    */
-  async authentication_intercept(req, res, next, authenticate = true) {
+  async authentication_intercept(req, res, next, authenticate = null) {
     try {
-      authenticate = authenticate == null ? true : authenticate
-
       const oauth_session = await this.get_session(req, null, false)
       req.stratis_oauth2_session = oauth_session
 
-      // only run authentication in the case where we have a need.
-      // for the case of a stratis request, if its secure.
-      if (authenticate) {
-        // check for token updates.
-
+      if (authenticate || oauth_session.needs_update())
+        // there is some session active, but its either elapsed or invalid.
+        // need to update.
         await oauth_session.update()
 
-        if (!oauth_session.is_access_granted) {
-          // check if needs clearing.
-          if (
-            oauth_session.is_authenticated &&
-            (!oauth_session.is_active || oauth_session.is_elapsed == true)
-          )
-            await oauth_session.clear()
-
+      // Authentication for the user is required otherwise login.
+      if (authenticate) {
+        if (!oauth_session.is_authenticated()) {
           return await this.svc_login(req, res, next, {
             redirect_uri: get_express_request_url(req),
             login_result: 'session',
@@ -817,20 +819,22 @@ class StratisOAuth2Provider {
         }
       }
 
-      // updating the user object.
-      if (!oauth_session.is_authenticated) {
-        req[this.user_key] = null
-        return
+      if (oauth_session.token_info != null) {
+        // updating the user object since we have an authenticated
+        // use. This dose not mean the access was granted.
+        const current_user_object = req[this.user_key] || {}
+
+        req[this.user_key] = Object.assign(
+          {},
+          typeof current_user_object != 'object' ? {} : current_user_object,
+          {
+            username: current_user_object.username || oauth_session.username,
+            token_info: oauth_session.token_info,
+            authenticated: oauth_session.is_authenticated(),
+            get_oauth_session: () => oauth_session,
+          }
+        )
       }
-      const current_user_object = req[this.user_key] || {}
-      req[this.user_key] = Object.assign(
-        typeof current_user_object != 'object' ? {} : current_user_object,
-        {
-          username: current_user_object.username || oauth_session.username,
-          access_token: oauth_session.access_token,
-          token_info: oauth_session.token_info,
-        }
-      )
 
       next()
     } catch (err) {
@@ -877,7 +881,7 @@ class StratisOAuth2Provider {
 
       await oauth_session.update()
 
-      if (!oauth_session.is_access_granted)
+      if (!oauth_session.is_authenticated)
         throw new StratisNotAuthorizedReloadError(
           'User session unauthorized or expired'
         )
