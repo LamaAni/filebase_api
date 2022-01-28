@@ -594,16 +594,26 @@ class StratisOAuth2Provider {
    * @param {Next} next
    * @param {{access_token:string}} query
    */
-  async svc_validate(req, res, next, { access_token }) {
+  async svc_validate(req, res, next, { access_token = null }) {
     assert(
       access_token != null,
-      new StratisNoEmitError('You must provide either an access_token')
+      new StratisNoEmitError('You must provide an access_token')
     )
+
+    const token_id =
+      access_token.length < 5
+        ? 'OBSCURED'
+        : access_token.substring(access_token.length - 5)
+
+    this.logger.debug('Validating access token ending in ' + token_id)
 
     let status = 200
     if (this.requests.introspect_url == null) status = 401
     else {
-      const token_info = await this.requests.introspect(token, 'access_token')
+      const token_info = await this.requests.introspect(
+        access_token,
+        'access_token'
+      )
       if (token_info.active != true) status = 401
     }
 
@@ -821,7 +831,7 @@ class StratisOAuth2Provider {
             username: current_user_object.username || oauth_session.username,
             token_info: oauth_session.token_info,
             authenticated: oauth_session.is_authenticated(),
-            session: oauth_session,
+            get_oauth_session: () => oauth_session,
           }
         )
       }
