@@ -5,11 +5,14 @@ const {
   to_base64,
   from_base64,
   assert_non_empty_string_or_null,
-  milliseconds_utc_since_epoc,
 } = require('../../common')
+
 const { concat_errors } = require('../../errors')
-const { StratisSessionStorageProvider } = require('./storage')
-const Cookies = require('cookies')
+const {
+  StratisSessionStorageProvider,
+  from_storage_type_name,
+} = require('./storage')
+const { StratisSessionProviderContext } = require('./context')
 
 /**
  * @typedef {import('express').Request} Request
@@ -18,170 +21,19 @@ const Cookies = require('cookies')
  * @typedef {import('../../webserver/interfaces').StratisLogger} StratisLogger
  * @typedef {import('./storage').StratisSessionStorageProvider} StratisSessionStorageProvider
  * @typedef {import('./storage').StratisSessionStorageProviderOptions} StratisSessionStorageProviderOptions
+ * @typedef {import('./storage').StratisSessionStorageProviderType} StratisSessionStorageProviderType
  */
-
-class StratisSessionProviderContext {
-  /**
-   * @param {Request} req The express request
-   * @param {Response} res The express response
-   * @param {StratisSessionProvider} provider
-   * @param {{}} data The session data.
-   * @param {StratisSessionStorageProviderOptions} storage_options Extended storage options
-   * for the current session (overrides storage_provider options)
-   */
-  constructor(req, res, provider, data = null, storage_options = null) {
-    this.req = req
-    this.res = res
-    this.data = data
-    this.provider = provider
-    this._source_session_json_value = null
-    this._session_json_value = null
-    this.accessed = false
-    /** @type {StratisSessionStorageProviderOptions} */
-    this.storage_options = storage_options || {}
-  }
-
-  has_changed() {
-    if (!this.accessed) return false
-    this.update_session_value()
-    return this._session_json_value != this._source_session_json_value
-  }
-
-  update_session_value() {
-    if (!this.accessed) return
-    this._session_json_value = JSON.stringify(this.data)
-  }
-
-  get_session_value() {
-    return this.provider.encode(this._session_json_value)
-  }
-
-  /**
-   * @param {string} name
-   * @param {string} value
-   * @param {Cookies.SetOption} options
-   */
-  write_cookie(name, value, options) {
-    assert(
-      value == null || typeof value == 'string',
-      'Value must be a string or null'
-    )
-    return new Cookies(this.req, this.res).set(name, value, options)
-  }
-
-  /**
-   * @param {string} name
-   * @param {Cookies.GetOption} options
-   * @returns {string} the value or null
-   */
-  read_cookie(name, options) {
-    return new Cookies(this.req, this.res).get(name, options)
-  }
-
-  /**
-   * Commit the session changes (if any)
-   */
-  async commit() {
-    await this.provider.storage_provider.commit(this)
-  }
-
-  /**
-   * @param {Request} req
-   * @param {Response} res
-   */
-  async initialize() {
-    try {
-      if (this.req.session != null)
-        this.provider.logger.warn(
-          'Another session proprietor has already set the session value for the request. req.session was overwritten'
-        )
-
-      // updating the cookie domain
-      if (
-        this.provider.cookie_subdomain_count > -1 &&
-        this.provider.storage_provider.options.domain == null
-      ) {
-        // domain is null
-        // and we have a subdomain count.
-        const is_localhost =
-          this.req.hostname.split('.').slice(-1)[0] == 'localhost'
-        const total_including_subdomain =
-          (is_localhost ? 1 : 2) + this.provider.cookie_subdomain_count
-        let domain_parts = this.req.hostname
-          .split('.')
-          .map((v) => v.trim())
-          .filter((v) => v.length > 0)
-
-        if (domain_parts.length > total_including_subdomain)
-          domain_parts = domain_parts.slice(-total_including_subdomain)
-
-        // auto domain includes subdomains for auth cookie persistence.
-        this.storage_options.domain =
-          (is_localhost ? '' : '.') + domain_parts.join('.')
-      }
-
-      // We cannot dynamically load the session value since we may not have
-      // an async response in the value getter.
-      // Therefore the session state must be loaded every time. (Slow?)
-
-      this.req.stratis_session_provider_context = this
-      this._source_session_json_value = this.provider.decode(
-        await this.provider.storage_provider.load(this)
-      )
-
-      let parsed_data_object = {}
-      try {
-        parsed_data_object = JSON.parse(this._source_session_json_value)
-      } catch (err) {}
-
-      this.data = Object.assign({}, this.data || {}, parsed_data_object)
-
-      this.req.session = new Proxy(this.data, {
-        get: (obj, prop) => {
-          this.accessed = true
-          return obj[prop]
-        },
-        set: (obj, prop, value) => {
-          this.accessed = true
-          obj[prop] = value
-          return true
-        },
-      })
-
-      return this
-    } catch (err) {
-      throw concat_errors(
-        new Error('Failed to initialize session provider'),
-        err
-      )
-    }
-  }
-
-  /**
-   * Write the response headers (if any)
-   */
-  write_headers() {
-    this.provider.storage_provider.write_headers(this)
-  }
-
-  /**
-   * @param {Request} req
-   * @returns {StratisSessionProviderContext}
-   */
-  static from_request(req) {
-    return req.stratis_session_provider_context
-  }
-}
 
 /**
  * @typedef {Object} StratisSessionProviderOptions
- * @property {StratisSessionStorageProvider} storage_provider The storage provider to use.
+ * @property {StratisSessionStorageProvider|StratisSessionStorageProviderType} storage_provider The storage provider to use.
+ * @property {StratisSessionStorageProviderOptions} storage_options Overrides for the storage provider options.
  * @property {string} encryption_key The encryption key to use for the session state. If null no encryption.
- * @property {StratisLogger} logger The associated logger. Defaults to console.
  * @property {number} cookie_subdomain_count  The number of subdomain elements to use for
  * the session cookie domain (auto generated). If null or domain is already set, no auto domain.
  *  example: For a request from a.b.c.d.com, and cookie_subdomain_count=2,
  *    cookie domain=>".b.c.d.com.". Defaults to 0.
+ * @property {StratisLogger} logger The associated logger. Defaults to console.
  */
 
 class StratisSessionProvider {
@@ -190,11 +42,17 @@ class StratisSessionProvider {
    * @param {StratisSessionProviderOptions} options
    */
   constructor({
-    storage_provider,
+    storage_provider = 'cookie',
+    storage_options = null,
     encryption_key = null,
-    logger = null,
     cookie_subdomain_count = 0,
+    logger = null,
   } = {}) {
+    if (typeof storage_provider == 'string')
+      storage_provider = new (from_storage_type_name(storage_provider))(
+        storage_options || {}
+      )
+
     assert(
       storage_provider instanceof StratisSessionStorageProvider,
       'storage_provider must be of type StratisSessionStorageProvider'
@@ -205,12 +63,19 @@ class StratisSessionProvider {
       'encryption_key Must be null or a non empty string'
     )
 
+    storage_provider.options = Object.assign(
+      {},
+      storage_provider.options,
+      storage_options || {}
+    )
+
     this.encryption_key = encryption_key
-    /** @type {StratisLogger} */
-    this.logger = logger || console
     this.storage_provider = storage_provider
     this.cookie_subdomain_count =
       cookie_subdomain_count == null ? -1 : cookie_subdomain_count
+
+    /** @type {StratisLogger} */
+    this.logger = logger || console
   }
 
   /**
@@ -245,9 +110,11 @@ class StratisSessionProvider {
   encode(value) {
     // return value
     if (value == null) return null
-    if (this.encryption_key != null)
+    if (this.encryption_key != null) {
       value = encrypt_string(value, this.encryption_key)
-    else value = to_base64(value)
+    } else {
+      value = to_base64(value)
+    }
     return value
   }
 
@@ -255,9 +122,11 @@ class StratisSessionProvider {
     if (value == null) return {}
     // return value
     try {
-      if (this.encryption_key != null)
+      if (this.encryption_key != null) {
         value = decrypt_string(value, this.encryption_key)
-      else value = from_base64(value)
+      } else {
+        value = from_base64(value)
+      }
     } catch (err) {
       this.logger.error(
         concat_errors('Error decoding session state', err).stack
@@ -328,4 +197,16 @@ class StratisSessionProvider {
 module.exports = {
   StratisSessionProvider,
   StratisSessionProviderContext,
+}
+
+if (require.main == module) {
+  new StratisSessionProvider({
+    storage_provider: 'cookie',
+  })
+  new StratisSessionProvider({
+    storage_provider: 'etcd',
+    storage_options: {
+      hosts: 'https://localhost:3232',
+    },
+  })
 }

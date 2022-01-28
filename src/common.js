@@ -242,16 +242,20 @@ class StringEncryptor {
   constructor(encryptionKey) {
     this.algorithm = 'aes-192-cbc'
     this.key = crypto.scryptSync(encryptionKey, 'salt', 24)
-    this.seperator = '-'
+    /** @type {BufferEncoding} */
+    this.encrypted_encoding = 'base64'
+    this.seperator = '.'
   }
 
   encrypt(clearText) {
     const iv = crypto.randomBytes(16)
     const cipher = crypto.createCipheriv(this.algorithm, this.key, iv)
-    const encrypted = cipher.update(clearText, 'utf8', 'base64')
-    const final = cipher.final('base64')
+    const encrypted = cipher.update(clearText, 'utf8', this.encrypted_encoding)
+    const final = cipher.final(this.encrypted_encoding)
 
-    return [iv.toString('base64'), encrypted + final].join(this.seperator)
+    return [iv.toString(this.encrypted_encoding), encrypted + final].join(
+      this.seperator
+    )
   }
 
   decrypt(encryptedText) {
@@ -260,9 +264,9 @@ class StringEncryptor {
     const decipher = crypto.createDecipheriv(
       this.algorithm,
       this.key,
-      Buffer.from(iv, 'base64')
+      Buffer.from(iv, this.encrypted_encoding)
     )
-    const val = decipher.update(encrypted, 'base64', 'utf8')
+    const val = decipher.update(encrypted, this.encrypted_encoding, 'utf8')
     const final = decipher.final('utf8')
     return val + final
   }
@@ -281,7 +285,7 @@ function to_base64(val, encoding = 'utf8') {
 }
 
 function from_base64(val, encoding = 'utf8') {
-  Buffer.from(val, 'base64').toString(encoding)
+  return Buffer.from(val, 'base64').toString(encoding)
 }
 
 module.exports = {

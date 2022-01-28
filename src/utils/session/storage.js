@@ -2,7 +2,7 @@ const { StratisSessionStorageProvider } = require('./storage/core')
 /**
  * Create a new cookie session middleware.
  * @typedef {import('./storage/core').StratisSessionStorageProviderOptions} StratisSessionStorageProviderOptions
- * @typedef {'etcd'|'cookie'} StratisSessionStorageProviderName
+ * @typedef {'etcd'|'cookie'} StratisSessionStorageProviderType
  */
 
 /** @type {Object.<string, typeof StratisSessionStorageProvider>} */
@@ -12,7 +12,7 @@ const StratisSessionStorageProvidersByType = {
 }
 
 /**
- * @param {StratisSessionStorageProviderName} type_name
+ * @param {StratisSessionStorageProviderType} type_name
  */
 function from_storage_type_name(type_name) {
   if (StratisSessionStorageProvidersByType[type_name] == null)

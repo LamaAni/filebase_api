@@ -1,10 +1,12 @@
 const { Etcd3 } = require('etcd3')
-
 const { StratisSessionStorageProvider } = require('./core')
 const { concat_errors } = require('../../../errors')
-const { create_uuid } = require('../../../common')
-
-const { filter_null } = require('../../../common')
+const {
+  create_uuid,
+  filter_null,
+  assert,
+  assert_non_empty_string,
+} = require('../../../common')
 
 /**
  * @typedef {import('express').Request} Request
@@ -59,6 +61,20 @@ class StratisSessionEtcdStorageProvider extends StratisSessionStorageProvider {
       sameSite,
       sign_with_keys,
     })
+
+    assert(
+      hosts != null,
+      'You must provide hosts (arg) for the etcd storage provider'
+    )
+    if (typeof hosts == 'string') hosts = [hosts]
+
+    hosts = hosts || []
+    hosts.forEach((h) =>
+      assert_non_empty_string(
+        h,
+        'Invalid hosts. Any host in the host list must be a non empty string'
+      )
+    )
 
     this.client = new Etcd3(
       filter_null({
