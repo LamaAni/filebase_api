@@ -82,6 +82,13 @@ class StratisSessionProviderContext {
   }
 
   /**
+   * Commit the session changes (if any)
+   */
+   async commit() {
+    await this.provider.storage_provider.commit(this)
+  }
+  
+  /**
    * @param {Request} req
    * @param {Response} res
    */
@@ -137,12 +144,6 @@ class StratisSessionProviderContext {
     this.provider.storage_provider.write_headers(this)
   }
 
-  /**
-   * Commit the session changes (if any)
-   */
-  async commit() {
-    await this.provider.storage_provider.commit(this)
-  }
 
   /**
    * @param {Request} req
@@ -257,7 +258,10 @@ class StratisSessionProvider {
       const original_write_head = res.writeHead
       res.writeHead = (...args) => {
         try {
-          if (!session_has_error && has_changed()) context.write_headers()
+          if (!session_has_error && has_changed()) {
+            context.write_headers()
+            this.logger.debug(`Session state ${context.}`)
+          }
         } catch (err) {
           session_has_error = true
           return next(err)
@@ -268,7 +272,9 @@ class StratisSessionProvider {
       const original_res_end = res.end
       res.end = async (...args) => {
         try {
-          if (!session_has_error && has_changed()) await context.commit()
+          if (!session_has_error && has_changed()) {
+            await context.commit()
+          }
         } catch (err) {
           session_has_error = true
           return next(err)
