@@ -3,7 +3,7 @@ const {
   value_from_object_path,
 } = require('../../common')
 
-const { parse_barer_token } = require('./common')
+const { parse_bearer_token } = require('./common')
 
 /**
  * @typedef {import('express').Request} Request
@@ -361,11 +361,11 @@ class StratisOAuth2ProviderSession {
    * @param {string} token The request object.
    */
   async load_data_from_bearer_token(token) {
-    this._data = this.provider.bearer_token_session_cache_bank.get(
-      barer_token
-    ) || {
-      access_token: barer_token,
+    this._data = this.provider.bearer_token_session_cache_bank.get(token)
+    this._data = this._data || {
+      access_token: token,
     }
+
     this.data.token_type = 'access_token'
     this.data.session_source = 'bearer'
   }
@@ -374,14 +374,14 @@ class StratisOAuth2ProviderSession {
    * Loads the OAuth provider session from the request.
    * @param {StratisOAuth2Provider} provider The provider
    * @param {Request} req The request object.
-   * @param {string} barer_token The bearer token to load from
+   * @param {string} bearer_token The bearer token to load from
    */
-  static async load(provider, req, barer_token = null) {
-    barer_token = barer_token || parse_barer_token(req)
+  static async load(provider, req, bearer_token = null) {
+    bearer_token = bearer_token || parse_bearer_token(req)
     const oauth_session = new StratisOAuth2ProviderSession(provider, req)
 
-    if (barer_token != null)
-      oauth_session.load_data_from_bearer_token(barer_token)
+    if (bearer_token != null)
+      oauth_session.load_data_from_bearer_token(bearer_token)
     else oauth_session.load_data_from_session(req.session || {})
     return oauth_session
   }

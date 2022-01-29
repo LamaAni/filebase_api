@@ -7,7 +7,7 @@
 /**
  * @param {Request} req
  */
-function parse_barer_token(req) {
+function parse_bearer_token(req) {
   const authorization =
     'authorization' in req.headers
       ? (req.headers['authorization'] || '').trim()
@@ -23,5 +23,5 @@ function parse_barer_token(req) {
 }
 
 module.exports = {
-  parse_barer_token,
+  parse_bearer_token,
 }
