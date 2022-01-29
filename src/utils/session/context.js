@@ -122,11 +122,20 @@ class StratisSessionProviderContext {
       )
 
       let parsed_data_object = {}
+      let needs_reset = false
       try {
-        parsed_data_object = JSON.parse(this._source_session_json_value)
-      } catch (err) {}
+        if (this._source_session_json_value != null) {
+          parsed_data_object = JSON.parse(this._source_session_json_value)
+          this.data = Object.assign({}, this.data || {}, parsed_data_object)
+        } else needs_reset = true
+      } catch (err) {
+        needs_reset = true
+      }
 
-      this.data = Object.assign({}, this.data || {}, parsed_data_object)
+      if (needs_reset) {
+        this.data = Object.assign({}, this.data || {})
+        this.accessed = true
+      }
 
       this.req.session = new Proxy(this.data, {
         get: (obj, prop) => {

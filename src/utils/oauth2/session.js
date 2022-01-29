@@ -329,9 +329,12 @@ class StratisOAuth2ProviderSession {
       }
 
     this.provider.logger.debug(
-      `OAuth2 session updated for ${this.username} (TID: ${this.session_id}, Access ${
-        this.is_authenticated() ? 'GRANTED' : 'DENIED'
-      } via ${was_refreshed ? 'Refresh' : 'Introspect'})`
+      `Access ${
+        this.is_authenticated() ? 'GRANTED'.green.reset : 'DENIED'.red.reset
+      }` +
+        ` for ${this.username} (TID: ${this.session_id}, via ${
+          was_refreshed ? 'Refresh' : 'Introspect'
+        })`.gray
     )
 
     await this.save()

@@ -79,7 +79,11 @@ class StratisRequestsClient {
    * @param {string | (response: StratisRequestResponse)=>string} message The message to show. Can be null
    * @param {[number]} valid_status_codes
    */
-  async raise_status_errors(response, message = null, valid_status_codes = null) {
+  async raise_status_errors(
+    response,
+    message = null,
+    valid_status_codes = null
+  ) {
     if (valid_status_codes && valid_status_codes.includes(response.statusCode))
       return
 
@@ -94,7 +98,9 @@ class StratisRequestsClient {
     const msg_compose = [
       `Http/s invalid response (${response.statusCode}): ${response.statusMessage}`,
       message,
-      (await stream_to_buffer(response)).toString(response.headers['content-encoding']),
+      (await stream_to_buffer(response)).toString(
+        response.headers['content-encoding']
+      ),
     ]
       .filter((v) => v != null)
       .map((v) => `${v}`)
@@ -186,7 +192,7 @@ class StratisRequestsClient {
    * Send an http/https request.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
+   * @returns {Promise<StratisRequestResponse>}
    */
   async request(url, options = {}) {
     if (!(url instanceof URL)) {
@@ -234,7 +240,7 @@ class StratisRequestsClient {
         agent: proxy_agent,
         method: 'GET',
         hostname: url.hostname,
-        port: url.port || url.protocol == 'http:' ? 80 : 443,
+        port: url.port || (url.protocol == 'http:' ? 80 : 443),
         path: `${url.pathname}${url.search}`,
         protocol: url.protocol,
         timeout: this.timeout,
@@ -306,7 +312,6 @@ class StratisRequestsClient {
    * Requests using GET should only retrieve data.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
    */
   async get(url, options = {}) {
     return await this.request(url, options)
@@ -318,7 +323,6 @@ class StratisRequestsClient {
    * but without the response body.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
    */
   async head(url, options = {}) {
     options = Object.assign({}, options, {
@@ -334,7 +338,6 @@ class StratisRequestsClient {
    * @param {URL|string} url The target url.
    * @param {Object|string|Buffer|ReadableStream} payload The request payload to send to the remote.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
    */
   async post(url, payload = null, options = {}) {
     options = Object.assign({}, options, {
@@ -351,7 +354,6 @@ class StratisRequestsClient {
    * @param {URL|string} url The target url.
    * @param {Object|string|Buffer|ReadableStream} payload The request payload to send to the remote.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
    */
   async put(url, payload = null, options = {}) {
     options = Object.assign({}, options, {
@@ -367,7 +369,7 @@ class StratisRequestsClient {
    * @param {URL|string} url The target url.
    * @param {Object|string|Buffer|ReadableStream} payload The request payload to send to the remote.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
+   *
    */
   async patch(url, payload = null, options = {}) {
     options = Object.assign({}, options, {
@@ -382,7 +384,6 @@ class StratisRequestsClient {
    * The DELETE method deletes the specified resource.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
    */
   async delete(url, options = {}) {
     options = Object.assign({}, options, {
@@ -396,7 +397,7 @@ class StratisRequestsClient {
    * The CONNECT method establishes a tunnel to the server identified by the target resource.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
+   *
    */
   async connect(url, options = {}) {
     options = Object.assign({}, options, {
@@ -411,7 +412,7 @@ class StratisRequestsClient {
    * The OPTIONS method describes the communication options for the target resource.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
+   *
    */
   async options(url, payload = null, options = {}) {
     options = Object.assign({}, options, {
@@ -426,7 +427,6 @@ class StratisRequestsClient {
    * The TRACE method performs a message loop-back test along the path to the target resource.
    * @param {URL|string} url The target url.
    * @param {StratisRequestOptions} options
-   * @returns {StratisRequestResponse} The server response
    */
   async trace(url, options = {}) {
     options = Object.assign({}, options, {
@@ -440,7 +440,7 @@ class StratisRequestsClient {
  * Send a http/https request.
  * @param {URL|string} url The target url.
  * @param {http.RequestOptions} options
- * @returns {StratisRequestResponse} The server response
+ *
  */
 async function request(url, options) {
   return await new StratisRequestsClient().request(url, options)

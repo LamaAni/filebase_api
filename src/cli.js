@@ -64,6 +64,16 @@ class StratisCli {
       description: 'Show the stratis api version and exit',
     }
 
+    /** The name of the current service. Will show up in logs */
+    this._service_name = 'stratis'
+    /** @type {CliArgument} */
+    this.__$service_name = {
+      type: 'named',
+      environmentVariable: 'IFR_SERVICE_NAME',
+      default: this._service_name,
+      description: 'The name of the current service. Will show up in logs',
+    }
+
     /** @type {CliArgument} */
     this.__$serve_path = {
       type: 'positional',
@@ -387,6 +397,14 @@ class StratisCli {
     this._app = express()
 
     this._initialized = false
+  }
+
+  get service_name() {
+    return this.logger.topic
+  }
+
+  set service_name(val) {
+    this.logger.topic = val
   }
 
   /**
@@ -739,17 +757,17 @@ class StratisCli {
    * @param {bool} listen_sync If true, await listen to the port.
    */
   async run(cli = null, listen_sync = false) {
-    cli = cli || new Cli({ name: 'stratis' })
+    cli = cli || new Cli({ name: this._service_name || 'stratis' })
     cli.logger.level = this.log_level || cli.logger.level
     this.api.logging_options.logger = cli.logger
 
     if (this.version) return await this.show_version()
 
-    // will only print in debug mode.
-    this.logger.debug('Debug mode ACTIVE'.yellow)
-
     // calling startup script
     await this.invoke_initialization_scripts(this.logger || console)
+
+    // will only print in debug mode.
+    this.logger.debug('Debug mode ACTIVE'.yellow)
 
     // check call the server command (i.e. was initialized)
     if (!this.initialized) await this.initialize()

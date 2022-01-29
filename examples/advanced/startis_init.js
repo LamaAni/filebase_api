@@ -21,6 +21,7 @@ function get_oauth2_test_config() {
  * @param {import('../../src/cli').StratisCli} stratis
  */
 module.exports = async (stratis) => {
+  stratis.service_name = 'test-site'
   stratis.session_key = stratis.session_key || 'test_session'
   stratis.show_app_errors = true
   if (process.env['TEST_USE_OAUTH2'] == 'true') {
@@ -38,9 +39,12 @@ module.exports = async (stratis) => {
 
   stratis.session_provider_options.storage_provider =
     process.env['TEST_SESSION_TYPE'] || 'cookie'
-  stratis.session_provider_options.storage_options = {
-    hosts: process.env['TEST_SESSION_STORAGE_ETCD_HOST'],
-  }
+  stratis.session_provider_options.storage_options = Object.assign(
+    stratis.session_provider_options.storage_options,
+    {
+      hosts: process.env['TEST_SESSION_STORAGE_ETCD_HOST'],
+    }
+  )
 
   // Call to initialize the service (if not called will be called by the stratis cli process)
   // This method can be sync if not called.

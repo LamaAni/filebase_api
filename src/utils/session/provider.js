@@ -125,7 +125,7 @@ class StratisSessionProvider {
   decode(value, ingore_errors = null) {
     ingore_errors = ingore_errors === null ? this.ingore_errors : ingore_errors
 
-    if (value == null) return {}
+    if (value == null) return null
     // return value
     try {
       if (this.encryption_key != null) {
@@ -134,10 +134,10 @@ class StratisSessionProvider {
         value = from_base64(value)
       }
     } catch (err) {
+      if (!ingore_errors) throw err
       this.logger.error(
         concat_errors('Error decoding session state', err).stack
       )
-      if (ingore_errors) throw err
       return null
     }
     return value
@@ -187,7 +187,9 @@ class StratisSessionProvider {
             this.logger.debug(`Session state response header data written`)
           }
         } catch (err) {
-          if (handle_errors(err, 'Error writing session state headers'))
+          if (
+            handle_errors(err, new Error('Error writing session state headers'))
+          )
             throw err
         }
         return original_write_head.apply(res, args)
@@ -201,12 +203,14 @@ class StratisSessionProvider {
             this.logger.debug(`Session state async data written`)
           }
         } catch (err) {
-          if (handle_errors(err, 'Error committing session state')) throw err
+          if (handle_errors(err, new Error('Error committing session state')))
+            throw err
         }
         return original_res_end.apply(res, args)
       }
     } catch (err) {
-      if (handle_errors(err)) next(err)
+      if (handle_errors(err, new Error('Error processing session state')))
+        next(err)
 
       req.session = req.session || {}
     }

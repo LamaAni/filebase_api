@@ -422,7 +422,7 @@ class StratisOAuth2Provider {
       )
     )
 
-    const redirect_url = this.requests.compose_authorize_url(
+    const authorize_url = this.requests.compose_authorize_url(
       this.redirect_url ||
         // The default service is the authorize service
         // Use this default since we want the auth redirect_uri
@@ -432,7 +432,7 @@ class StratisOAuth2Provider {
       this.response_type
     )
 
-    return res.redirect(redirect_url)
+    return res.redirect(authorize_url)
   }
 
   /**
@@ -542,24 +542,25 @@ class StratisOAuth2Provider {
    * @param {Request} req
    * @param {Response} res
    * @param {NextFunction} next
-   * @param {Object} query The query arguments
+   * @param {{
+   * redirect_param:string,
+   * token:string,
+   * update:boolean,
+   * }} query The query arguments
    */
-  async svc_authorize_session(
-    req,
-    res,
-    next,
-    { redirect_uri = null, token = null, update }
-  ) {
-    const oauth_session = await this.get_session(req, token, true)
+  async svc_authorize_session(req, res, next, query) {
+    const redirect_uri = query[query.redirect_param || 'redirect_uri'] || '/'
 
-    if (!oauth_session.is_authenticated)
+    const oauth_session = await this.get_session(req, query.token, true)
+
+    if (!oauth_session.is_authenticated())
       return res.redirect(
         this.compose_service_url(req, 'login', {
           redirect_uri,
         })
       )
 
-    return res.redirect(redirect_uri || '/')
+    return res.redirect(redirect_uri)
   }
 
   /**
@@ -627,33 +628,11 @@ class StratisOAuth2Provider {
    * @param {Request} req
    * @param {Response} res
    * @param {Next} next
-   * @param {{access_token:string}} query
+   * @param {{token:string}} query
    */
-  async svc_validate_session(req, res, next, { access_token = null }) {
-    assert(
-      typeof access_token == 'string',
-      new StratisNoEmitError('You must provide an access_token')
-    )
-
-    const token_id =
-      access_token.length < 5
-        ? 'OBSCURED'
-        : access_token.substring(access_token.length - 5)
-
-    this.logger.debug('Validating access token ending in ' + token_id)
-
-    let status = 200
-    if (this.requests.introspect_url == null) status = 401
-    else {
-      const token_info = await this.requests.introspect(
-        access_token,
-        'access_token'
-      )
-      if (token_info.active != true) status = 401
-    }
-
-    res.status(status)
-    res.end(status == 200 ? 'access granted' : 'access denied')
+  async svc_validate_session(req, res, next, { token = null }) {
+    const oauth_session = await this.get_session(req, token, false)
+    res.status(oauth_session.is_authenticated() == true ? 200 : 401).end()
   }
 
   /**
