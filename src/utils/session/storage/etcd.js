@@ -1,14 +1,11 @@
-const Cookies = require('cookies')
 const { Etcd3 } = require('etcd3')
-
 const { StratisSessionStorageProvider } = require('./core')
 const { concat_errors } = require('../../../errors')
-const { create_uuid } = require('../../../common')
-
 const {
+  create_uuid,
+  filter_null,
   assert,
   assert_non_empty_string,
-  filter_null,
 } = require('../../../common')
 
 /**
@@ -65,6 +62,20 @@ class StratisSessionEtcdStorageProvider extends StratisSessionStorageProvider {
       sign_with_keys,
     })
 
+    assert(
+      hosts != null,
+      'You must provide hosts (arg) for the etcd storage provider'
+    )
+    if (typeof hosts == 'string') hosts = [hosts]
+
+    hosts = hosts || []
+    hosts.forEach((h) =>
+      assert_non_empty_string(
+        h,
+        'Invalid hosts. Any host in the host list must be a non empty string'
+      )
+    )
+
     this.client = new Etcd3(
       filter_null({
         hosts,
@@ -84,10 +95,7 @@ class StratisSessionEtcdStorageProvider extends StratisSessionStorageProvider {
    */
   get_session_id(context, can_create = false) {
     let session_id = context.session_id
-
-    // read from cookie
-    if (session_id == null)
-      session_id = context.read_cookie(this.name, this.cookie_options)
+    if (session_id == null) session_id = this.read_cookie(context, this.name)
 
     // validate
     if (session_id != null && session_id.match(/[^0-9a-zA-Z-]/g))
@@ -97,11 +105,10 @@ class StratisSessionEtcdStorageProvider extends StratisSessionStorageProvider {
       if (!can_create) throw new Error('Could not find or create session id')
       else {
         session_id = create_uuid()
-        context.write_cookie(this.name, session_id)
+        this.write_cookie(context, this.name, session_id)
       }
 
     context.session_id = session_id
-
     return session_id
   }
 

@@ -90,21 +90,26 @@ class StratisParseError extends StratisNoEmitError {
 class StratisNotImplementedError extends StratisError {}
 
 /**
- * @param {Error|string} exception
- * @param {Error} inner_exception
- * @param {string} sep
+ * @param {[Error|string]} errors
  */
-function concat_errors(exception, inner_exception, sep = '. ') {
-  if (!(exception instanceof Error)) exception = new StratisError(exception)
+function concat_errors(...errors) {
+  if (errors.length == 0) throw new Error('Cannot concat less than one error')
+  const first_error = errors.filter((e) => e instanceof Error)[0]
 
-  if (!(inner_exception instanceof Error))
-    inner_exception = new Error(inner_exception)
+  errors = errors.map((err) => {
+    if (err instanceof Error) return err
+    else return new Error(`${err}`)
+  })
 
-  exception.stack =
-    (exception.stack || '') + '\n' + (inner_exception.stack || '')
-  exception.message =
-    (exception.message || '') + sep + (inner_exception.message || '')
-  return exception
+  const stack = errors.map((err) => err.stack).join('\n')
+  const message = errors.map((err) => err.message).join('\n')
+
+  /** @type {Error} */
+  const concatenated = new Error(first_error || errors[0])
+  concatenated.stack = stack
+  concatenated.message = message
+
+  return concatenated
 }
 
 module.exports = {

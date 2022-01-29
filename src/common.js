@@ -242,28 +242,33 @@ class StringEncryptor {
   constructor(encryptionKey) {
     this.algorithm = 'aes-192-cbc'
     this.key = crypto.scryptSync(encryptionKey, 'salt', 24)
-    this.seperator = '-'
+    /** @type {BufferEncoding} */
+    this.encrypted_encoding = 'base64'
+    this.seperator = '.'
   }
 
   encrypt(clearText) {
     const iv = crypto.randomBytes(16)
     const cipher = crypto.createCipheriv(this.algorithm, this.key, iv)
-    const encrypted = cipher.update(clearText, 'utf8', 'hex')
-    return [
-      encrypted + cipher.final('hex'),
-      Buffer.from(iv).toString('hex'),
-    ].join(this.seperator)
+    const encrypted = cipher.update(clearText, 'utf8', this.encrypted_encoding)
+    const final = cipher.final(this.encrypted_encoding)
+
+    return [iv.toString(this.encrypted_encoding), encrypted + final].join(
+      this.seperator
+    )
   }
 
   decrypt(encryptedText) {
-    const [encrypted, iv] = encryptedText.split(this.seperator)
+    const [iv, encrypted] = encryptedText.split(this.seperator)
     if (!iv) throw new Error('IV not found')
     const decipher = crypto.createDecipheriv(
       this.algorithm,
       this.key,
-      Buffer.from(iv, 'hex')
+      Buffer.from(iv, this.encrypted_encoding)
     )
-    return decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8')
+    const val = decipher.update(encrypted, this.encrypted_encoding, 'utf8')
+    const final = decipher.final('utf8')
+    return val + final
   }
 }
 
@@ -271,8 +276,8 @@ function encrypt_string(val, key) {
   return new StringEncryptor(key).encrypt(val)
 }
 
-function decrypt_string(encyrpted_val, key) {
-  return new StringEncryptor(key).decrypt(encyrpted_val)
+function decrypt_string(val, key) {
+  return new StringEncryptor(key).decrypt(val)
 }
 
 function to_base64(val, encoding = 'utf8') {
@@ -280,7 +285,7 @@ function to_base64(val, encoding = 'utf8') {
 }
 
 function from_base64(val, encoding = 'utf8') {
-  Buffer.from(val, 'base64').toString(encoding)
+  return Buffer.from(val, 'base64').toString(encoding)
 }
 
 module.exports = {

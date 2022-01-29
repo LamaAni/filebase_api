@@ -1,5 +1,4 @@
-const Cookies = require('cookies')
-const { assert, sleep } = require('../../../common')
+const { assert } = require('../../../common')
 const { StratisSessionStorageProvider } = require('./core')
 const { StratisError } = require('../../../errors')
 
@@ -69,16 +68,27 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
   }
 
   /**
+   * @param {string} value
+   */
+  __split_to_cookie_size(value) {
+    // size max 4096 - name length - 3 chars for index - 1 char for equal - 1 char for colunm
+    const max_char_count = this.max_size - this.name.length - 5
+    return value.match(new RegExp(`.{1,${max_char_count}}`, 'g'))
+  }
+
+  /**
    * @param {StratisSessionProviderContext} context
    */
-  __get_exsiting_value_parts(context) {
+  load_cookie_values(context) {
     let values = []
     let idx = 0
+
     while (true) {
-      const val = context.read_cookie(
-        this.__compose_cookie_name_by_index(idx),
-        this.cookie_options
+      const val = this.read_cookie(
+        context,
+        this.__compose_cookie_name_by_index(idx)
       )
+
       if (val == null) break
       values.push(val)
       idx += 1
@@ -87,12 +97,11 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
   }
 
   /**
-   * @param {string} value
+   * @param {StratisSessionProviderContext} context
    */
-  __split_to_cookie_size(value) {
-    // size max 4096 - name length - 3 chars for index - 1 char for equal - 1 char for colunm
-    const max_char_count = this.max_size - this.name.length - 5
-    return value.match(new RegExp(`.{1,${max_char_count}}`, 'g'))
+  load_cookies_data(context) {
+    let values = this.load_cookie_values(context)
+    return values.length == 0 ? null : values.join('')
   }
 
   /**
@@ -114,7 +123,7 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
         }`
       )
 
-    const existing_value_parts = this.__get_exsiting_value_parts(context)
+    const existing_value_parts = this.load_cookie_values(context)
     const max_count =
       value_parts.length > existing_value_parts.length
         ? value_parts.length
@@ -122,20 +131,8 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
 
     for (let i = 0; i < max_count; i++) {
       const value = value_parts.length > i ? value_parts[i] : null
-      context.write_cookie(
-        this.__compose_cookie_name_by_index(i),
-        value,
-        this.cookie_options
-      )
+      this.write_cookie(context, this.__compose_cookie_name_by_index(i), value)
     }
-  }
-
-  /**
-   * @param {StratisSessionProviderContext} context
-   */
-  load_cookies_data(context) {
-    let values = this.__get_exsiting_value_parts(context)
-    return values.length == 0 ? null : values.join('')
   }
 
   /**
@@ -157,11 +154,9 @@ class StratisSessionCookieStorageProvider extends StratisSessionStorageProvider 
 
   /**
    * Commit changes.
-   * @param {Request} req
-   * @param {Response} res
    * @param {StratisSessionProviderContext} context
    */
-  commit(req, res, context) {
+  commit(context) {
     // nothing to do here.
   }
 }
