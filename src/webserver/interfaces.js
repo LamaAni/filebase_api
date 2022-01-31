@@ -43,11 +43,12 @@
 
 /**
  * @typedef {Object} StratisExpressRequestEnhancements
- * @property {Stratis} stratis
- * @property {StratisRequest} stratis_request
- * @property {StratisSessionProviderContext} stratis_session_provider_context
- * @property {StratisOAuth2Provider} stratis_security_provider
- * @property {StratisOAuth2ProviderSession} stratis_oauth2_session
+ * @property {Stratis} stratis The stratis api.
+ * @property {StratisRequest} stratis_request The stratis request details.
+ * @property {StratisSessionProviderContext} stratis_session_provider_context The associated session provider.
+ * @property {StratisOAuth2Provider} stratis_security_provider The currently associated security provider.
+ * @property {StratisOAuth2ProviderSession} stratis_oauth2_session The stratis OAuth2 provider session. Is
+ * null if the provider is not active.
  */
 
 /**

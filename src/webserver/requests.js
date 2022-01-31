@@ -10,6 +10,7 @@ const is_websocket_request =
  * @typedef {import('./interfaces').StratisExpressRequest} StratisExpressRequest
  * @typedef {import('./interfaces').StratisExpressResponse} StratisExpressResponse
  * @typedef {import('./pages').StratisPageCallContext} StratisPageCallContext
+ * @typedef {import('../utils/oauth2').StratisOAuth2ProviderSession} StratisOAuth2ProviderSession
  */
 
 /**
@@ -100,6 +101,13 @@ class StratisRequest {
    */
   get context() {
     return this._context
+  }
+
+  /**
+   * The oauth2 session. Is null if provider is not active.
+   */
+  get stratis_oauth2_session() {
+    return this.request.stratis_oauth2_session
   }
 
   /**
@@ -204,16 +212,6 @@ class StratisRequest {
    */
   get filepath_exists() {
     return this._filepath_exists || false
-  }
-
-  /**
-   * Retrieve the user information.
-   * @returns {Object<string,any>} The user information.
-   */
-  async get_user_info() {
-    if (this.stratis.session_options.get_user_info == null) return {}
-
-    return await this.stratis.session_options.get_user_info(this.request)
   }
 
   /**

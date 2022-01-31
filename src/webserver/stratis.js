@@ -78,8 +78,6 @@ const {
 
 /**
  * @typedef {Object} StratisSessionOptions
- * @property {(req:StratisExpressRequest)=>{}} get_user_info Stratis assumes that the user
- * info is attached to the express request. Either provide method or request string key.
  * @property {(req:StratisExpressRequest,...permit_args)=>boolean} is_permitted A method to check if the
  * current request is allowed.
  */

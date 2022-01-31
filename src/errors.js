@@ -49,13 +49,13 @@ class StratisNotFoundError extends StratisError {
 
 class StratisNotAuthorizedError extends StratisError {
   get http_response_code() {
-    return 403
+    return 401
   }
 }
 
 class StratisNotAuthorizedReloadError extends StratisNotAuthorizedError {
   get http_response_code() {
-    return 403
+    return 401
   }
 
   get requires_reload() {
