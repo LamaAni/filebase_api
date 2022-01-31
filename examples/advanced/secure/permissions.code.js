@@ -11,8 +11,8 @@ module.exports = {
     return true
   },
   /** @type {StratisApiHandler} */
-  async get_user_access_token({}, context) {
-    const user_info = await context.stratis_request.get_user_info()
-    return user_info.access_token
+  async get_user_token({} = {}, context) {
+    if (context.req.stratis_oauth2_session == null) return null
+    return context.req.stratis_oauth2_session.access_token
   },
 }

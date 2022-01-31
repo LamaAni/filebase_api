@@ -29,7 +29,6 @@ const { StratisOAuth2ProviderSession } = require('./session')
  * @typedef {Object} StratisOAuth2ProviderOptionsExtend
  * @property {string|URL|(req:Request, query: {})=>string|URL} redirect_url Overrides the oauth redirect call back url.
  * @property {stirng} basepath The path to use for the apply command (serves the oauth2 login and redirect)
- * @property {'access_token' | 'id_token'} token_type The (remote service) token type to use when refreshing a token.
  * @property {string} session_key The session key to use when recording the oauth token
  * @property {string} encryption_key The encryption key for session encryption. Defaults to client_secret.
  * @property {string} encryption_expiration The time, in ms, for the encryption expiration. Defaults to 5 minutes.
@@ -62,7 +61,6 @@ class StratisOAuth2Provider {
     redirect_url = null,
     basepath = '/oauth2',
     scope = [],
-    token_type = 'access_token',
     session_key = 'stratis:oauth2:token',
     encryption_key = null,
     encryption_expiration = 1000 * 60 * 5,
@@ -117,7 +115,7 @@ class StratisOAuth2Provider {
     this.refresh_interval = refresh_interval
     this.logger = logger
     this.user_key = user_key
-    this.token_type = token_type
+
     /** @type {[string]} */
     this.username_from_token_info_path = Array.isArray(
       username_from_token_info_path
@@ -263,10 +261,11 @@ class StratisOAuth2Provider {
    */
   compose_well_known_metadata(req) {
     return {
-      token_endpoint: this.compose_service_url(req, 'token', {
-        token_type: this.token_type,
-      }),
       scopes_supported: this.scope,
+      token_endpoint: this.compose_service_url(req, 'token', {
+        token_type: 'access_token',
+      }),
+      introspection_endpoint: this.compose_service_url(req, 'introspect'),
       // Unsupported
       authorization_endpoint: null,
       device_authorization_endpoint: null,
@@ -274,7 +273,6 @@ class StratisOAuth2Provider {
       code_challenge_methods_supported: null,
       end_session_endpoint: null,
       grant_types_supported: null,
-      introspection_endpoint: null,
       introspection_endpoint_auth_methods_supported: null,
       issuer: null,
       request_object_signing_alg_values_supported: null,
@@ -544,14 +542,13 @@ class StratisOAuth2Provider {
    * @param {NextFunction} next
    * @param {{
    * redirect_param:string,
-   * token:string,
+   * access_token:string,
    * update:boolean,
    * }} query The query arguments
    */
   async svc_authorize_session(req, res, next, query) {
     const redirect_uri = query[query.redirect_param || 'redirect_uri'] || '/'
-
-    const oauth_session = await this.get_session(req, query.token, true)
+    const oauth_session = await this.get_session(req, query.access_token, true)
 
     if (!oauth_session.is_authenticated())
       return res.redirect(
@@ -881,10 +878,6 @@ class StratisOAuth2Provider {
    * @param {Stratis} stratis
    */
   bind_stratis_api(stratis) {
-    stratis.session_options.get_user_info = async (req) => {
-      return req[this.user_key]
-    }
-
     stratis.on('stratis_request', async (stratis_request) => {
       if (stratis_request.access_mode != 'secure') return
 

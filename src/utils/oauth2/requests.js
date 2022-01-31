@@ -205,14 +205,14 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
   /**
    * Returns the token info using the introspect url. Sends a request to the server.
    * @param {string} token The token to get info about.
-   * @param {'access_token','refresh_token','id_token'} token_type The token type.
+   * @param {'access_token'|'refresh_token'|'id_token'} token_type_hint The token type.
    */
-  async introspect(token, token_type = 'access_token') {
+  async introspect(token, token_type_hint = 'access_token') {
     const url = this.compose_url(this.introspect_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       token,
-      token_type_hint: token_type,
+      token_type_hint,
     })
 
     return await (
@@ -229,15 +229,15 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
   /**
    * Sends a revoke request for a specific token.
    * @param {string} token The token
-   * @param {string} token_type The token type.
+   * @param {'access_token'|'refresh_token'|'id_token'} token_type_hint The token type.
    * @returns
    */
-  async revoke(token, token_type = 'access_token') {
+  async revoke(token, token_type_hint = 'access_token') {
     const url = this.compose_url(this.revoke_url, {
       client_id: this.client_id,
       client_secret: this.client_secret,
       token,
-      token_type_hint: token_type,
+      token_type_hint,
     })
 
     return await (

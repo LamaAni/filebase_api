@@ -18,7 +18,7 @@ const { parse_bearer_token } = require('./common')
  * @property {string} scope The session scope.
  * @property {string} refresh_token The refresh token
  * @property {{}} token_info The downloaded introspect token info
- * @property {boolean} token_valid True if the usage token (either access_token or id_token) is valid.
+ * @property {number} invalidated The timestamp for which the current tokens were invalidated.
  * @property {number} updated The timestamp of the last session data update.
  * @property {number} refreshed The timestamp of the last session refresh token call.
  * @property {number} introspected The timestamp of the last token info update.
@@ -40,12 +40,7 @@ class StratisOAuth2ProviderSession {
     this._data = {}
 
     /** @type {'session_state'|'bearer'} Where the token was loaded from. */
-    this.session_source = null
-
-    /**
-     * @type {'access_token'|'id_token'}
-     */
-    this.use_token_type = 'access_token'
+    this.session_type = null
   }
 
   /** The OAuth provider */
@@ -77,13 +72,6 @@ class StratisOAuth2ProviderSession {
   }
 
   /**
-   * True if the access token is valid.
-   */
-  get token_valid() {
-    return this.data.token_valid
-  }
-
-  /**
    * @type {string} The session refresh token.
    */
   get refresh_token() {
@@ -111,16 +99,11 @@ class StratisOAuth2ProviderSession {
     return this.data.introspected || 0
   }
 
-  /** The session token */
-  get token() {
-    switch (this.use_token_type) {
-      case 'access_token':
-        return this.access_token
-      case 'id_token':
-        return this.id_token
-      default:
-        return null
-    }
+  /**
+   * The timestamp of when the token(s) were invalidated.
+   */
+  get invalidated() {
+    return this.data.invalidated
   }
 
   /**
@@ -143,7 +126,7 @@ class StratisOAuth2ProviderSession {
    * The last 5 chars of the active token.
    */
   get session_id() {
-    const token = this.token
+    const token = this.access_token || this.id_token
     return token == null || token.length < 5
       ? '?????'
       : token.substring(token.length - 5)
@@ -165,7 +148,9 @@ class StratisOAuth2ProviderSession {
   }
 
   is_valid_session() {
-    return this.token_valid == true && this.token != null
+    if (this.access_token == null) return false
+    if (this.session_type == 'bearer') return true
+    return this.data.invalidated == null
   }
 
   is_valid_token_info() {
@@ -175,7 +160,7 @@ class StratisOAuth2ProviderSession {
 
   is_refresh_elapsed() {
     // cannot use refresh on bearer token
-    if (this.session_source == 'bearer') return false
+    if (this.session_type == 'bearer') return false
     // Not refresh token it cannot elapse.
     if (this.refresh_token == null) return false
 
@@ -197,7 +182,6 @@ class StratisOAuth2ProviderSession {
   }
 
   needs_update() {
-    if (this.session_source == 'bearer') return false
     if (!this.is_valid_session()) return false
 
     return (
@@ -206,6 +190,13 @@ class StratisOAuth2ProviderSession {
       this.is_recheck_elapsed() ||
       this.is_refresh_elapsed()
     )
+  }
+
+  /**
+   * Mark the current session is invalid.
+   */
+  invalidate() {
+    this.data.invalidated = milliseconds_utc_since_epoc()
   }
 
   /**
@@ -224,14 +215,9 @@ class StratisOAuth2ProviderSession {
     if (data.refresh_token != null)
       this.data.refreshed = milliseconds_utc_since_epoc()
 
-    switch (this.use_token_type) {
-      case 'access_token':
-        if (data.access_token != null) this.data.token_valid = true
-        break
-      case 'id_token':
-        if (data.id_token != null) this.data.token_valid = true
-        break
-    }
+    // if there was an access token, then we need
+    // to remove invalidation if any.
+    if (data.access_token) delete this.data.invalidated
 
     if (save) await this.save()
   }
@@ -248,8 +234,8 @@ class StratisOAuth2ProviderSession {
     let token_info = null
     try {
       token_info = await this.provider.requests.introspect(
-        this.token,
-        this.use_token_type
+        this.access_token,
+        'access_token'
       )
     } catch (err) {
       if (throw_errors) throw err
@@ -265,11 +251,11 @@ class StratisOAuth2ProviderSession {
    * Call to refresh the tokens.
    * @param {boolean} save Save the new state to the session
    * @param {boolean} throw_errors Throw any download token errors.
-   * @returns True if successful update or no need.
+   * @returns True if successful updated
    */
   async refresh(save = true, throw_errors = true) {
     // no refresh token
-    if (this.refresh_token == null) return true
+    if (this.refresh_token == null) return false
 
     // refresh response can fail, since the refresh token may be invalid.
     let session_data = null
@@ -299,45 +285,61 @@ class StratisOAuth2ProviderSession {
     // Dont update if not needed
     if (!force && !this.needs_update()) return false
 
-    // If true, we can try to update via introspection.
-    let needs_refresh = this.is_refresh_elapsed() || !this.active
-    let was_refreshed = false
-    if (!needs_refresh) {
-      if (!(await this.update_token_info(false, false)))
-        // the case where the token introspect failed.
-        needs_refresh = true
-      // the case where after the token introspect, the session is not active.
-      else {
-        needs_refresh = !this.active
-      }
+    let update_type = 'Introspect'
+
+    switch (this.session_type) {
+      case 'bearer':
+        // bearer token update is just introspect.
+        await this.update_token_info(false, false)
+        if (!this.active) this.invalidate()
+      case 'session_state':
+        // If no refresh is needed then we will attempt to just
+        // update the session token info. Otherwise
+        // do a full refresh.
+        let needs_refresh = this.is_refresh_elapsed() || !this.active
+
+        if (!needs_refresh) {
+          if (!(await this.update_token_info(false, false)))
+            // the case where the token introspect failed.
+            needs_refresh = true
+          // the case where after the token introspect, the session is not active.
+          else {
+            needs_refresh = !this.active
+          }
+        }
+
+        if (needs_refresh)
+          if (
+            this.session_type == 'bearer' ||
+            !(await this.refresh(false, false))
+          ) {
+            // session was invalidated. The access tokens are not valid anymore.
+            // and the token data is not valid.
+            this.invalidate()
+          } else {
+            update_type = 'Refresh'
+
+            // need to retry to update the token info after refresh.
+            // since we have new refresh token info.
+            if (!(await this.update_token_info(false, false)))
+              this.provider.logger.warn(
+                'Refresh token retrieved but token_info could not be retrieved.' +
+                  ' Error in refresh token return values'
+              )
+          }
+
+        break
     }
 
-    if (needs_refresh)
-      if (!(await this.refresh(false, false))) {
-        // session was invalidated. The access tokens are not valid anymore.
-        // and the token data is not valid.
-
-        // marking invalid.
-        this.data.token_valid = false
-      } else {
-        was_refreshed = true
-        if (!(await this.update_token_info(false, false)))
-          this.provider.logger.warn(
-            'Refresh token retrieved but token_info could not be retrieved.' +
-              ' Error in refresh token return values'
-          )
-      }
+    await this.save()
 
     this.provider.logger.debug(
       `Access ${
         this.is_authenticated() ? 'GRANTED'.green.reset : 'DENIED'.red.reset
       }` +
-        ` for ${this.username} (TID: ${this.session_id}, via ${
-          was_refreshed ? 'Refresh' : 'Introspect'
-        })`.gray
+        ` for ${this.username} (TID: ${this.session_id}, via ${update_type})`
+          .gray
     )
-
-    await this.save()
 
     return true
   }
@@ -353,7 +355,7 @@ class StratisOAuth2ProviderSession {
         ? JSON.parse(session_value)
         : session_value
 
-    this.session_source = 'session_state'
+    this.session_type = 'session_state'
   }
 
   /**
@@ -361,13 +363,16 @@ class StratisOAuth2ProviderSession {
    * @param {string} token The request object.
    */
   async load_data_from_bearer_token(token) {
-    this._data = this.provider.bearer_token_session_cache_bank.get(token)
-    this._data = this._data || {
-      access_token: token,
-    }
+    this._data = this.provider.bearer_token_session_cache_bank.get(token) || {}
+    this._data = Object.assign(
+      {},
+      this.provider.bearer_token_session_cache_bank.get(token) || {},
+      { access_token: token }
+    )
 
-    this.data.token_type = 'access_token'
-    this.data.session_source = 'bearer'
+    delete this.data.id_token
+
+    this.session_type = 'bearer'
   }
 
   /**
@@ -390,10 +395,13 @@ class StratisOAuth2ProviderSession {
    * Save the current state if needed.
    */
   async save() {
-    switch (this.session_source) {
+    switch (this.session_type) {
       case 'bearer':
-        if (this.token == null) return false
-        this.provider.bearer_token_session_cache_bank.set(this.token, this.data)
+        if (this.access_token == null) return false
+        this.provider.bearer_token_session_cache_bank.set(
+          this.access_token,
+          this.data
+        )
         return true
       case 'session_state':
         if (this.req.session == null) {
@@ -407,7 +415,7 @@ class StratisOAuth2ProviderSession {
         return true
       default:
         throw new Error(
-          `Unknown session source ${this.session_source}, invalid session`
+          `Unknown session source ${this.session_type}, invalid session`
         )
     }
   }

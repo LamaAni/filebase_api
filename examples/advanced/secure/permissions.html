@@ -1,36 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <%- render_stratis_script_tag() %>
+
+<head>
+  <%- render_stratis_script_tag() %>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Test website for stratis</title>
     <script>
-        async function perm_check(){
-            try{
-              const group=document.getElementById('perm_group').value
-              console.info(`Checking permissions for group ${group}`)
-              await stratis.check_if_permitted({group})
-              console.log("Access granted")
-              alert("Access granted")
-            }   
-            catch(err){
-                console.log("Access denied")
-                console.error(err)
-                alert("Access denied")
-            }
+      async function perm_check() {
+        try {
+          const group = document.getElementById('perm_group').value
+          console.info(`Checking permissions for group ${group}`)
+          await stratis.check_if_permitted({ group })
+          console.log("Access granted")
+          alert("Access granted")
         }
+        catch (err) {
+          console.log("Access denied")
+          console.error(err)
+          alert("Access denied")
+        }
+      }
     </script>
-  </head>
-  <body>
-    <div>
-      User access token:<br />
-      <%- (await context.get_user_info()).access_token %>
+</head>
+
+<body>
+  <div>
+    User access token:<br />
+    <%- await get_user_token({},context) %>
       <br />
       <br />
       <input type="text" id="perm_group" />
       <input type="button" id="perm_check" onclick="perm_check()" value="Check permission group"></input>
-    </div>
-  </body>
+  </div>
+</body>
+
 </html>
