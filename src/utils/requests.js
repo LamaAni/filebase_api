@@ -332,6 +332,32 @@ class StratisRequestsClient {
   }
 
   /**
+   * Send a POST http/https request as application/x-www-form-urlencoded content type.
+   * This would use the body to hold the request. This command cannot have
+   * a body payload.
+   * @param {URL|string} url The target url.
+   * @param {StratisRequestOptions} options
+   */
+  async post_form(url, options = {}) {
+    options = Object.assign({}, options, {
+      method: 'POST',
+    })
+    assert(options.payload == null, 'a post_form command cannot have a payload')
+
+    // extracting the url parameters.
+    if (!(url instanceof URL)) {
+      assert(typeof url == 'string', 'url must be of types string/URL')
+      url = new URL(url)
+    }
+
+    let url_parts = url.href.split('?')
+    options.payload = url_parts[1]
+    options.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+
+    return await this.request(url_parts[0], options)
+  }
+
+  /**
    * Send a POST http/https request.
    * The POST method submits an entity to the specified resource,
    * often causing a change in state or side effects on the server.

@@ -168,9 +168,8 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
     )
 
     return await (
-      await this.post(
+      await this.post_form(
         url,
-        null,
         this.compose_request_options({
           custom_error_message: `Error while getting token from ${url.origin}${url.pathname}`,
         })
@@ -216,9 +215,8 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
     })
 
     return await (
-      await this.post(
+      await this.post_form(
         url,
-        null,
         this.compose_request_options({
           custom_error_message: `Error while getting token info from ${url.origin}${url.pathname}`,
         })
@@ -241,9 +239,8 @@ class StratisOAuth2RequestClient extends StratisRequestsClient {
     })
 
     return await (
-      await this.post(
+      await this.post_form(
         url,
-        null,
         this.compose_request_options({
           custom_error_message: `Error while revoking token at ${url.origin}${url.pathname}`,
         })
